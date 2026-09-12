@@ -34,7 +34,7 @@ IMAGE_LIMIT = 500_000_000
     ("service", "base"),
     [
         ("etcd", "quay.io/coreos/etcd:v3.5.18"),
-        ("minio", "minio/minio:RELEASE.2024-05-28T17-19-04Z"),
+        ("minio", "quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z"),
         ("milvus", "milvusdb/milvus:v2.6.4"),
     ],
 )
@@ -46,6 +46,23 @@ def test_storage_images_keep_pinned_bases_and_nonroot_users(service: str, base: 
     config = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
     assert config["services"][service]["user"] == "10001:10001"
     assert config["services"][service]["build"]["dockerfile"] == f"docker/Dockerfile.{service}"
+
+
+def test_compose_default_provider_resource_is_public() -> None:
+    config = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+    value = config["services"]["api"]["environment"]["IP_LLM__CAPABILITIES_PATHS"]
+    prefix = "${IP_LLM_CAPABILITIES_PATHS:-"
+    assert value.startswith(prefix)
+    assert value.endswith("}")
+    paths = json.loads(value[len(prefix) : -1])
+    assert paths == ["app/resources/provider_capabilities.json"]
+    assert (
+        DeploymentSettings.model_fields["llm_capabilities_paths"].get_default(
+            call_default_factory=True
+        )
+        == paths
+    )
+    assert all((ROOT / path).is_file() for path in paths)
 
 
 def test_dockerignore_excludes_env() -> None:

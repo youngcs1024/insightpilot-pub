@@ -28,9 +28,7 @@ CASES = load_cases().traps
 
 
 @pytest.mark.parametrize("case", CASES, ids=[case.id for case in CASES])
-async def test_declared_trap(
-    seeded: SeedSettings, seed_directory: Path, case: SeedTrap
-) -> None:
+async def test_declared_trap(seeded: SeedSettings, seed_directory: Path, case: SeedTrap) -> None:
     trap, naive_sql, correct_sql = case.id, case.naive_sql, case.correct_sql
     engine = create_async_engine(seeded.seed.url)
     try:
@@ -250,7 +248,7 @@ async def test_refund_and_boundary_semantics(seeded: SeedSettings) -> None:
     engine = create_async_engine(seeded.seed.url)
     try:
         async with engine.connect() as connection:
-            _, _, refund_sql = next(pair for pair in pairs() if pair[0] == "T2")
+            refund_sql = next(case.correct_sql for case in CASES if case.id == "T2")
             assert (
                 await connection.scalar(
                     text(

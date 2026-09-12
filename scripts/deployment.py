@@ -69,7 +69,9 @@ class DeploymentSettings(BaseSettings):
     llm_timeout_s: float = Field(default=45, ge=0.01, le=120)
     llm_roles: dict[ModelRole, ModelRoleSettings] = Field(default_factory=dict)
     llm_capabilities_paths: list[str] = Field(
-        default_factory=lambda: ["app/resources/provider_capabilities.json"], min_length=1, max_length=16
+        default_factory=lambda: ["app/resources/provider_capabilities.json"],
+        min_length=1,
+        max_length=16,
     )
     llm_api_key: Secret | None = None
     data_agent: DataAgentSettings = Field(default_factory=DataAgentSettings)

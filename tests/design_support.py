@@ -8,8 +8,8 @@ REFUND_TRAP = 2
 def synthetic_design() -> str:
     """Build minimal parser input without reading or reproducing private documents."""
     sections = ["# Synthetic parser fixture"]
-    for name in sorted(TABLES):
-        sections.append(
+    sections.extend(
+        (
             f"### Table: {name}\n\n"
             "Rows: 5 exactly.\n\nGeneration: stable IDs\n\n"
             f"DDL:\n```sql\nCREATE TABLE biz.{name} (\n"
@@ -17,6 +17,8 @@ def synthetic_design() -> str:
             f"Indexes:\n```sql\nCREATE INDEX ix_{name}_renamed_from "
             f"ON biz.{name} (id);\n```"
         )
+        for name in sorted(TABLES)
+    )
     for number in range(1, 9):
         family = "gmv" if number == 1 else "refund" if number == REFUND_TRAP else "synthetic"
         first = 1 if number <= REFUND_TRAP else number * 10
