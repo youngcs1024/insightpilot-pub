@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "evidence_source": "live_api",
+  "model": "qwen3.6-flash-2026-04-16",
+  "execution_complete": true,
+  "recommended_tier": 1
+}

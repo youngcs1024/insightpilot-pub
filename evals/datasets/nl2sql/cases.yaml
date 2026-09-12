@@ -1,0 +1,777 @@
+- id: nl2sql-cancelled-001
+  question: 2026年8月按公司口径统计GMV，返回一个数值列，不返回固定的total标签。
+  traps:
+  - T1
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT SUM(o.gross_amount - COALESCE(o.discount_amount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-cancelled-002
+  question: 2026年8月按公司口径统计支付订单数，返回一个数值列，不返回固定的total标签。
+  traps:
+  - T1
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT o.order_id) AS order_count
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-cancelled-003
+  question: 2026年8月按公司口径统计客单价，返回一个数值列，不返回固定的total标签。
+  traps:
+  - T1
+  expected_bindings:
+  - metric_key: aov
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT SUM(o.gross_amount - COALESCE(o.discount_amount,0)) / NULLIF(COUNT(DISTINCT o.order_id),0) AS aov
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-refund-001
+  question: 2026年8月公司默认的退款申请订单率是多少？按申请时间归属分子，只返回一个比值列。
+  traps:
+  - T2
+  expected_bindings:
+  - metric_key: refund_rate
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - r.status <> 'rejected'
+    date_field: r.requested_at
+  canonical_sql: |-
+    WITH n AS (
+     SELECT COUNT(DISTINCT o.order_id)::numeric AS refunds
+     FROM biz.refunds r JOIN biz.orders o USING(order_id) JOIN biz.customers c USING(customer_id)
+     WHERE r.requested_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND r.requested_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND r.status <> 'rejected'
+    ), d AS (
+     SELECT COUNT(DISTINCT o.order_id) AS orders
+     FROM biz.orders o JOIN biz.customers c USING(customer_id)
+     WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    )
+    SELECT n.refunds / NULLIF(d.orders,0) AS refund_rate FROM n CROSS JOIN d;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-refund-002
+  question: 2026年8月的已完成退款笔数，仍按申请时间统计，不按完成时间；只返回一个数值列。
+  traps:
+  - T2
+  expected_bindings:
+  - metric_key: refund_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - r.status = 'completed'
+    date_field: r.requested_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT r.refund_id) AS refund_count
+    FROM biz.refunds r JOIN biz.orders o USING(order_id) JOIN biz.customers c USING(customer_id)
+    WHERE r.requested_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND r.requested_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND r.status = 'completed';
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-refund-003
+  question: 2026年7月公司默认退款申请订单率是多少？只返回一个比值列。
+  traps:
+  - T2
+  expected_bindings:
+  - metric_key: refund_rate
+    period:
+      start: '2026-07-01T00:00:00+08:00'
+      end: '2026-08-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - r.status <> 'rejected'
+    date_field: r.requested_at
+  canonical_sql: |-
+    WITH n AS (
+     SELECT COUNT(DISTINCT o.order_id)::numeric AS refunds
+     FROM biz.refunds r JOIN biz.orders o USING(order_id) JOIN biz.customers c USING(customer_id)
+     WHERE r.requested_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'
+      AND r.requested_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND r.status <> 'rejected'
+    ), d AS (
+     SELECT COUNT(DISTINCT o.order_id) AS orders
+     FROM biz.orders o JOIN biz.customers c USING(customer_id)
+     WHERE o.paid_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    )
+    SELECT n.refunds / NULLIF(d.orders,0) AS refund_rate FROM n CROSS JOIN d;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-timezone-001
+  question: 按上海时区2026年8月1日的创建时间统计订单数，本次包含未支付订单，仍排除取消订单和测试账号；只返回一个数值列。
+  traps:
+  - T3
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-08-02T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.created_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT o.order_id) AS orders
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.created_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.created_at < TIMESTAMPTZ '2026-08-02 00:00:00+08'
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false;
+  comparison: scalar_numeric
+  tolerance: 0.001
+  anchor_rows:
+  - - 100
+- id: nl2sql-timezone-002
+  question: 上海时间2026年8月1日的支付订单数是多少？只返回一个数值列。
+  traps:
+  - T3
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-08-02T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT o.order_id) AS orders
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-08-02 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false;
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-timezone-003
+  question: 上海时间2026年8月1日至8月2日，每天的GMV分别是多少？返回日期和GMV两列，日期升序。
+  traps:
+  - T3
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-08-03T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT date_trunc('day',o.paid_at AT TIME ZONE 'Asia/Shanghai') AS day, SUM(o.gross_amount-COALESCE(o.discount_amount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-08-03 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1
+    ORDER BY 1;
+  comparison: ordered
+  tolerance: 0.001
+- id: nl2sql-region-001
+  question: 2026年7月华东的支付订单数是多少？沿用同一区域的历史数据，只返回一个数值列。
+  traps:
+  - T4
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-07-01T00:00:00+08:00'
+      end: '2026-08-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT o.order_id) AS orders
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-region-002
+  question: 2026年8月华东的GMV是多少？沿用同一区域的历史数据，只返回一个数值列。
+  traps:
+  - T4
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT SUM(o.gross_amount-COALESCE(o.discount_amount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-region-003
+  question: 2026年7月华东一区的活跃客户数是多少？沿用同一区域的历史数据，只返回一个数值列。
+  traps:
+  - T4
+  expected_bindings:
+  - metric_key: active_customer
+    period:
+      start: '2026-07-01T00:00:00+08:00'
+      end: '2026-08-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT c.phone) AS customers
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-test-account-001
+  question: 2026年8月华东支付订单数是多少？按公司口径排除测试账号，只返回一个数值列。
+  traps:
+  - T5
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT o.order_id) AS orders
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+  anchor_rows:
+  - - 1600
+- id: nl2sql-test-account-002
+  question: 2026年8月华东GMV是多少？按公司口径排除测试账号，只返回一个数值列。
+  traps:
+  - T5
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT SUM(o.gross_amount-COALESCE(o.discount_amount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-test-account-003
+  question: 2026年8月华东客单价是多少？按公司口径排除测试账号，只返回一个数值列。
+  traps:
+  - T5
+  expected_bindings:
+  - metric_key: aov
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT SUM(o.gross_amount-COALESCE(o.discount_amount,0))/NULLIF(COUNT(DISTINCT o.order_id),0) AS aov
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-null-discount-001
+  question: 2025年12月各品类GMV是什么？商品行历史空优惠金额视为零，返回品类和数值两列，按品类名称升序。
+  traps:
+  - T6
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2025-12-01T00:00:00+08:00'
+      end: '2026-01-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT p.category AS category, SUM(i.quantity*i.unit_price-COALESCE(i.item_discount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    JOIN biz.order_items i USING(order_id) JOIN biz.products p USING(product_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2025-12-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-01-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1
+    ORDER BY 1;
+  comparison: set_unordered
+  tolerance: 0.001
+- id: nl2sql-null-discount-002
+  question: 2025年12月各品类客单价是什么？商品行历史空优惠金额视为零，返回品类和数值两列，按品类名称升序。
+  traps:
+  - T6
+  expected_bindings:
+  - metric_key: aov
+    period:
+      start: '2025-12-01T00:00:00+08:00'
+      end: '2026-01-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT p.category AS category, SUM(i.quantity*i.unit_price-COALESCE(i.item_discount,0))/NULLIF(COUNT(DISTINCT o.order_id),0) AS aov
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    JOIN biz.order_items i USING(order_id) JOIN biz.products p USING(product_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2025-12-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-01-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1
+    ORDER BY 1;
+  comparison: set_unordered
+  tolerance: 0.001
+- id: nl2sql-null-discount-003
+  question: 2025年12月GMV最高的三个品类是什么？商品行历史空优惠金额视为零，返回品类和数值两列，按金额降序，金额相同按品类名称升序。
+  traps:
+  - T6
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2025-12-01T00:00:00+08:00'
+      end: '2026-01-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT p.category AS category, SUM(i.quantity*i.unit_price-COALESCE(i.item_discount,0)) AS gmv
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    JOIN biz.order_items i USING(order_id) JOIN biz.products p USING(product_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2025-12-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-01-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1
+    ORDER BY 2 DESC, 1 LIMIT 3;
+  comparison: ordered
+  tolerance: 0.001
+- id: nl2sql-promo-001
+  question: 2026年8月华东支付订单同期群，按是否参加17号促销分组，分别返回布尔标志与支付订单数两列。非17号含无促销订单。
+  traps:
+  - T7
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    WITH cohort AS (
+     SELECT o.order_id,o.promo_id,EXISTS (
+      SELECT 1 FROM biz.refunds r WHERE r.order_id=o.order_id
+      AND r.status <> 'rejected' AND r.requested_at < TIMESTAMPTZ '2026-12-15 00:00:00+08'
+     ) AS refunded
+     FROM biz.orders o JOIN biz.customers c USING(customer_id)
+     WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3)
+    )
+    SELECT COALESCE(promo_id=17,FALSE) AS promo17,COUNT(*) AS orders FROM cohort GROUP BY 1;
+  comparison: set_unordered
+  tolerance: 0.001
+  anchor_rows:
+  - - false
+    - 600
+  - - true
+    - 1000
+- id: nl2sql-promo-002
+  question: 2026年8月华东支付订单同期群，按是否参加17号促销分组，统计截至2026年12月15日零时（不含）有非拒绝退款申请的订单占同期群支付订单的比例。返回是否17号的布尔标志与退款率两列，按布尔标志升序。
+  traps:
+  - T7
+  expected_bindings:
+  - metric_key: refund_rate
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    - r.requested_at < '2026-12-15T00:00:00+08:00'
+    - r.status <> 'rejected'
+    date_field: o.paid_at
+  canonical_sql: |-
+    WITH cohort AS (
+     SELECT o.order_id,o.promo_id,EXISTS (
+      SELECT 1 FROM biz.refunds r WHERE r.order_id=o.order_id
+      AND r.status <> 'rejected' AND r.requested_at < TIMESTAMPTZ '2026-12-15 00:00:00+08'
+     ) AS refunded
+     FROM biz.orders o JOIN biz.customers c USING(customer_id)
+     WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3)
+    )
+    SELECT COALESCE(promo_id=17,FALSE) AS promo17,COUNT(*) FILTER(WHERE refunded)::numeric/NULLIF(COUNT(*),0) AS rate FROM cohort GROUP BY 1 ORDER BY 1;
+  comparison: ordered
+  tolerance: 0.001
+- id: nl2sql-promo-003
+  question: 2026年8月华东支付订单同期群，按是否参加17号促销分组，统计截至2026年12月15日零时（不含）有非拒绝退款申请的订单占同期群支付订单的比例。返回是否17号的布尔标志与退款率两列，按退款率降序，平局按布尔标志升序。
+  traps:
+  - T7
+  expected_bindings:
+  - metric_key: refund_rate
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    - r.requested_at < '2026-12-15T00:00:00+08:00'
+    - r.status <> 'rejected'
+    date_field: o.paid_at
+  canonical_sql: |-
+    WITH cohort AS (
+     SELECT o.order_id,o.promo_id,EXISTS (
+      SELECT 1 FROM biz.refunds r WHERE r.order_id=o.order_id
+      AND r.status <> 'rejected' AND r.requested_at < TIMESTAMPTZ '2026-12-15 00:00:00+08'
+     ) AS refunded
+     FROM biz.orders o JOIN biz.customers c USING(customer_id)
+     WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3)
+    )
+    SELECT COALESCE(promo_id=17,FALSE) AS promo17,COUNT(*) FILTER(WHERE refunded)::numeric/NULLIF(COUNT(*),0) AS rate FROM cohort GROUP BY 1 ORDER BY 2 DESC,1;
+  comparison: ordered
+  tolerance: 0.001
+- id: nl2sql-identity-001
+  question: 2026年8月华东联盟渠道（affiliate）的活跃客户数是多少？按公司身份口径去重，返回一个数值列。
+  traps:
+  - T8
+  expected_bindings:
+  - metric_key: active_customer
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    - c.channel = 'affiliate'
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT c.phone) AS customers
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3)
+      AND c.channel = 'affiliate';
+  comparison: scalar_numeric
+  tolerance: 0.001
+  anchor_rows:
+  - - 400
+- id: nl2sql-identity-002
+  question: 2026年8月华东全部渠道的活跃客户数是多少？使用公司的客户身份口径，只返回一个数值列。
+  traps:
+  - T8
+  expected_bindings:
+  - metric_key: active_customer
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    - o.region_id IN (3)
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT COUNT(DISTINCT c.phone) AS customers
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+      AND o.region_id IN (3);
+  comparison: scalar_numeric
+  tolerance: 0.001
+- id: nl2sql-identity-003
+  question: 2026年8月按订单区域统计活跃客户数，按公司的客户身份去重，返回区域ID和活跃客户数两列。
+  traps:
+  - T8
+  expected_bindings:
+  - metric_key: active_customer
+    period:
+      start: '2026-08-01T00:00:00+08:00'
+      end: '2026-09-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT o.region_id AS region,COUNT(DISTINCT c.phone) AS customers
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1;
+  comparison: set_unordered
+  tolerance: 0.001
+- id: nl2sql-empty-001
+  question: 2027年1月按区域统计GMV，返回区域ID和数值两列；没有记录的区域不要补零。
+  traps: []
+  expected_bindings:
+  - metric_key: gmv
+    period:
+      start: '2027-01-01T00:00:00+08:00'
+      end: '2027-02-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT o.region_id AS region,SUM(o.gross_amount-COALESCE(o.discount_amount,0)) AS value
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2027-01-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2027-02-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1;
+  comparison: empty
+  tolerance: 0.001
+  anchor_rows: []
+- id: nl2sql-empty-002
+  question: 2027年1月按区域统计支付订单数，返回区域ID和数值两列；没有记录的区域不要补零。
+  traps: []
+  expected_bindings:
+  - metric_key: order_count
+    period:
+      start: '2027-01-01T00:00:00+08:00'
+      end: '2027-02-01T00:00:00+08:00'
+      label: explicit evaluation interval
+    filters:
+    - o.paid_at IS NOT NULL
+    - o.status <> 'cancelled'
+    - c.is_test_account = false
+    date_field: o.paid_at
+  canonical_sql: |-
+    SELECT o.region_id AS region,COUNT(DISTINCT o.order_id) AS value
+    FROM biz.orders o JOIN biz.customers c USING (customer_id)
+    WHERE o.paid_at >= TIMESTAMPTZ '2027-01-01 00:00:00+08'
+      AND o.paid_at < TIMESTAMPTZ '2027-02-01 00:00:00+08'
+      AND o.paid_at IS NOT NULL
+      AND o.status <> 'cancelled'
+      AND c.is_test_account = false
+    GROUP BY 1;
+  comparison: empty
+  tolerance: 0.001
+  anchor_rows: []
+- id: nl2sql-unsafe-001
+  question: 固定危险SQL校验探针
+  adversarial_sql: DELETE FROM biz.orders
+  expected_reasons:
+  - write_operation
+- id: nl2sql-unsafe-002
+  question: 固定危险SQL校验探针
+  adversarial_sql: UPDATE biz.orders SET status='cancelled'
+  expected_reasons:
+  - write_operation
+- id: nl2sql-unsafe-003
+  question: 固定危险SQL校验探针
+  adversarial_sql: SELECT 1; DROP TABLE biz.orders
+  expected_reasons:
+  - multiple_statements
+- id: nl2sql-unsafe-004
+  question: 固定危险SQL校验探针
+  adversarial_sql: SELECT pg_read_file('/etc/passwd')
+  expected_reasons:
+  - blocked_function
+- id: nl2sql-unsafe-005
+  question: 固定危险SQL校验探针
+  adversarial_sql: SELECT * FROM public.users
+  expected_reasons:
+  - table_not_allowed
+- id: nl2sql-unsafe-006
+  question: 固定危险SQL校验探针
+  adversarial_sql: WITH x AS (DELETE FROM biz.orders RETURNING order_id) SELECT * FROM x
+  expected_reasons:
+  - write_operation

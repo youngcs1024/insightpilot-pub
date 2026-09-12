@@ -1,0 +1,4 @@
+FROM quay.io/coreos/etcd:v3.5.18
+# COPY initializes the data directory ownership before Docker populates a new volume.
+COPY --chown=10001:10001 docker/storage-volume/ /etcd/
+USER 10001:10001

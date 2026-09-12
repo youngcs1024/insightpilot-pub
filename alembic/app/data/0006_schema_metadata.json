@@ -1,0 +1,1450 @@
+{
+  "schema_version": 1,
+  "tables": [
+    {
+      "table_name": "biz.regions",
+      "description": "销售区域维表",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "华东与华东一区解析为稳定 region_id=3；改名不截断历史订单。"
+      ],
+      "columns": [
+        {
+          "column_name": "region_id",
+          "sql_type": "integer",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_regions",
+              "kind": "p",
+              "definition": "PRIMARY KEY (region_id)",
+              "columns": [
+                "region_id"
+              ]
+            }
+          ],
+          "description": "区域ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "name",
+          "sql_type": "character varying(40)",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_regions_rename",
+              "kind": "c",
+              "definition": "CHECK (((renamed_from IS NULL) OR ((renamed_from)::text <> (name)::text)))",
+              "columns": [
+                "renamed_from",
+                "name"
+              ]
+            },
+            {
+              "name": "uq_regions_name",
+              "kind": "u",
+              "definition": "UNIQUE (name)",
+              "columns": [
+                "name"
+              ]
+            }
+          ],
+          "description": "当前中文名",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [
+            "华东一区"
+          ],
+          "notes": []
+        },
+        {
+          "column_name": "name_en",
+          "sql_type": "character varying(80)",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "uq_regions_name_en",
+              "kind": "u",
+              "definition": "UNIQUE (name_en)",
+              "columns": [
+                "name_en"
+              ]
+            }
+          ],
+          "description": "英文名",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "renamed_from",
+          "sql_type": "character varying(40)",
+          "ordinal_position": 4,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_regions_rename",
+              "kind": "c",
+              "definition": "CHECK (((renamed_from IS NULL) OR ((renamed_from)::text <> (name)::text)))",
+              "columns": [
+                "renamed_from",
+                "name"
+              ]
+            }
+          ],
+          "description": "更名前名称",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [
+            "华东"
+          ],
+          "notes": []
+        },
+        {
+          "column_name": "effective_from",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "改名生效时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.promotions",
+      "description": "促销活动；规则以文档为准",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "活动区间为左闭右开；promo_id=17 的规则需读取促销文档，数据相关性不能证明因果。"
+      ],
+      "columns": [
+        {
+          "column_name": "promo_id",
+          "sql_type": "integer",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_promotions",
+              "kind": "p",
+              "definition": "PRIMARY KEY (promo_id)",
+              "columns": [
+                "promo_id"
+              ]
+            }
+          ],
+          "description": "促销ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "name",
+          "sql_type": "character varying(100)",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "活动名称",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "kind",
+          "sql_type": "character varying(20)",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_promotions_kind",
+              "kind": "c",
+              "definition": "CHECK (((kind)::text = ANY ((ARRAY['discount'::character varying, 'seasonal'::character varying, 'shipping'::character varying])::text[])))",
+              "columns": [
+                "kind"
+              ]
+            }
+          ],
+          "description": "活动类型",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "discount": "折扣",
+            "seasonal": "季节活动",
+            "shipping": "运费优惠"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "starts_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_promotions_interval",
+              "kind": "c",
+              "definition": "CHECK ((starts_at < ends_at))",
+              "columns": [
+                "starts_at",
+                "ends_at"
+              ]
+            }
+          ],
+          "description": "开始时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "ends_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_promotions_interval",
+              "kind": "c",
+              "definition": "CHECK ((starts_at < ends_at))",
+              "columns": [
+                "starts_at",
+                "ends_at"
+              ]
+            }
+          ],
+          "description": "结束时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "rule_doc_ref",
+          "sql_type": "character varying(200)",
+          "ordinal_position": 6,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "规则文档引用",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [
+            "promo_2026_summer.md"
+          ],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.products",
+      "description": "商品维表，一行一SKU",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。"
+      ],
+      "columns": [
+        {
+          "column_name": "product_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_products",
+              "kind": "p",
+              "definition": "PRIMARY KEY (product_id)",
+              "columns": [
+                "product_id"
+              ]
+            }
+          ],
+          "description": "商品ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "sku",
+          "sql_type": "character varying(32)",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "uq_products_sku",
+              "kind": "u",
+              "definition": "UNIQUE (sku)",
+              "columns": [
+                "sku"
+              ]
+            }
+          ],
+          "description": "SKU编码",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [
+            "SKU-000001"
+          ],
+          "notes": []
+        },
+        {
+          "column_name": "category",
+          "sql_type": "character varying(32)",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_products_category",
+              "kind": "c",
+              "definition": "CHECK (((category)::text = ANY ((ARRAY['apparel'::character varying, 'beauty'::character varying, 'home'::character varying, 'electronics'::character varying, 'food'::character varying])::text[])))",
+              "columns": [
+                "category"
+              ]
+            }
+          ],
+          "description": "品类",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "apparel": "服饰",
+            "beauty": "美妆",
+            "home": "家居",
+            "electronics": "电子",
+            "food": "食品"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "list_price",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_products_price",
+              "kind": "c",
+              "definition": "CHECK (((list_price > (0)::numeric) AND (cost >= (0)::numeric) AND (cost <= list_price)))",
+              "columns": [
+                "list_price",
+                "cost"
+              ]
+            }
+          ],
+          "description": "标价",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "cost",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_products_price",
+              "kind": "c",
+              "definition": "CHECK (((list_price > (0)::numeric) AND (cost >= (0)::numeric) AND (cost <= list_price)))",
+              "columns": [
+                "list_price",
+                "cost"
+              ]
+            }
+          ],
+          "description": "成本价",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "launched_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 6,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "上架时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.customers",
+      "description": "客户维表",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "分析默认排除 is_test_account=true。",
+        "活跃客户以规范化 phone 去重；同手机号不同邮箱可能重复，这是本合成数据的身份假设。"
+      ],
+      "columns": [
+        {
+          "column_name": "customer_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_customers",
+              "kind": "p",
+              "definition": "PRIMARY KEY (customer_id)",
+              "columns": [
+                "customer_id"
+              ]
+            }
+          ],
+          "description": "客户ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "region_id",
+          "sql_type": "integer",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.regions",
+          "fk_column": "region_id",
+          "constraints": [
+            {
+              "name": "fk_customers_region_id_regions",
+              "kind": "f",
+              "definition": "FOREIGN KEY (region_id) REFERENCES biz.regions(region_id) ON DELETE RESTRICT",
+              "columns": [
+                "region_id"
+              ]
+            }
+          ],
+          "description": "客户所属区域",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "registered_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "注册时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "channel",
+          "sql_type": "character varying(20)",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_customers_channel",
+              "kind": "c",
+              "definition": "CHECK (((channel)::text = ANY ((ARRAY['organic'::character varying, 'search'::character varying, 'social'::character varying, 'affiliate'::character varying])::text[])))",
+              "columns": [
+                "channel"
+              ]
+            }
+          ],
+          "description": "获客渠道",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "organic": "自然流量",
+            "search": "搜索",
+            "social": "社交",
+            "affiliate": "联盟"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "is_test_account",
+          "sql_type": "boolean",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "测试账号标记",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "true": "测试账号，分析排除",
+            "false": "真实业务账号"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "phone",
+          "sql_type": "character varying(24)",
+          "ordinal_position": 6,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "规范化手机号",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": true,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "email",
+          "sql_type": "character varying(254)",
+          "ordinal_position": 7,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "uq_customers_email",
+              "kind": "u",
+              "definition": "UNIQUE (email)",
+              "columns": [
+                "email"
+              ]
+            }
+          ],
+          "description": "邮箱",
+          "semantic_type": "text",
+          "allowed_values": {},
+          "is_pii": true,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.orders",
+      "description": "客户订单主表，一行一单",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "GMV=SUM(gross_amount-discount_amount)，按 paid_at 统计，排除取消订单和测试账号，不扣退款、不含运费。",
+        "销售分组用 orders.region_id；未支付订单 paid_at 为 NULL。"
+      ],
+      "columns": [
+        {
+          "column_name": "order_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_orders",
+              "kind": "p",
+              "definition": "PRIMARY KEY (order_id)",
+              "columns": [
+                "order_id"
+              ]
+            }
+          ],
+          "description": "订单ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "customer_id",
+          "sql_type": "bigint",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.customers",
+          "fk_column": "customer_id",
+          "constraints": [
+            {
+              "name": "fk_orders_customer_id_customers",
+              "kind": "f",
+              "definition": "FOREIGN KEY (customer_id) REFERENCES biz.customers(customer_id) ON DELETE RESTRICT",
+              "columns": [
+                "customer_id"
+              ]
+            }
+          ],
+          "description": "客户ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "region_id",
+          "sql_type": "integer",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.regions",
+          "fk_column": "region_id",
+          "constraints": [
+            {
+              "name": "fk_orders_region_id_regions",
+              "kind": "f",
+              "definition": "FOREIGN KEY (region_id) REFERENCES biz.regions(region_id) ON DELETE RESTRICT",
+              "columns": [
+                "region_id"
+              ]
+            }
+          ],
+          "description": "下单区域",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "created_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_paid_time",
+              "kind": "c",
+              "definition": "CHECK (((paid_at IS NULL) OR (paid_at >= created_at)))",
+              "columns": [
+                "paid_at",
+                "created_at"
+              ]
+            }
+          ],
+          "description": "创建时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "paid_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 5,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_paid_time",
+              "kind": "c",
+              "definition": "CHECK (((paid_at IS NULL) OR (paid_at >= created_at)))",
+              "columns": [
+                "paid_at",
+                "created_at"
+              ]
+            },
+            {
+              "name": "ck_orders_payment",
+              "kind": "c",
+              "definition": "CHECK (((((status)::text = 'created'::text) AND (paid_at IS NULL)) OR (((status)::text <> 'created'::text) AND (paid_at IS NOT NULL))))",
+              "columns": [
+                "status",
+                "paid_at"
+              ]
+            }
+          ],
+          "description": "支付完成时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "status",
+          "sql_type": "character varying(16)",
+          "ordinal_position": 6,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_payment",
+              "kind": "c",
+              "definition": "CHECK (((((status)::text = 'created'::text) AND (paid_at IS NULL)) OR (((status)::text <> 'created'::text) AND (paid_at IS NOT NULL))))",
+              "columns": [
+                "status",
+                "paid_at"
+              ]
+            },
+            {
+              "name": "ck_orders_status",
+              "kind": "c",
+              "definition": "CHECK (((status)::text = ANY ((ARRAY['created'::character varying, 'paid'::character varying, 'shipped'::character varying, 'delivered'::character varying, 'cancelled'::character varying, 'closed'::character varying])::text[])))",
+              "columns": [
+                "status"
+              ]
+            }
+          ],
+          "description": "订单状态",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "created": "已创建",
+            "paid": "已支付",
+            "shipped": "已发货",
+            "delivered": "已签收",
+            "cancelled": "已取消",
+            "closed": "已关闭"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "gross_amount",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 7,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_amount",
+              "kind": "c",
+              "definition": "CHECK (((gross_amount >= (0)::numeric) AND (discount_amount >= (0)::numeric) AND (discount_amount <= gross_amount) AND (shipping_fee >= (0)::numeric)))",
+              "columns": [
+                "gross_amount",
+                "discount_amount",
+                "shipping_fee"
+              ]
+            }
+          ],
+          "description": "商品总额，未扣优惠，不含运费",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "discount_amount",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 8,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_amount",
+              "kind": "c",
+              "definition": "CHECK (((gross_amount >= (0)::numeric) AND (discount_amount >= (0)::numeric) AND (discount_amount <= gross_amount) AND (shipping_fee >= (0)::numeric)))",
+              "columns": [
+                "gross_amount",
+                "discount_amount",
+                "shipping_fee"
+              ]
+            }
+          ],
+          "description": "优惠总额",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "shipping_fee",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 9,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_orders_amount",
+              "kind": "c",
+              "definition": "CHECK (((gross_amount >= (0)::numeric) AND (discount_amount >= (0)::numeric) AND (discount_amount <= gross_amount) AND (shipping_fee >= (0)::numeric)))",
+              "columns": [
+                "gross_amount",
+                "discount_amount",
+                "shipping_fee"
+              ]
+            }
+          ],
+          "description": "运费",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "promo_id",
+          "sql_type": "integer",
+          "ordinal_position": 10,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": "biz.promotions",
+          "fk_column": "promo_id",
+          "constraints": [
+            {
+              "name": "fk_orders_promo_id_promotions",
+              "kind": "f",
+              "definition": "FOREIGN KEY (promo_id) REFERENCES biz.promotions(promo_id) ON DELETE RESTRICT",
+              "columns": [
+                "promo_id"
+              ]
+            }
+          ],
+          "description": "关联促销ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.order_items",
+      "description": "订单商品明细",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "历史 item_discount 为 NULL 时按0处理：SUM(unit_price*quantity-COALESCE(item_discount,0))，不得直接相减导致漏计。"
+      ],
+      "columns": [
+        {
+          "column_name": "order_item_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_order_items",
+              "kind": "p",
+              "definition": "PRIMARY KEY (order_item_id)",
+              "columns": [
+                "order_item_id"
+              ]
+            }
+          ],
+          "description": "明细ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "order_id",
+          "sql_type": "bigint",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.orders",
+          "fk_column": "order_id",
+          "constraints": [
+            {
+              "name": "fk_order_items_order_id_orders",
+              "kind": "f",
+              "definition": "FOREIGN KEY (order_id) REFERENCES biz.orders(order_id) ON DELETE RESTRICT",
+              "columns": [
+                "order_id"
+              ]
+            },
+            {
+              "name": "uq_order_items_order_id",
+              "kind": "u",
+              "definition": "UNIQUE (order_id, product_id)",
+              "columns": [
+                "order_id",
+                "product_id"
+              ]
+            }
+          ],
+          "description": "订单ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "product_id",
+          "sql_type": "bigint",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.products",
+          "fk_column": "product_id",
+          "constraints": [
+            {
+              "name": "fk_order_items_product_id_products",
+              "kind": "f",
+              "definition": "FOREIGN KEY (product_id) REFERENCES biz.products(product_id) ON DELETE RESTRICT",
+              "columns": [
+                "product_id"
+              ]
+            },
+            {
+              "name": "uq_order_items_order_id",
+              "kind": "u",
+              "definition": "UNIQUE (order_id, product_id)",
+              "columns": [
+                "order_id",
+                "product_id"
+              ]
+            }
+          ],
+          "description": "商品ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "quantity",
+          "sql_type": "integer",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_order_items_amount",
+              "kind": "c",
+              "definition": "CHECK (((quantity > 0) AND (unit_price > (0)::numeric) AND ((item_discount IS NULL) OR ((item_discount >= (0)::numeric) AND (item_discount <= ((quantity)::numeric * unit_price))))))",
+              "columns": [
+                "quantity",
+                "unit_price",
+                "item_discount"
+              ]
+            }
+          ],
+          "description": "购买数量",
+          "semantic_type": "quantity",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "unit_price",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_order_items_amount",
+              "kind": "c",
+              "definition": "CHECK (((quantity > 0) AND (unit_price > (0)::numeric) AND ((item_discount IS NULL) OR ((item_discount >= (0)::numeric) AND (item_discount <= ((quantity)::numeric * unit_price))))))",
+              "columns": [
+                "quantity",
+                "unit_price",
+                "item_discount"
+              ]
+            }
+          ],
+          "description": "成交单价",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "item_discount",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 6,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_order_items_amount",
+              "kind": "c",
+              "definition": "CHECK (((quantity > 0) AND (unit_price > (0)::numeric) AND ((item_discount IS NULL) OR ((item_discount >= (0)::numeric) AND (item_discount <= ((quantity)::numeric * unit_price))))))",
+              "columns": [
+                "quantity",
+                "unit_price",
+                "item_discount"
+              ]
+            }
+          ],
+          "description": "明细优惠",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.refunds",
+      "description": "退款申请；一单可多次申请",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。",
+        "默认退款率：按 requested_at 统计非拒绝申请的去重订单数／按 paid_at 统计的支付订单数；两侧排除取消和测试账号，分母为0返回NULL。",
+        "申请可能跨订单月份；此流量比率可超过100%，支付队列退款率须另行声明口径。"
+      ],
+      "columns": [
+        {
+          "column_name": "refund_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "pk_refunds",
+              "kind": "p",
+              "definition": "PRIMARY KEY (refund_id)",
+              "columns": [
+                "refund_id"
+              ]
+            }
+          ],
+          "description": "退款ID",
+          "semantic_type": "identifier",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "order_id",
+          "sql_type": "bigint",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": "biz.orders",
+          "fk_column": "order_id",
+          "constraints": [
+            {
+              "name": "fk_refunds_order_id_orders",
+              "kind": "f",
+              "definition": "FOREIGN KEY (order_id) REFERENCES biz.orders(order_id) ON DELETE RESTRICT",
+              "columns": [
+                "order_id"
+              ]
+            }
+          ],
+          "description": "订单ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "requested_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_refunds_completion",
+              "kind": "c",
+              "definition": "CHECK (((((status)::text = 'completed'::text) AND (completed_at IS NOT NULL) AND (completed_at >= requested_at)) OR (((status)::text <> 'completed'::text) AND (completed_at IS NULL))))",
+              "columns": [
+                "status",
+                "completed_at",
+                "requested_at"
+              ]
+            }
+          ],
+          "description": "申请时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "completed_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 4,
+          "nullable": true,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_refunds_completion",
+              "kind": "c",
+              "definition": "CHECK (((((status)::text = 'completed'::text) AND (completed_at IS NOT NULL) AND (completed_at >= requested_at)) OR (((status)::text <> 'completed'::text) AND (completed_at IS NULL))))",
+              "columns": [
+                "status",
+                "completed_at",
+                "requested_at"
+              ]
+            }
+          ],
+          "description": "完成时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "amount",
+          "sql_type": "numeric(12,2)",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_refunds_amount",
+              "kind": "c",
+              "definition": "CHECK ((amount > (0)::numeric))",
+              "columns": [
+                "amount"
+              ]
+            }
+          ],
+          "description": "申请退款金额",
+          "semantic_type": "money",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "reason_code",
+          "sql_type": "character varying(24)",
+          "ordinal_position": 6,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_refunds_reason",
+              "kind": "c",
+              "definition": "CHECK (((reason_code)::text = ANY ((ARRAY['quality'::character varying, 'size'::character varying, 'delayed'::character varying, 'changed_mind'::character varying, 'other'::character varying])::text[])))",
+              "columns": [
+                "reason_code"
+              ]
+            }
+          ],
+          "description": "退款原因",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "quality": "质量",
+            "size": "尺码",
+            "delayed": "延迟",
+            "changed_mind": "改变主意",
+            "other": "其他"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "status",
+          "sql_type": "character varying(16)",
+          "ordinal_position": 7,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_refunds_completion",
+              "kind": "c",
+              "definition": "CHECK (((((status)::text = 'completed'::text) AND (completed_at IS NOT NULL) AND (completed_at >= requested_at)) OR (((status)::text <> 'completed'::text) AND (completed_at IS NULL))))",
+              "columns": [
+                "status",
+                "completed_at",
+                "requested_at"
+              ]
+            },
+            {
+              "name": "ck_refunds_status",
+              "kind": "c",
+              "definition": "CHECK (((status)::text = ANY ((ARRAY['requested'::character varying, 'approved'::character varying, 'rejected'::character varying, 'completed'::character varying])::text[])))",
+              "columns": [
+                "status"
+              ]
+            }
+          ],
+          "description": "退款状态",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "requested": "已申请",
+            "approved": "已批准",
+            "rejected": "已拒绝",
+            "completed": "已完成"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "table_name": "biz.inventory",
+      "description": "商品库存快照",
+      "notes": [
+        "所有时间均为 TIMESTAMPTZ；业务时区 Asia/Shanghai，区间为[start,end)。"
+      ],
+      "columns": [
+        {
+          "column_name": "product_id",
+          "sql_type": "bigint",
+          "ordinal_position": 1,
+          "nullable": false,
+          "is_primary_key": true,
+          "fk_table": "biz.products",
+          "fk_column": "product_id",
+          "constraints": [
+            {
+              "name": "fk_inventory_product_id_products",
+              "kind": "f",
+              "definition": "FOREIGN KEY (product_id) REFERENCES biz.products(product_id) ON DELETE RESTRICT",
+              "columns": [
+                "product_id"
+              ]
+            },
+            {
+              "name": "pk_inventory",
+              "kind": "p",
+              "definition": "PRIMARY KEY (product_id)",
+              "columns": [
+                "product_id"
+              ]
+            }
+          ],
+          "description": "商品ID",
+          "semantic_type": "foreign_key",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "warehouse",
+          "sql_type": "character varying(16)",
+          "ordinal_position": 2,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_inventory_warehouse",
+              "kind": "c",
+              "definition": "CHECK (((warehouse)::text = ANY ((ARRAY['WH-N'::character varying, 'WH-S'::character varying, 'WH-E'::character varying])::text[])))",
+              "columns": [
+                "warehouse"
+              ]
+            }
+          ],
+          "description": "仓库编码",
+          "semantic_type": "enum",
+          "allowed_values": {
+            "WH-N": "北仓",
+            "WH-S": "南仓",
+            "WH-E": "东仓"
+          },
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "quantity",
+          "sql_type": "integer",
+          "ordinal_position": 3,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_inventory_quantity",
+              "kind": "c",
+              "definition": "CHECK (((quantity >= 0) AND (reorder_level >= 0)))",
+              "columns": [
+                "quantity",
+                "reorder_level"
+              ]
+            }
+          ],
+          "description": "当前库存",
+          "semantic_type": "quantity",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "reorder_level",
+          "sql_type": "integer",
+          "ordinal_position": 4,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [
+            {
+              "name": "ck_inventory_quantity",
+              "kind": "c",
+              "definition": "CHECK (((quantity >= 0) AND (reorder_level >= 0)))",
+              "columns": [
+                "quantity",
+                "reorder_level"
+              ]
+            }
+          ],
+          "description": "补货阈值",
+          "semantic_type": "quantity",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        },
+        {
+          "column_name": "updated_at",
+          "sql_type": "timestamp with time zone",
+          "ordinal_position": 5,
+          "nullable": false,
+          "is_primary_key": false,
+          "fk_table": null,
+          "fk_column": null,
+          "constraints": [],
+          "description": "更新时间",
+          "semantic_type": "timestamp",
+          "allowed_values": {},
+          "is_pii": false,
+          "sample_values": [],
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

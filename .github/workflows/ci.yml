@@ -1,0 +1,575 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.select.outputs.plan }}
+      checks: ${{ steps.select.outputs.checks }}
+      images: ${{ steps.select.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Audit the public source boundary
+        id: public_files
+        run: .venv/bin/python -m scripts.public_files
+      - name: Select checks from a trusted successful ancestor
+        id: select
+        env:
+          IP_CI_TOKEN: ${{ github.token }}
+          IP_CI_REPOSITORY: ${{ github.repository }}
+          IP_CI_EVENT: ${{ github.event_name }}
+          IP_CI_TESTED_SHA: ${{ github.sha }}
+          IP_CI_RUN_ID: ${{ github.run_id }}
+          IP_CI_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          export IP_CI_OUTPUT="$GITHUB_OUTPUT" IP_CI_SUMMARY="$GITHUB_STEP_SUMMARY"
+          .venv/bin/python -m scripts.ci_changes
+
+  quality:
+    needs: changes
+    if: needs.changes.outputs.checks == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      quality_details: ${{ steps.report.outputs.quality_details }}
+      collection_outcome: ${{ steps.collection.outcome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Independent deployment environment contracts
+        id: contracts
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m scripts.check_deployment_contracts 2>&1 | tee quality-contracts.log
+      - name: Collect all ordinary tests without executing fixtures or test bodies
+        id: collection
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external" 2>&1 | tee quality-collection.log
+      - name: Ruff rules
+        id: lint
+        env:
+          RUFF_OUTPUT_FORMAT: github
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          make lint-check ENV=test 2>&1 | tee quality-lint.log
+      - name: Ruff formatting
+        id: format
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          make format-check ENV=test 2>&1 | tee quality-format.log
+      - name: Static types
+        id: types
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          make typecheck-report ENV=test 2>&1 | tee quality-types.log
+      - name: Dependency declarations
+        id: dependencies
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m scripts.ci_dependencies --output dependency-evidence 2>&1 | tee quality-dependencies.log
+      - name: Save native type diagnostics
+        id: types_upload
+        if: ${{ always() && hashFiles('type-evidence/*') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: type-evidence
+          path: type-evidence/
+          if-no-files-found: error
+      - name: Save dependency audit evidence
+        if: ${{ always() && hashFiles('dependency-evidence/*') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dependency-evidence
+          path: dependency-evidence/
+          if-no-files-found: error
+      - name: Summarize every quality outcome
+        id: report
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+        run: .venv/bin/python -m scripts.ci_result quality --steps "$CI_STEPS" --summary "$GITHUB_STEP_SUMMARY" --output "$GITHUB_OUTPUT" --tested-sha "$CI_TESTED_SHA"
+      - name: Generate safe Ruff repair evidence
+        id: format_repair
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && (steps.lint.outcome == 'failure' || steps.format.outcome == 'failure') }}
+        timeout-minutes: 2
+        env:
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_FORMAT_OUTPUT: ${{ runner.temp }}/format-repair-${{ github.run_id }}-${{ github.run_attempt }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          export CI_FORMAT_SUMMARY="$GITHUB_STEP_SUMMARY"
+          make ruff-patch ENV=test
+      - name: Save format repair evidence
+        id: repair_upload
+        if: ${{ always() && steps.format_repair.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: format-repair
+          path: ${{ runner.temp }}/format-repair-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
+      - name: Save available quality logs
+        id: quality_logs
+        if: ${{ always() && hashFiles('quality-*.log') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quality-evidence
+          path: quality-*.log
+          if-no-files-found: error
+
+      - name: Record quality diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage quality --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/quality.json --summary "$GITHUB_STEP_SUMMARY" --dependencies dependency-evidence/assessment.json --types type-evidence/report.json
+      - name: Save quality diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/quality.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-quality
+          path: ci-diagnostics/quality.json
+          if-no-files-found: error
+
+  unit:
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.checks == 'true' && needs.quality.result != 'cancelled' && needs.quality.outputs.collection_outcome == 'success' }}
+    outputs:
+      coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      # Tooling includes tiny real-mypy fixtures; full-project mypy runs only in quality.
+      - name: All tests without containers, including API, agents and tooling
+        id: tests
+        timeout-minutes: 5
+        env:
+          COVERAGE_FILE: .coverage.unit
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/pytest -m "not integration and not gpu and not external" --cov=app --cov-report=term-missing --junitxml=unit-results.xml --durations=30 2>&1 | tee unit-tests.log
+      - name: Summarize executed tests and require evidence
+        id: test_report
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .venv/bin/python -m scripts.ci_result tests --report unit-results.xml --coverage .coverage.unit --outcome "$TEST_OUTCOME" --summary "$GITHUB_STEP_SUMMARY"
+      - name: Explain unexecuted tests
+        if: ${{ always() && steps.tests.outcome != 'success' && steps.tests.outcome != 'failure' }}
+        shell: bash
+        run: echo 'Tests were not completed (setup blocked or cancelled); no acceptance claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: coverage_upload
+        if: ${{ always() && hashFiles('.coverage.unit') != '' }}
+        with:
+          name: unit-coverage
+          path: .coverage.unit
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: test_upload
+        if: ${{ always() && hashFiles('unit-results.xml', 'unit-tests.log') != '' }}
+        with:
+          name: unit-evidence
+          path: |
+            unit-results.xml
+            unit-tests.log
+          if-no-files-found: error
+
+      - name: Record unit diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage unit --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/unit.json --summary "$GITHUB_STEP_SUMMARY" --report unit-results.xml
+      - name: Save unit diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/unit.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-unit
+          path: ci-diagnostics/unit.json
+          if-no-files-found: error
+
+  integration:
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.checks == 'true' && needs.quality.result != 'cancelled' && needs.quality.outputs.collection_outcome == 'success' }}
+    outputs:
+      coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.5-pg16
+        env:
+          POSTGRES_PASSWORD: ci-only-postgres
+          IP_BOOTSTRAP_APP_PASSWORD: ci-only-app
+          IP_BOOTSTRAP_ETL_PASSWORD: ci-only-etl
+          IP_BOOTSTRAP_MCP_PASSWORD: ci-only-mcp
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 1s --health-timeout 3s --health-retries 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Install the independently locked MCP process used by integration tests
+        id: mcp
+        run: make install-mcp ENV=test
+      - name: Bootstrap the runner-owned PostgreSQL service
+        id: bootstrap
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < docker/postgres/init/01_bootstrap.sql
+      - name: Real containers and typed model substitutes
+        id: tests
+        timeout-minutes: 14
+        env:
+          INSIGHTPILOT_TEST_REQUIRE_DOCKER: "true"
+          INSIGHTPILOT_TEST_POSTGRES__PORT: ${{ job.services.postgres.ports['5432'] }}
+          INSIGHTPILOT_TEST_POSTGRES__PASSWORD: ci-only-postgres
+          INSIGHTPILOT_TEST_POSTGRES__APP_PASSWORD: ci-only-app
+          COVERAGE_FILE: .coverage.integration
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/pytest -v -m "integration and not storage and not gpu and not external" --cov=app --cov-report=term-missing --junitxml=integration-results.xml --durations=30 2>&1 | tee integration-tests.log
+      - name: Summarize executed tests and require evidence
+        id: test_report
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .venv/bin/python -m scripts.ci_result tests --report integration-results.xml --coverage .coverage.integration --outcome "$TEST_OUTCOME" --summary "$GITHUB_STEP_SUMMARY"
+      - name: Explain unexecuted tests
+        if: ${{ always() && steps.tests.outcome != 'success' && steps.tests.outcome != 'failure' }}
+        shell: bash
+        run: echo 'Tests were not completed (setup blocked or cancelled); no acceptance claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Report migration cases from the integration run without repeating them
+        id: migrations_report
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .venv/bin/python -m scripts.ci_result migrations --report integration-results.xml --outcome "$TEST_OUTCOME" --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: coverage_upload
+        if: ${{ always() && hashFiles('.coverage.integration') != '' }}
+        with:
+          name: integration-coverage
+          path: .coverage.integration
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: test_upload
+        if: ${{ always() && hashFiles('integration-results.xml', 'integration-tests.log') != '' }}
+        with:
+          name: integration-evidence
+          path: |
+            integration-results.xml
+            integration-tests.log
+            model-tunnel-evidence/
+          if-no-files-found: error
+
+      - name: Record integration diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage integration --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/integration.json --summary "$GITHUB_STEP_SUMMARY" --report integration-results.xml
+      - name: Save integration diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/integration.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-integration
+          path: ci-diagnostics/integration.json
+          if-no-files-found: error
+      - name: Record migrations diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage migrations --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/migrations.json --summary "$GITHUB_STEP_SUMMARY" --report integration-results.xml
+      - name: Save migrations diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/migrations.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-migrations
+          path: ci-diagnostics/migrations.json
+          if-no-files-found: error
+
+  storage:
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.checks == 'true' && needs.quality.result != 'cancelled' && needs.quality.outputs.collection_outcome == 'success' }}
+    outputs:
+      coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Real isolated storage containers and non-root runtime
+        id: tests
+        timeout-minutes: 12
+        env:
+          INSIGHTPILOT_TEST_REQUIRE_DOCKER: "true"
+          COVERAGE_FILE: .coverage.storage
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/pytest -v -m "integration and storage and not gpu and not external" --cov=app --cov-report=term-missing --junitxml=storage-results.xml --durations=30 2>&1 | tee storage-tests.log
+      - name: Summarize executed tests and require evidence
+        id: test_report
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .venv/bin/python -m scripts.ci_result tests --report storage-results.xml --coverage .coverage.storage --outcome "$TEST_OUTCOME" --summary "$GITHUB_STEP_SUMMARY"
+      - name: Explain unexecuted tests
+        if: ${{ always() && steps.tests.outcome != 'success' && steps.tests.outcome != 'failure' }}
+        shell: bash
+        run: echo 'Tests were not completed (setup blocked or cancelled); no acceptance claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: coverage_upload
+        if: ${{ always() && hashFiles('.coverage.storage') != '' }}
+        with:
+          name: storage-coverage
+          path: .coverage.storage
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: test_upload
+        if: ${{ always() && hashFiles('storage-results.xml', 'storage-tests.log') != '' }}
+        with:
+          name: storage-evidence
+          path: |
+            storage-results.xml
+            storage-tests.log
+            milvus-evidence/
+          if-no-files-found: error
+
+      - name: Record storage diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage storage --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/storage.json --summary "$GITHUB_STEP_SUMMARY" --report storage-results.xml
+      - name: Save storage diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/storage.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-storage
+          path: ci-diagnostics/storage.json
+          if-no-files-found: error
+
+  coverage:
+    needs: [changes, unit, integration, storage]
+    if: ${{ !cancelled() && needs.changes.outputs.checks == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - id: unit_download
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.unit.outputs.coverage_artifact_id != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ needs.unit.outputs.coverage_artifact_id }}
+          path: .
+      - name: Explain absent unit coverage
+        if: ${{ always() && needs.unit.outputs.coverage_artifact_id == '' }}
+        env:
+          UPSTREAM_OUTCOME: ${{ needs.unit.result }}
+        run: echo "No unit coverage artifact was uploaded; upstream=$UPSTREAM_OUTCOME. Evidence remains incomplete." >> "$GITHUB_STEP_SUMMARY"
+      - id: integration_download
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.integration.outputs.coverage_artifact_id != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ needs.integration.outputs.coverage_artifact_id }}
+          path: .
+      - name: Explain absent integration coverage
+        if: ${{ always() && needs.integration.outputs.coverage_artifact_id == '' }}
+        env:
+          UPSTREAM_OUTCOME: ${{ needs.integration.result }}
+        run: echo "No integration coverage artifact was uploaded; upstream=$UPSTREAM_OUTCOME. Evidence remains incomplete." >> "$GITHUB_STEP_SUMMARY"
+      - id: storage_download
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.storage.outputs.coverage_artifact_id != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ needs.storage.outputs.coverage_artifact_id }}
+          path: .
+      - name: Explain absent storage coverage
+        if: ${{ always() && needs.storage.outputs.coverage_artifact_id == '' }}
+        env:
+          UPSTREAM_OUTCOME: ${{ needs.storage.result }}
+        run: echo "No storage coverage artifact was uploaded; upstream=$UPSTREAM_OUTCOME. Evidence remains incomplete." >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnose available coverage and require complete acceptance
+        id: coverage
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        env:
+          UNIT_OUTCOME: ${{ needs.unit.result }}
+          INTEGRATION_OUTCOME: ${{ needs.integration.result }}
+          STORAGE_OUTCOME: ${{ needs.storage.result }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m scripts.ci_coverage --unit "$UNIT_OUTCOME" --integration "$INTEGRATION_OUTCOME" --storage "$STORAGE_OUTCOME" --summary "$GITHUB_STEP_SUMMARY" --output coverage-assessment.json 2>&1 | tee coverage.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: coverage_upload
+        if: ${{ always() && hashFiles('.coverage.json', 'coverage.log', 'coverage-assessment.json') != '' }}
+        with:
+          name: coverage-evidence
+          path: |
+            .coverage.json
+            coverage.log
+            coverage-assessment.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Record coverage diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage coverage --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/coverage.json --summary "$GITHUB_STEP_SUMMARY" --assessment coverage-assessment.json
+      - name: Save coverage diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/coverage.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-coverage
+          path: ci-diagnostics/coverage.json
+          if-no-files-found: error
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
+    uses: ./.github/workflows/docker.yml
+    with:
+      images: ${{ needs.changes.outputs.images }}
+
+  ci-result:
+    name: ci-result
+    needs: [changes, quality, unit, integration, storage, coverage, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python
+        id: setup
+      - name: Explain unavailable setup
+        if: ${{ always() && steps.setup.outcome != 'success' }}
+        shell: bash
+        run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Download available stage diagnostics
+        id: diagnostics_download
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: diagnostic-*
+          path: ci-diagnostics
+          merge-multiple: false
+      - name: Require every selected check to succeed
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_PLAN: ${{ needs.changes.outputs.plan }}
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: .venv/bin/python -m scripts.ci_result result --tested-sha "$CI_TESTED_SHA" --plan "$CI_PLAN" --needs "$CI_NEEDS" --summary "$GITHUB_STEP_SUMMARY"
+      - name: Explain available stage evidence
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_PLAN: ${{ needs.changes.outputs.plan }}
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --directory ci-diagnostics --needs "$CI_NEEDS" --plan "$CI_PLAN" --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --summary "$GITHUB_STEP_SUMMARY"

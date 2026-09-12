@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "traps": [
+    {
+      "id": "T1",
+      "naive_sql": "SELECT SUM(o.gross_amount - o.discount_amount) AS gmv\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n  AND NOT c.is_test_account;",
+      "correct_sql": "SELECT SUM(o.gross_amount - o.discount_amount) AS gmv\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "lower_delta": "0.05",
+      "upper_delta": "0.20",
+      "eval_cases": [
+        "nl2sql-gmv-001",
+        "nl2sql-gmv-007",
+        "nl2sql-trend-003"
+      ]
+    },
+    {
+      "id": "T2",
+      "naive_sql": "WITH eligible AS (\n  SELECT o.* FROM biz.orders o JOIN biz.customers c USING (customer_id)\n  WHERE NOT c.is_test_account AND o.status <> 'cancelled' AND o.paid_at IS NOT NULL\n), denominator AS (\n  SELECT COUNT(*) AS n FROM eligible\n  WHERE paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n    AND paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n)\nSELECT COUNT(DISTINCT o.order_id)::numeric / NULLIF((SELECT n FROM denominator), 0) AS rate\nFROM eligible o JOIN biz.refunds r USING (order_id)\nWHERE r.status <> 'rejected'\n  AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "correct_sql": "WITH eligible AS (\n  SELECT o.* FROM biz.orders o JOIN biz.customers c USING (customer_id)\n  WHERE NOT c.is_test_account AND o.status <> 'cancelled' AND o.paid_at IS NOT NULL\n), denominator AS (\n  SELECT COUNT(*) AS n FROM eligible\n  WHERE paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n    AND paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n)\nSELECT COUNT(DISTINCT o.order_id)::numeric / NULLIF((SELECT n FROM denominator), 0) AS rate\nFROM eligible o JOIN biz.refunds r USING (order_id)\nWHERE r.status <> 'rejected'\n  AND r.requested_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND r.requested_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "lower_delta": "0.05",
+      "upper_delta": "0.50",
+      "eval_cases": [
+        "nl2sql-refund-001",
+        "nl2sql-refund-002",
+        "nl2sql-refund-003"
+      ]
+    },
+    {
+      "id": "T3",
+      "naive_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.created_at >= TIMESTAMPTZ '2026-08-01 00:00:00+00'\n  AND o.created_at < TIMESTAMPTZ '2026-08-02 00:00:00+00'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "correct_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.created_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.created_at < TIMESTAMPTZ '2026-08-02 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "lower_delta": "0.05",
+      "upper_delta": "0.15",
+      "eval_cases": [
+        "nl2sql-time-001",
+        "nl2sql-time-002",
+        "nl2sql-time-003"
+      ]
+    },
+    {
+      "id": "T4",
+      "naive_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nJOIN biz.regions r ON r.region_id = o.region_id\nWHERE r.name = '华东'\n  AND o.paid_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "correct_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nJOIN biz.regions r ON r.region_id = o.region_id\nWHERE (r.name = '华东' OR r.renamed_from = '华东')\n  AND o.paid_at >= TIMESTAMPTZ '2026-07-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "lower_delta": "1.00",
+      "upper_delta": "1.00",
+      "eval_cases": [
+        "nl2sql-region-001",
+        "nl2sql-region-002",
+        "nl2sql-region-003"
+      ]
+    },
+    {
+      "id": "T5",
+      "naive_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.region_id = 3 AND o.status <> 'cancelled'\n  AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "correct_sql": "SELECT COUNT(*) AS orders\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.region_id = 3 AND o.status <> 'cancelled' AND NOT c.is_test_account\n  AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "lower_delta": "0.05",
+      "upper_delta": "0.20",
+      "eval_cases": [
+        "nl2sql-test-001",
+        "nl2sql-test-002",
+        "nl2sql-test-003"
+      ]
+    },
+    {
+      "id": "T6",
+      "naive_sql": "SELECT SUM(i.unit_price * i.quantity - i.item_discount) AS merchandise\nFROM biz.order_items i JOIN biz.orders o USING (order_id)\nJOIN biz.customers c USING (customer_id)\nWHERE o.paid_at >= TIMESTAMPTZ '2025-12-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-01-01 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "correct_sql": "SELECT SUM(i.unit_price * i.quantity - COALESCE(i.item_discount, 0)) AS merchandise\nFROM biz.order_items i JOIN biz.orders o USING (order_id)\nJOIN biz.customers c USING (customer_id)\nWHERE o.paid_at >= TIMESTAMPTZ '2025-12-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-01-01 00:00:00+08'\n  AND NOT c.is_test_account AND o.status <> 'cancelled';",
+      "lower_delta": "0.20",
+      "upper_delta": "0.40",
+      "eval_cases": [
+        "nl2sql-null-001",
+        "nl2sql-null-002",
+        "nl2sql-null-003"
+      ]
+    },
+    {
+      "id": "T7",
+      "naive_sql": "WITH cohort AS (\n  SELECT o.order_id, o.promo_id, EXISTS (\n    SELECT 1 FROM biz.refunds r WHERE r.order_id = o.order_id\n      AND r.status <> 'rejected'\n      AND r.requested_at < TIMESTAMPTZ '2026-12-15 00:00:00+08'\n  ) AS refunded\n  FROM biz.orders o JOIN biz.customers c USING (customer_id)\n  WHERE o.region_id = 3 AND NOT c.is_test_account AND o.status <> 'cancelled'\n    AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n    AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n)\nSELECT COUNT(*) AS orders, COUNT(*) FILTER (WHERE refunded) AS refunded_orders,\n  COUNT(*) FILTER (WHERE refunded)::numeric / NULLIF(COUNT(*), 0) AS rate\nFROM cohort;",
+      "correct_sql": "WITH cohort AS (\n  SELECT o.order_id, o.promo_id, EXISTS (\n    SELECT 1 FROM biz.refunds r WHERE r.order_id = o.order_id\n      AND r.status <> 'rejected'\n      AND r.requested_at < TIMESTAMPTZ '2026-12-15 00:00:00+08'\n  ) AS refunded\n  FROM biz.orders o JOIN biz.customers c USING (customer_id)\n  WHERE o.region_id = 3 AND NOT c.is_test_account AND o.status <> 'cancelled'\n    AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n    AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08'\n)\nSELECT COALESCE(promo_id = 17, FALSE) AS is_promo_17,\n  COUNT(*) AS orders, COUNT(*) FILTER (WHERE refunded) AS refunded_orders,\n  COUNT(*) FILTER (WHERE refunded)::numeric / NULLIF(COUNT(*), 0) AS rate\nFROM cohort GROUP BY COALESCE(promo_id = 17, FALSE)\nORDER BY is_promo_17;",
+      "lower_delta": "0.20",
+      "upper_delta": "0.40",
+      "eval_cases": [
+        "nl2sql-promo-001",
+        "nl2sql-promo-002",
+        "nl2sql-promo-003"
+      ]
+    },
+    {
+      "id": "T8",
+      "naive_sql": "SELECT COUNT(DISTINCT c.customer_id) AS active_customers\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.region_id = 3 AND c.channel = 'affiliate'\n  AND NOT c.is_test_account AND o.status <> 'cancelled'\n  AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "correct_sql": "SELECT COUNT(DISTINCT c.phone) AS active_customers\nFROM biz.orders o JOIN biz.customers c USING (customer_id)\nWHERE o.region_id = 3 AND c.channel = 'affiliate'\n  AND NOT c.is_test_account AND o.status <> 'cancelled'\n  AND o.paid_at >= TIMESTAMPTZ '2026-08-01 00:00:00+08'\n  AND o.paid_at < TIMESTAMPTZ '2026-09-01 00:00:00+08';",
+      "lower_delta": "0.05",
+      "upper_delta": "0.15",
+      "eval_cases": [
+        "nl2sql-customer-001",
+        "nl2sql-customer-002",
+        "nl2sql-customer-003"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+# Disposable feasibility stack only. All data survives container stop.
+name: ${IP_CAPACITY_PROJECT:?required isolated project}
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "3"}
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.5-pg16
+    environment:
+      POSTGRES_PASSWORD: ${IP_CAPACITY_POSTGRES_PASSWORD:?required probe-only secret}
+    command: [postgres, -c, shared_buffers=256MB, -c, max_connections=100]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy: {resources: {limits: {memory: 1536M}}}
+    logging: *logging
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "2147483648"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: [etcd, -advertise-client-urls=http://etcd:2379, -listen-client-urls, "http://0.0.0.0:2379", --data-dir, /etcd]
+    volumes: [etcddata:/etcd]
+    networks: [backend]
+    healthcheck:
+      test: [CMD, etcdctl, endpoint, health]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy: {resources: {limits: {memory: 512M}}}
+    logging: *logging
+  minio:
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    environment:
+      MINIO_ACCESS_KEY: ${IP_CAPACITY_MINIO_USER:?required}
+      MINIO_SECRET_KEY: ${IP_CAPACITY_MINIO_PASSWORD:?required}
+    command: [minio, server, /minio_data]
+    volumes: [miniodata:/minio_data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9000/minio/health/live]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy: {resources: {limits: {memory: 512M}}}
+    logging: *logging
+  milvus:
+    image: milvusdb/milvus:v2.6.4
+    command: [milvus, run, standalone]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${IP_CAPACITY_MINIO_USER:?required}
+      MINIO_SECRET_ACCESS_KEY: ${IP_CAPACITY_MINIO_PASSWORD:?required}
+    volumes: [milvusdata:/var/lib/milvus]
+    networks: [backend]
+    depends_on:
+      etcd: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9091/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 36
+      start_period: 90s
+    deploy: {resources: {limits: {memory: 3072M}}}
+    logging: *logging
+  model-tunnel:
+    image: insightpilot-step08-tunnel:local
+    build: {context: ., dockerfile: spikes/capacity/Dockerfile.tunnel}
+    profiles: [probe]
+    init: true
+    read_only: true
+    networks: [models, egress]
+    volumes:
+      - ${IP_CAPACITY_SSH_CONFIG:?required}:/run/ip-ssh/config:ro
+      - ${IP_CAPACITY_JUMP_KEY:?required}:/run/ip-ssh/jump_key:ro
+      - ${IP_CAPACITY_TARGET_KEY:?required}:/run/ip-ssh/target_key:ro
+      - ${IP_CAPACITY_KNOWN_HOSTS:?required}:/run/ip-ssh/known_hosts:ro
+    healthcheck:
+      test: [CMD, curl, --max-time, "2", --fail, http://127.0.0.1:8100/health]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+    deploy: {resources: {limits: {cpus: "0.5", memory: 128M}}}
+    logging: *logging
+  workload:
+    image: insightpilot-step08-client:local
+    build: {context: ., dockerfile: spikes/capacity/Dockerfile.client}
+    profiles: [probe]
+    init: true
+    read_only: true
+    tmpfs: [/tmp:size=32m]
+    networks: [backend, models]
+    environment:
+      IP_WORKLOAD__OUTPUT: /evidence/workload.json
+      IP_WORKLOAD__MODEL_URL: http://model-tunnel:8100
+      IP_WORKLOAD__AUTH_TOKEN: ${IP_CAPACITY_MODEL_TOKEN:?required probe-only token}
+      IP_WORKLOAD__POSTGRES_PASSWORD: ${IP_CAPACITY_POSTGRES_PASSWORD:?required}
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    volumes: ["${IP_CAPACITY_EVIDENCE:?required}:/evidence"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      milvus: {condition: service_healthy}
+      model-tunnel: {condition: service_healthy}
+    deploy: {resources: {limits: {memory: 512M}}}
+    logging: *logging
+networks:
+  backend: {internal: true}
+  models: {internal: true}
+  egress: {}
+volumes:
+  pgdata: {}
+  etcddata: {}
+  miniodata: {}
+  milvusdata: {}

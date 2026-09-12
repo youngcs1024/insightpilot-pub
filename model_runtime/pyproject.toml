@@ -1,0 +1,28 @@
+[project]
+name = "insightpilot-model-runtime"
+version = "0.1.0"
+description = "Candidate GPU dependencies; server CUDA acceptance is required before deployment."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.14.0+cu126",
+    "FlagEmbedding==1.4.2",
+    "transformers==5.16.1",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.4",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.12.0",
+    "structlog==26.1.0",
+]
+
+[tool.uv]
+required-version = "==0.11.32"
+package = false
+
+# Driver 550.135 supports CUDA 12 minor compatibility; actual inference is still required.
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

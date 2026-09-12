@@ -1,0 +1,17 @@
+name: Locked Python environment
+description: Install the pinned uv and root lock into the project-local environment.
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      with:
+        version: "0.11.32"
+        enable-cache: false
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: .uv-cache
+        key: uv-${{ runner.os }}-${{ runner.arch }}-0.11.32-py312-${{ hashFiles('uv.lock', 'mcp_server/uv.lock') }}
+    - shell: bash
+      run: bash scripts/uv_project.sh api python install 3.12
+    - shell: bash
+      run: make install ENV=test

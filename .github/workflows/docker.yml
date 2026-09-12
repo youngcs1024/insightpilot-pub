@@ -1,0 +1,79 @@
+name: Docker builds
+on:
+  workflow_call:
+    inputs:
+      images:
+        description: JSON array of selected api/mcp images
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: ${{ matrix.image == 'model-runtime' && 'docker' || 'docker-container' }}
+      - name: Build locked image without publishing
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.image }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: insightpilot-${{ matrix.image }}:ci
+          cache-from: ${{ matrix.image != 'model-runtime' && format('type=gha,scope={0}', matrix.image) || '' }}
+          cache-to: ${{ matrix.image != 'model-runtime' && format('type=gha,mode=max,scope={0}', matrix.image) || '' }}
+      - name: Verify runtime image
+        id: smoke
+        env:
+          IMAGE: insightpilot-${{ matrix.image }}:ci
+          IMAGE_KIND: ${{ matrix.image }}
+        run: |
+          if [ "$IMAGE_KIND" != model-runtime ]; then
+            test "$(docker image inspect "$IMAGE" --format '{{.Size}}')" -lt 500000000
+          fi
+          test "$(docker run --rm "$IMAGE" whoami)" = appuser
+          docker run --rm "$IMAGE" python -c 'import shutil; assert all(shutil.which(name) is None for name in ("cc", "gcc", "g++", "make", "uv"))'
+          case "$IMAGE_KIND" in
+            model-runtime)
+              docker run --rm "$IMAGE" python -c 'import sys; import model_runtime.server, model_runtime.probe; assert "torch" not in sys.modules; import torch; assert not torch.cuda.is_available()'
+              ;;
+            model-tunnel)
+              docker run --rm "$IMAGE" python -c 'import model_tunnel.supervisor; import shutil; assert shutil.which("ssh")'
+              ;;
+            *)
+              docker run --rm "$IMAGE" python -c 'from app.core.sql_policy.sql_validator import SQLValidator; from app.schemas.mcp import ValidationStatus; policy = SQLValidator(); assert policy.validate("SELECT order_id FROM biz.orders").status is ValidationStatus.VALID; assert policy.validate("DELETE FROM biz.orders").status is ValidationStatus.UNSAFE'
+              ;;
+          esac
+      - uses: ./.github/actions/setup-python
+        id: setup
+        if: ${{ always() }}
+      - name: Record ${{ matrix.image }} diagnostics
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        env:
+          CI_STEPS: ${{ toJSON(steps) }}
+          CI_TESTED_SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage ${{ matrix.image }} --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/${{ matrix.image }}.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Save ${{ matrix.image }} diagnostics
+        if: ${{ always() && hashFiles('ci-diagnostics/*.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostic-${{ matrix.image }}
+          path: ci-diagnostics/${{ matrix.image }}.json
+          if-no-files-found: error

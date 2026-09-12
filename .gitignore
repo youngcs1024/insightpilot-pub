@@ -1,0 +1,104 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# JavaScript dependencies and build cache
+node_modules/
+.next/
+
+# Local agent configuration and OS files
+/.agents/
+/.codex/
+.DS_Store
+Thumbs.db
+
+# Retained environments during dependency backend migration (no files deleted).
+.venv-step17-backup/
+
+# Generated business seed exports
+/data/seed/out/
+
+# Evaluation attempts are retained locally; explicitly publish reviewed final evidence.
+/evals/reports/
+
+# Generated real Milvus CI evidence (uploaded as an artifact).
+milvus-evidence/
+
+model-tunnel-evidence/
+ssh/
+
+# Public repository: only reviewed root entries participate in Git.
+/*
+!/.gitignore
+!/.dockerignore
+!/.python-version
+!/Makefile
+!/pyproject.toml
+!/uv.lock
+!/alembic.ini
+!/docker-compose.yml
+!/docker-compose.dev.yml
+!/docker-compose.model-server.yml
+!/.env.example
+!/.env.*.example
+!/.github/
+!/app/
+!/tests/
+!/scripts/
+!/alembic/
+!/data/
+!/evals/
+!/mcp_server/
+!/model_runtime/
+!/model_tunnel/
+!/spikes/
+!/docker/
+
+# Local prose and generated evidence never become public source.
+*.md
+*.log
+*.txt
+*.csv
+*.jsonl
+*.tar
+*.zip
+*.db
+*.sqlite
+*.gz
+*.json
+!app/agents/prompts/*.md
+!app/services/llm/prompts/*.md
+!app/resources/provider_capabilities.json
+!tests/fixtures/seed_traps.json
+!alembic/app/data/0006_schema_metadata.json
+!alembic/app/data/0007_metric_catalog.json
+!scripts/data/cl100k_base.tiktoken.gz
+**/docs/
+**/reports/
+**/logs/
+**/evidence/
+**/.agents/
+**/.codex/

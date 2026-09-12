@@ -1,0 +1,4 @@
+FROM alpine:3.23.3
+RUN apk add --no-cache openssh-client curl && addgroup -g 1000 probe && adduser -D -u 1000 -G probe probe
+USER 1000:1000
+ENTRYPOINT ["ssh", "-F", "/run/ip-ssh/config", "-N", "-T", "-g", "-L", "0.0.0.0:8100:127.0.0.1:18108", "ip-model"]

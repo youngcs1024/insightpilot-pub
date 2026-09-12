@@ -1,0 +1,4 @@
+FROM milvusdb/milvus:v2.6.4
+# Upstream ships binary/libs/config directories without other-user execute access.
+RUN chmod -R a+rX /milvus && mkdir -p /var/lib/milvus /milvus/logs && chown -R 10001:10001 /var/lib/milvus /milvus/logs
+USER 10001:10001

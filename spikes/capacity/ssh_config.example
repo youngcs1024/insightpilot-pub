@@ -1,0 +1,25 @@
+# Replace only hosts/users/ports from verified operator inputs. The mounted
+# known_hosts must already contain trusted records for both endpoints.
+Host ip-jump
+    HostName jump.example.invalid
+    User example
+    Port 22
+    IdentityFile /run/ip-ssh/jump_key
+Host ip-model
+    HostName target.example.invalid
+    User example
+    Port 22
+    IdentityFile /run/ip-ssh/target_key
+    ProxyJump ip-jump
+Host *
+    BatchMode yes
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+    UserKnownHostsFile /run/ip-ssh/known_hosts
+    GlobalKnownHostsFile /dev/null
+    ConnectTimeout 10
+    ConnectionAttempts 1
+    ServerAliveInterval 10
+    ServerAliveCountMax 3
+    ExitOnForwardFailure yes
+    ForwardAgent no

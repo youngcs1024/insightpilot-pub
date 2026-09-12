@@ -1,0 +1,18 @@
+[project]
+name = "insightpilot-mcp"
+version = "0.1.0"
+description = "Read-only business-data MCP server with an independent dependency environment."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mcp==2.1.1",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.12.0",
+    "sqlglot[c]==30.18.0",
+    "psycopg[binary,pool]==3.3.5",
+    "structlog==26.1.0",
+    "starlette==1.6.0",
+]
+
+[tool.uv]
+required-version = "==0.11.32"
+package = false

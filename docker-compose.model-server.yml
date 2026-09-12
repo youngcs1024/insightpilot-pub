@@ -1,0 +1,51 @@
+name: insightpilot-model
+services:
+  model-runtime:
+    image: ${IP_MODEL_SERVER__IMAGE:?required immutable image}
+    user: '10001:10001'
+    init: true
+    restart: unless-stopped
+    command: [python, -m, model_runtime.server]
+    ports: ['127.0.0.1:8100:8100']
+    environment:
+      IP_MODEL_SERVER__AUTH_TOKEN: ${IP_MODEL_SERVER__AUTH_TOKEN:?required}
+      IP_MODEL_SERVER__EMBED_REVISION: ${IP_MODEL_SERVER__EMBED_REVISION:?required}
+      IP_MODEL_SERVER__RERANK_REVISION: ${IP_MODEL_SERVER__RERANK_REVISION:?required}
+      IP_MODEL_SERVER__DEVICE: cuda:0
+      IP_MODEL_SERVER__PRECISION: ${IP_MODEL_SERVER__PRECISION:-fp16}
+      IP_MODEL_SERVER__WORKERS: ${IP_MODEL_SERVER__WORKERS:-1}
+      IP_MODEL_SERVER__MAX_CONCURRENCY: ${IP_MODEL_SERVER__MAX_CONCURRENCY:-1}
+      IP_MODEL_SERVER__QUEUE_CAPACITY: ${IP_MODEL_SERVER__QUEUE_CAPACITY:-8}
+      IP_MODEL_SERVER__EMBED_BATCH: ${IP_MODEL_SERVER__EMBED_BATCH:-16}
+      IP_MODEL_SERVER__RERANK_BATCH: ${IP_MODEL_SERVER__RERANK_BATCH:-16}
+      IP_MODEL_SERVER__EMBED_MAX_LENGTH: ${IP_MODEL_SERVER__EMBED_MAX_LENGTH:-512}
+      IP_MODEL_SERVER__RERANK_MAX_LENGTH: ${IP_MODEL_SERVER__RERANK_MAX_LENGTH:-320}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_HOME: /models
+    volumes:
+      - type: bind
+        source: ${IP_MODEL_SERVER__CACHE_PATH:?required}
+        target: /models
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [model-backend]
+    healthcheck:
+      test: [CMD, python, -m, model_runtime.probe, --ready]
+      interval: 10s
+      timeout: 3s
+      start_period: 120s
+      retries: 6
+    deploy:
+      resources:
+        limits: {cpus: '4.0', memory: 12G}
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['${IP_MODEL_SERVER__GPU_ID:?required}']
+              capabilities: [gpu]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+networks:
+  model-backend: {internal: true}

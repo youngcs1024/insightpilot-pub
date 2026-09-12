@@ -1,0 +1,16 @@
+FROM python:3.12.13-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS build
+WORKDIR /opt/probe
+RUN pip install --no-cache-dir uv==0.11.32
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project --no-default-groups
+
+FROM python:3.12.13-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+WORKDIR /opt/probe
+COPY --from=build /opt/probe/.venv /opt/probe/.venv
+COPY app/core/errors.py app/core/settings_base.py ./app/core/
+COPY model_runtime/config.py ./model_runtime/
+COPY spikes/capacity ./spikes/capacity/
+ENV PATH="/opt/probe/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1
+USER 1000:1000
+RUN python -c "import spikes.capacity.workload, spikes.capacity.database_probe; import sys; assert 'torch' not in sys.modules"
+CMD ["python", "-m", "spikes.capacity.workload"]

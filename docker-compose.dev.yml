@@ -1,0 +1,9 @@
+# Explicit opt-in: scripts/compose.sh --dev --profile core up -d
+services:
+  postgres:
+    ports: ["127.0.0.1:${IP_DB_HOST_PORT:-15432}:5432"]
+    # Engine 29 does not publish ports on an internal-only endpoint.
+    # Reuse this project's egress network instead of allocating a third subnet.
+    networks: [backend, egress]
+  model-tunnel:
+    ports: ['127.0.0.1:${IP_TUNNEL__HOST_PORT:-18100}:8100']

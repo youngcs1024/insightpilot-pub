@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
+FROM python:3.12.12-slim-bookworm AS builder
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends build-essential
+COPY --from=uv /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
+WORKDIR /opt/insightpilot/mcp_server
+COPY mcp_server/pyproject.toml mcp_server/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+
+FROM python:3.12.12-slim-bookworm AS runtime
+RUN groupadd --gid 10001 appuser && useradd --uid 10001 --gid 10001 --no-create-home appuser
+WORKDIR /opt/insightpilot
+COPY --from=builder /opt/insightpilot/mcp_server/.venv ./mcp_server/.venv
+COPY mcp_server/*.py ./mcp_server/
+COPY mcp_server/tools ./mcp_server/tools
+COPY mcp_server/policy ./mcp_server/policy
+COPY app/__init__.py ./app/__init__.py
+COPY app/core/__init__.py app/core/errors.py app/core/settings_base.py ./app/core/
+COPY app/core/sql_policy ./app/core/sql_policy
+COPY app/schemas/__init__.py app/schemas/mcp.py app/schemas/schema_catalog.py ./app/schemas/
+ENV PATH="/opt/insightpilot/mcp_server/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+USER appuser
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=3).status == 200 else 1)"]
+CMD ["python", "-m", "mcp_server.server"]

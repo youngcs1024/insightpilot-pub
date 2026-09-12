@@ -1,0 +1,16 @@
+# Pass the verified local Step 0.2 image ID; this ARG contains no credential.
+ARG PROBE_BASE
+FROM ${PROBE_BASE}
+USER root
+# Step 0.2 predates typed process settings. The probe needs these exact additional
+# pure-Python pins from model_runtime/uv.lock; no torch/model versions change.
+RUN /usr/local/bin/python -m pip --python /opt/ip-model/.venv/bin/python install --timeout 30 --retries 2 --no-cache-dir --no-deps pydantic-settings==2.12.0 python-dotenv==1.2.3
+WORKDIR /opt/probe
+COPY app/core/errors.py app/core/settings_base.py ./app/core/
+COPY model_runtime/config.py ./model_runtime/
+COPY spikes/model_runtime/cuda_smoke.py ./spikes/model_runtime/
+COPY spikes/capacity ./spikes/capacity/
+ENV PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=/models OMP_NUM_THREADS=4
+USER 10001:10001
+RUN python -c "import pydantic_settings, httpx; import spikes.capacity.model_probe"
+CMD ["python", "-m", "spikes.capacity.model_probe"]
