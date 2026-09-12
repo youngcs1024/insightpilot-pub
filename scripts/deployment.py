@@ -18,6 +18,7 @@ from app.core.config_models import DataAgentSettings, ObservabilitySettings
 from app.core.errors import InsightPilotError
 from app.core.llm_config import ModelRole, ModelRoleSettings
 from app.retrieval.config import RetrievalSettings
+from scripts.model_evidence import Provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 LOGGER = structlog.get_logger()
@@ -212,10 +213,8 @@ def validate_arguments(call: Invocation) -> None:
         Command.BOOTSTRAP: set(),
     }
     if call.command is Command.RUN:
-        if call.arguments[:2] == ["--rm", "model-diagnostics"] and call.arguments[2:] in (
-            ["python", "-m", "scripts.probe_model_runtime", "--ready"],
-            ["python", "-m", "scripts.bench_model_runtime"],
-        ):
+        if call.arguments[:2] == ["--rm", "model-diagnostics"]:
+            validate_model_diagnostic(call.arguments[2:])
             return
         if call.arguments != ["--rm", "seed"]:
             raise DeploymentError("run supports only --rm seed.")
@@ -233,6 +232,19 @@ def validate_arguments(call: Invocation) -> None:
         raise DeploymentError(
             "Unsupported arguments; project overrides and volume deletion are forbidden."
         )
+
+
+def validate_model_diagnostic(arguments: list[str]) -> None:
+    """Allow a bounded provenance value without exposing arbitrary Docker arguments."""
+    if arguments == ["python", "-m", "scripts.probe_model_runtime", "--ready"]:
+        return
+    prefix = ["python", "-m", "scripts.bench_model_runtime", "--provenance-json"]
+    if arguments[:-1] != prefix:
+        raise DeploymentError("Model diagnostics require a supported command and provenance.")
+    try:
+        Provenance.model_validate_json(arguments[-1])
+    except ValidationError as exc:
+        raise DeploymentError("Invalid model measurement provenance.") from exc
 
 
 def verify_volume(docker: str, settings: DeploymentSettings, env: dict[str, str]) -> None:

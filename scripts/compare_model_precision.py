@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from app.core.errors import ValidationError
-from scripts.bench_model_runtime import Benchmark
+from scripts.model_evidence import Benchmark
 
 MIN_DISTINCT_RANKS = 2
 MIN_SPEARMAN = 0.95
@@ -40,6 +40,9 @@ def compare(fp16: Benchmark, fp32: Benchmark) -> Comparison:
     """Refuse mismatched workloads or settings before measuring rank agreement."""
     if (
         fp16.input_sha256 != fp32.input_sha256
+        or fp16.provenance != fp32.provenance
+        or not fp16.stable_settings
+        or not fp32.stable_settings
         or fp16.metadata.precision != "fp16"
         or fp32.metadata.precision != "fp32"
         or fp16.metadata.model_dump(exclude={"precision"})

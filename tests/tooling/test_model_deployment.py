@@ -7,8 +7,10 @@ import yaml
 from pydantic import ValidationError
 
 from scripts.check_deployment_contracts import document_issues, load_compose
+from scripts.deployment import Command, DeploymentError, Invocation, validate_arguments
 from scripts.deployment_contracts import environment_issues
 from scripts.model_deployment_settings import ModelDeploymentFields
+from scripts.model_evidence import Provenance
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -49,3 +51,17 @@ def test_immutable_local_image_id_and_repository_digest_supported(tmp_path: Path
         assert ModelDeploymentFields(image=image, **values).image == image
     with pytest.raises(ValidationError):
         ModelDeploymentFields(image="model:latest", **values)
+
+
+def test_benchmark_wrapper_accepts_only_complete_provenance() -> None:
+    provenance = Provenance(
+        source_sha="a" * 40,
+        image_id="sha256:" + "b" * 64,
+        gpu_uuid="GPU-11111111-2222-3333-4444-555555555555",
+    ).model_dump_json()
+    prefix = ["--rm", "model-diagnostics", "python", "-m", "scripts.bench_model_runtime"]
+    valid = [*prefix, "--provenance-json", provenance]
+    validate_arguments(Invocation(command=Command.RUN, arguments=valid))
+    for invalid in (prefix, [*valid, "--privileged"], [*prefix, "--provenance-json", "{}"]):
+        with pytest.raises(DeploymentError):
+            validate_arguments(Invocation(command=Command.RUN, arguments=invalid))

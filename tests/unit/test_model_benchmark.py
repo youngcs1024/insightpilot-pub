@@ -1,0 +1,73 @@
+"""Exercise measurement capture with typed HTTP substitutes, never a GPU."""
+# ruff: noqa: PLR2004 -- exact dedicated-workload dimensions.
+
+import pytest
+
+from app.clients.model_runtime import ModelRuntimeClient
+from app.core.config_models import ModelRuntimeClientSettings
+from app.schemas.model_runtime import EmbedResult, ReadyResult, RerankResult
+from scripts import bench_model_runtime
+from tests.unit.test_model_precision import artifact
+
+
+@pytest.mark.parametrize("recover", [False, True])
+async def test_benchmark_records_every_effective_response(
+    monkeypatch: pytest.MonkeyPatch, recover: bool
+) -> None:
+    expected = artifact("fp16")
+    reranks = []
+    closed = []
+
+    async def ready(self: ModelRuntimeClient, **kwargs: object) -> ReadyResult:
+        return ReadyResult(request_id="ready", metadata=expected.metadata)
+
+    async def embed(self: ModelRuntimeClient, *args: object, **kwargs: object) -> EmbedResult:
+        return EmbedResult(
+            request_id="embed",
+            metadata=expected.metadata,
+            ms=10,
+            queue_ms=2,
+            inference_ms=8,
+            dense=[[0.0] * 1024 for _ in range(16)],
+            sparse=[{42: 0.5} for _ in range(16)],
+        )
+
+    async def rerank(
+        self: ModelRuntimeClient, query: str, passages: list[str], **kwargs: object
+    ) -> RerankResult:
+        metadata = expected.metadata.model_copy(deep=True)
+        if recover and len(reranks) == 6:
+            metadata.rerank_batch = 8
+        reranks.append(len(passages))
+        return RerankResult(
+            request_id=f"rerank-{len(reranks)}",
+            metadata=metadata,
+            scores=[1 / (index + 1) for index in range(len(passages))],
+            ms=20,
+            queue_ms=3,
+            inference_ms=17,
+        )
+
+    async def close(self: ModelRuntimeClient) -> None:
+        closed.append(True)
+
+    # Avoid process settings and any transport while retaining the real client boundary.
+    client = object.__new__(ModelRuntimeClient)
+    monkeypatch.setattr(bench_model_runtime, "ModelRuntimeClient", lambda settings: client)
+    settings = bench_model_runtime.ModelDiagnosticsSettings(
+        model_runtime=ModelRuntimeClientSettings(auth_token="synthetic"),  # noqa: S106 -- public fixture credential.
+        _env_file=None,
+    )
+    monkeypatch.setattr(bench_model_runtime.ModelDiagnosticsSettings, "load", lambda: settings)
+    monkeypatch.setattr(ModelRuntimeClient, "ready", ready)
+    monkeypatch.setattr(ModelRuntimeClient, "embed", embed)
+    monkeypatch.setattr(ModelRuntimeClient, "rerank", rerank)
+    monkeypatch.setattr(ModelRuntimeClient, "aclose", close)
+    result = await bench_model_runtime.benchmark(expected.provenance)
+    assert reranks == [2, *([10] * 5), *([20] * 50)]
+    assert result.embedding.request_id == "embed"
+    assert result.latency_calls[0].call.queue_ms == 3
+    assert result.latency_calls[0].call.inference_ms == 17
+    assert result.latency_calls[0].call.metadata.rerank_batch == (8 if recover else 16)
+    assert result.accepted is not recover
+    assert closed == [True]

@@ -4,13 +4,32 @@
 import time
 
 import pytest
+from pydantic import SecretStr
 
 from app.clients.model_runtime import ModelRuntimeClient
 from app.core.deadline import Deadline
 from app.schemas.model_runtime import EmbedMode
+from model_runtime.errors import ModelAuthError
 from scripts.model_diagnostics_settings import ModelDiagnosticsSettings
 
 pytestmark = [pytest.mark.gpu, pytest.mark.external]
+
+
+async def test_authenticated_ready_requires_service_token() -> None:
+    settings = ModelDiagnosticsSettings.load().model_runtime
+    client = ModelRuntimeClient(settings)
+    invalid = ModelRuntimeClient(
+        settings.model_copy(update={"auth_token": SecretStr("invalid-acceptance-token")})
+    )
+    try:
+        ready = await client.ready(deadline=Deadline(time.monotonic() + 2))
+        assert ready.ready
+        assert ready.metadata.precision == settings.precision
+        with pytest.raises(ModelAuthError):
+            await invalid.ready(deadline=Deadline(time.monotonic() + 2))
+    finally:
+        await client.aclose()
+        await invalid.aclose()
 
 
 async def test_embed_returns_1024_dense_and_nonempty_sparse() -> None:
