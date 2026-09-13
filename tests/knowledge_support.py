@@ -29,9 +29,12 @@ def retrieval(values: list[Candidate] | None = None) -> RetrievalResult:
     """Explicitly empty input remains empty, with unknown ranking diagnostics."""
     values = [candidate()] if values is None else values
     return RetrievalResult(
-        query=query(), corpus_version="a" * 64, candidates=values,
+        query=query(),
+        corpus_version="a" * 64,
+        candidates=values,
         retrieval_config=RetrievalConfig(use_rerank=False),
-        model_metadata=None, timings=RetrievalTimings(),
+        model_metadata=None,
+        timings=RetrievalTimings(),
         provenance=[provenance(value) for value in values],
     )
 

@@ -32,7 +32,9 @@ logger = structlog.get_logger(__name__)
 def validate_citations(draft: KnowledgeDraft, evidence: KnowledgeEvidence) -> tuple[Citation, ...]:
     """Never resolve against the full candidate pool or today's registry."""
     allowed = {chunk.chunk_id: chunk for chunk in evidence.chunks}
-    identifiers = dict.fromkeys(identifier for passage in draft.passages for identifier in passage.chunk_ids)
+    identifiers = dict.fromkeys(
+        identifier for passage in draft.passages for identifier in passage.chunk_ids
+    )
     if any(identifier not in allowed for identifier in identifiers):
         raise FabricatedCitation()
     return tuple(
@@ -47,14 +49,19 @@ def _messages(evidence: KnowledgeEvidence, *, repair: bool) -> list[BaseMessage]
     system = KNOWLEDGE_SYSTEM + ("\n" + KNOWLEDGE_CITATION_REPAIR if repair else "")
     return [
         SystemMessage(content=system),
-        HumanMessage(content=json.dumps({
-            "question": evidence.query_used,
-            "time_scope": evidence.time_scope.model_dump(mode="json"),
-            "assumptions": evidence.assumptions,
-            "reranked": evidence.reranked,
-            "degradation": evidence.degradation,
-            "valid_chunk_ids": [str(chunk.chunk_id) for chunk in evidence.chunks],
-        }, ensure_ascii=False)),
+        HumanMessage(
+            content=json.dumps(
+                {
+                    "question": evidence.query_used,
+                    "time_scope": evidence.time_scope.model_dump(mode="json"),
+                    "assumptions": evidence.assumptions,
+                    "reranked": evidence.reranked,
+                    "degradation": evidence.degradation,
+                    "valid_chunk_ids": [str(chunk.chunk_id) for chunk in evidence.chunks],
+                },
+                ensure_ascii=False,
+            )
+        ),
         HumanMessage(content=evidence.generation_block),
     ]
 
@@ -74,22 +81,29 @@ class KnowledgeGenerationService:
             raise KnowledgeEvidenceError(reason="generation_block_mismatch")
         if not evidence.chunks:
             reason = (
-                KnowledgeAbstention.BUDGET_EXHAUSTED if evidence.decisions
+                KnowledgeAbstention.BUDGET_EXHAUSTED
+                if evidence.decisions
                 else KnowledgeAbstention.NO_EVIDENCE
             )
             return KnowledgeGeneration(abstention=reason, attempts=0)
         for attempt in (1, 2):
             deadline.check("knowledge_generation")
             draft = await self.llm.generate_structured(
-                ModelRole.SYNTHESIS, _messages(evidence, repair=attempt == 2),
-                KnowledgeDraft, deadline=deadline,
+                ModelRole.SYNTHESIS,
+                _messages(evidence, repair=attempt > 1),
+                KnowledgeDraft,
+                deadline=deadline,
             )
             if not draft.passages:
-                return KnowledgeGeneration(abstention=KnowledgeAbstention.UNSUPPORTED, attempts=attempt)
+                return KnowledgeGeneration(
+                    abstention=KnowledgeAbstention.UNSUPPORTED, attempts=attempt
+                )
             try:
                 citations = validate_citations(draft, evidence)
             except FabricatedCitation:
                 logger.exception("knowledge_citation_rejected", attempt=attempt)
                 continue
-            return KnowledgeGeneration(passages=draft.passages, citations=citations, attempts=attempt)
+            return KnowledgeGeneration(
+                passages=draft.passages, citations=citations, attempts=attempt
+            )
         return KnowledgeGeneration(abstention=KnowledgeAbstention.FABRICATED_CITATION, attempts=2)

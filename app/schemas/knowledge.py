@@ -176,7 +176,8 @@ class KnowledgeEvidence(FrozenContract):
         ids = [item.chunk_id for item in self.chunks]
         decisions = [item.chunk_id for item in self.decisions]
         selected = [
-            item.chunk_id for item in self.decisions
+            item.chunk_id
+            for item in self.decisions
             if item.selection is not TextSelection.OMITTED_BUDGET
         ]
         if len(ids) != len(set(ids)) or len(decisions) != len(set(decisions)) or ids != selected:

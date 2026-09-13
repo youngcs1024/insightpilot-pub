@@ -52,9 +52,7 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
     monkeypatch.setattr(
         ChunkRepository,
         "provenance",
-        AsyncMock(
-            side_effect=lambda values: [provenance(item) for item in values]
-        ),
+        AsyncMock(side_effect=lambda values: [provenance(item) for item in values]),
     )
     output = EmbedResult(
         request_id="test",

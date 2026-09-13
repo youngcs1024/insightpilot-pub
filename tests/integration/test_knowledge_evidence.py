@@ -20,19 +20,31 @@ from tests.retrieval_support import RetrievalHarness, deadline, harness, query
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
 __all__ = ["harness", "milvus_stack"]
+RETRIEVAL_SCHEMA_VERSION = 2
+ORIGINAL_PAGE = 2
 
 
-async def test_real_retrieval_packages_scores_metadata_and_generates_citations(harness: RetrievalHarness) -> None:
-    result = await harness.pipeline(RetrievalConfig(record_arm_scores=True)).retrieve(query(), deadline=deadline())
-    assert result.schema_version == 2
+async def test_real_retrieval_packages_scores_metadata_and_generates_citations(
+    harness: RetrievalHarness,
+) -> None:
+    result = await harness.pipeline(RetrievalConfig(record_arm_scores=True)).retrieve(
+        query(), deadline=deadline()
+    )
+    assert result.schema_version == RETRIEVAL_SCHEMA_VERSION
     evidence = package_evidence(result, EvidenceConfig(), SchemaTokenCounter())
-    assert evidence.chunks and evidence.reranked and evidence.meets_floor
+    assert evidence.chunks
+    assert evidence.reranked
+    assert evidence.meets_floor
     assert evidence.corpus_version == result.corpus_version
     assert evidence.chunks[0].scores.rrf is not None
     assert evidence.chunks[0].scores.rerank is not None
     assert all(chunk.document_title == "测试规则" for chunk in evidence.chunks)
     assert all(chunk.page is None for chunk in evidence.chunks)
-    assert any(chunk.original_text != next(item.content for item in result.candidates if item.chunk_uuid == chunk.chunk_id) for chunk in evidence.chunks)
+    assert any(
+        chunk.original_text
+        != next(item.content for item in result.candidates if item.chunk_uuid == chunk.chunk_id)
+        for chunk in evidence.chunks
+    )
     llm = FakeChatModel([draft(evidence.chunks[0].chunk_id)])
     answer = await KnowledgeGenerationService(llm).generate(evidence, deadline=deadline())
     assert answer.citations[0].document_title == "测试规则"
@@ -40,18 +52,24 @@ async def test_real_retrieval_packages_scores_metadata_and_generates_citations(h
     assert len(harness.embeddings.rerank_calls) == 1
 
 
-async def test_title_page_and_path_share_admission_snapshot(harness: RetrievalHarness, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_title_page_and_path_share_admission_snapshot(
+    harness: RetrievalHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
     original = DocumentRepository.manifest
     async with harness.database.session() as session, session.begin():
         documents = await DocumentRepository(session).list_documents()
-        await session.execute(update(Chunk).values(page=2))
+        await session.execute(update(Chunk).values(page=ORIGINAL_PAGE))
     renamed = CorpusMetadata.model_validate(documents[0].metadata.model_dump())
     renamed.title = "并发替换的新标题"
 
     async def mutate_after_snapshot(repository: DocumentRepository) -> ActiveManifest | None:
         manifest = await original(repository)
         async with harness.database.session() as writer, writer.begin():
-            await writer.execute(update(Document).where(Document.id == documents[0].document_id).values(business_metadata=renamed.model_dump_json(), source_path="renamed.md"))
+            await writer.execute(
+                update(Document)
+                .where(Document.id == documents[0].document_id)
+                .values(business_metadata=renamed.model_dump_json(), source_path="renamed.md")
+            )
             await writer.execute(update(Chunk).values(page=9))
         return manifest
 
@@ -59,10 +77,13 @@ async def test_title_page_and_path_share_admission_snapshot(harness: RetrievalHa
     result = await harness.pipeline().retrieve(query(), deadline=deadline())
     evidence = package_evidence(result, EvidenceConfig(), SchemaTokenCounter())
     assert evidence.chunks
-    assert all(chunk.document_title == "测试规则" and chunk.page == 2 for chunk in evidence.chunks)
+    assert all(
+        chunk.document_title == "测试规则" and chunk.page == ORIGINAL_PAGE
+        for chunk in evidence.chunks
+    )
     assert all(chunk.source_path != "renamed.md" for chunk in evidence.chunks)
     assert any(chunk.document_id == documents[0].document_id for chunk in evidence.chunks)
-    assert all(source.page == 2 for source in result.provenance)
+    assert all(source.page == ORIGINAL_PAGE for source in result.provenance)
 
 
 async def test_reingestion_cannot_change_packaged_text(harness: RetrievalHarness) -> None:

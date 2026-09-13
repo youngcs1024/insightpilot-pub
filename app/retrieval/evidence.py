@@ -52,7 +52,9 @@ def render_documents(chunks: tuple[EvidenceChunk, ...]) -> str:
             "effective_from": chunk.effective_from.isoformat() if chunk.effective_from else "",
             "effective_to": chunk.effective_to.isoformat() if chunk.effective_to else "",
         }
-        rendered = " ".join(f'{key}="{html.escape(value, quote=True)}"' for key, value in attributes.items())
+        rendered = " ".join(
+            f'{key}="{html.escape(value, quote=True)}"' for key, value in attributes.items()
+        )
         blocks.append(
             f"<retrieved_document {rendered}>\n"
             f"{html.escape(chunk.generation_text, quote=False)}\n</retrieved_document>"
@@ -113,10 +115,17 @@ def _select(
     decisions = []
     for candidate in result.candidates:
         provenance = registered[_identity(candidate)]
-        flags = injection_flags("\n".join((
-            candidate.content, candidate.parent_content, provenance.document_title,
-            provenance.source_path, provenance.heading_path,
-        )))
+        flags = injection_flags(
+            "\n".join(
+                (
+                    candidate.content,
+                    candidate.parent_content,
+                    provenance.document_title,
+                    provenance.source_path,
+                    provenance.heading_path,
+                )
+            )
+        )
         if flags:
             logger.warning(
                 "knowledge_instruction_like_content",
@@ -131,9 +140,13 @@ def _select(
                 chunks = proposed
                 selection = choice
                 break
-        decisions.append(EvidenceDecision(
-            chunk_id=candidate.chunk_uuid, selection=selection, injection_flags=flags,
-        ))
+        decisions.append(
+            EvidenceDecision(
+                chunk_id=candidate.chunk_uuid,
+                selection=selection,
+                injection_flags=flags,
+            )
+        )
     return chunks, tuple(decisions)
 
 
@@ -144,26 +157,36 @@ def package_evidence(
     try:
         chunks, decisions = _select(result, config, counter)
         block = render_documents(chunks)
-        fields = result.model_dump(exclude={
-            "schema_version", "query", "candidates", "provenance", "stages",
-        })
-        evidence = KnowledgeEvidence.model_validate({
-            **fields,
-            "query_used": result.query.standalone,
-            "time_scope": result.query.time_scope.model_dump(),
-            "assumptions": tuple(result.query.assumptions),
-            "chunks": chunks,
-            "packaging_config": config.model_dump(),
-            "decisions": decisions,
-            "generation_block": block,
-            "generation_tokens": counter.count(block),
-            "tokenizer": counter.name,
-        })
+        fields = result.model_dump(
+            exclude={
+                "schema_version",
+                "query",
+                "candidates",
+                "provenance",
+                "stages",
+            }
+        )
+        evidence = KnowledgeEvidence.model_validate(
+            {
+                **fields,
+                "query_used": result.query.standalone,
+                "time_scope": result.query.time_scope.model_dump(),
+                "assumptions": tuple(result.query.assumptions),
+                "chunks": chunks,
+                "packaging_config": config.model_dump(),
+                "decisions": decisions,
+                "generation_block": block,
+                "generation_tokens": counter.count(block),
+                "tokenizer": counter.name,
+            }
+        )
     except ValidationError as exc:
         raise KnowledgeEvidenceError() from exc
     logger.info(
-        "knowledge_evidence_packaged", candidates=len(result.candidates),
-        selected=len(chunks), omitted=len(result.candidates) - len(chunks),
+        "knowledge_evidence_packaged",
+        candidates=len(result.candidates),
+        selected=len(chunks),
+        omitted=len(result.candidates) - len(chunks),
         tokens=evidence.generation_tokens,
     )
     return evidence
