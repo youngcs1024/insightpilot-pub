@@ -22,11 +22,24 @@ MIGRATION_CASES = (
     "test_real_autogenerate_file_is_empty[app]",
     "test_real_autogenerate_file_is_empty[business]",
 )
-QUALITY_CHECKS = ("contracts", "structure", "collection", "lint", "format", "types", "dependencies")
+QUALITY_CHECKS = (
+    "contracts",
+    "structure",
+    "corpus",
+    "collection",
+    "lint",
+    "format",
+    "types",
+    "dependencies",
+)
 QUALITY_COMMANDS = {
     "structure": ".venv/bin/python -m scripts.check_test_structure",
     "contracts": ".venv/bin/python -m scripts.check_deployment_contracts",
-    "collection": '.venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external"',
+    "corpus": ".venv/bin/python -m scripts.corpus_stats",
+    "collection": (
+        '.venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external" '
+        "-p tests.ci_collection_plugin --collection-report quality-collection.json"
+    ),
     "lint": "make lint-check ENV=test",
     "format": "make format-check ENV=test",
     "types": "make typecheck-report ENV=test",
@@ -48,6 +61,7 @@ class QualitySteps(BaseModel):
     setup: StepResult | None = None
     structure: StepResult | None = None
     contracts: StepResult | None = None
+    corpus: StepResult | None = None
     collection: StepResult | None = None
     lint: StepResult | None = None
     format: StepResult | None = None

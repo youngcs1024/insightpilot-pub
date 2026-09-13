@@ -222,10 +222,10 @@ def test_invalid_predecessor_chain_fails(one_source: Path, failure: str) -> None
 @pytest.mark.parametrize(
     ("before", "after"),
     [
-        ("默认日期字段：r.requested_at", "默认日期字段：o.paid_at"),
+        ("默认日期字段\uff1ar.requested_at", "默认日期字段\uff1ao.paid_at"),
         ("r.status <> 'rejected'", "r.status = 'completed'"),
         ("零分母返回 NULL", "零分母返回 0"),
-        ("支持粒度：total、day、week、month、region", "支持粒度：total、category"),
+        ("支持粒度\uff1atotal、day、week、month、region", "支持粒度\uff1atotal、category"),
     ],
 )
 def test_memo_body_drift_fails(
@@ -272,7 +272,7 @@ def test_statistics_count_body_not_metadata(one_source: Path) -> None:
 
 
 def test_cli_emits_real_inventory_statistics() -> None:
-    result = subprocess.run(  # noqa: S603 -- fixed local offline statistics entrypoint.
+    result = subprocess.run(
         [sys.executable, "-m", "scripts.corpus_stats"],
         cwd=ROOT,
         capture_output=True,
@@ -291,7 +291,9 @@ def test_cli_emits_real_inventory_statistics() -> None:
     assert "refund_policy_v3.md" in {item.path for item in summary.documents}
 
 
-def test_cli_failure_is_nonzero_and_safe(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_failure_is_nonzero_and_safe(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert main(["--root", str(tmp_path)]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""

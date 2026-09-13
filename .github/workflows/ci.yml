@@ -83,13 +83,20 @@ jobs:
         run: |
           set -o pipefail
           .venv/bin/python -m scripts.check_test_structure 2>&1 | tee quality-structure.log
+      - name: Validate corpus resources independently of test collection
+        id: corpus
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m scripts.corpus_stats 2>&1 | tee quality-corpus.log
       - name: Collect all ordinary tests without executing fixtures or test bodies
         id: collection
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         run: |
           set -o pipefail
-          .venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external" 2>&1 | tee quality-collection.log
+          .venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external" -p tests.ci_collection_plugin --collection-report quality-collection.json 2>&1 | tee quality-collection.log
       - name: Ruff rules
         id: lint
         env:
@@ -168,7 +175,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quality-evidence
-          path: quality-*.log
+          path: |
+            quality-*.log
+            quality-collection.json
           if-no-files-found: error
 
       - name: Record quality diagnostics
@@ -178,7 +187,7 @@ jobs:
           CI_TESTED_SHA: ${{ github.sha }}
           CI_RUN_ID: ${{ github.run_id }}
           CI_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: .venv/bin/python -m scripts.ci_diagnostics --stage quality --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/quality.json --summary "$GITHUB_STEP_SUMMARY" --dependencies dependency-evidence/assessment.json --types type-evidence/report.json
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage quality --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/quality.json --summary "$GITHUB_STEP_SUMMARY" --dependencies dependency-evidence/assessment.json --types type-evidence/report.json --collection quality-collection.json
       - name: Save quality diagnostics
         if: ${{ always() && hashFiles('ci-diagnostics/quality.json') != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -572,7 +581,7 @@ jobs:
           CI_PLAN: ${{ needs.changes.outputs.plan }}
           CI_NEEDS: ${{ toJSON(needs) }}
         run: .venv/bin/python -m scripts.ci_result result --tested-sha "$CI_TESTED_SHA" --plan "$CI_PLAN" --needs "$CI_NEEDS" --summary "$GITHUB_STEP_SUMMARY"
-      - name: Explain available stage evidence
+      - name: Require valid current-run stage evidence
         if: ${{ always() && steps.setup.outcome == 'success' }}
         env:
           CI_PLAN: ${{ needs.changes.outputs.plan }}

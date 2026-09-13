@@ -95,3 +95,27 @@ def test_saved_assessment_separates_thresholds_from_upstream_failure(
     assert value.checks_passed
     assert value.evidence_valid
     assert not value.accepted
+
+
+@pytest.mark.parametrize("outcome", [Result.SKIPPED, Result.FAILURE, Result.SUCCESS])
+def test_missing_inputs_preserve_the_upstream_cause(tmp_path: Path, outcome: Result) -> None:
+    output = tmp_path / "assessment.json"
+    assert not collect(tmp_path, tmp_path / "summary", (outcome, outcome, outcome), output=output)
+    value = CheckEvidence.model_validate_json(output.read_text())
+    assert not value.accepted
+    assert value.artifact_error is (outcome is not Result.SKIPPED)
+    assert set(value.partitions) == set(PARTITIONS)
+
+
+def test_corrupt_input_is_not_hidden_by_an_unrelated_skip(tmp_path: Path) -> None:
+    (tmp_path / ".coverage.unit").write_bytes(b"broken")
+    output = tmp_path / "assessment.json"
+    assert not collect(
+        tmp_path,
+        tmp_path / "summary",
+        (Result.SUCCESS, Result.SKIPPED, Result.SKIPPED),
+        output=output,
+    )
+    value = CheckEvidence.model_validate_json(output.read_text())
+    assert value.artifact_error
+    assert not value.accepted

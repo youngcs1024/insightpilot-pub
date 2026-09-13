@@ -12,12 +12,12 @@ def metric_contract_text(definition: MetricDefinition) -> str:
     """Render the authoritative facts as readable prose and explicit field lists."""
     return "\n\n".join(
         [
-            f"指标：{definition.key}；版本：{definition.version}；名称：{definition.display_name}",
+            f"指标\uff1a{definition.key}；版本\uff1a{definition.version}；名称\uff1a{definition.display_name}",
             definition.description,
-            "默认日期字段：" + definition.default_date_field.value,
-            "必需过滤条件：\n" + "\n".join("- " + item for item in definition.required_filters),
-            "支持粒度：" + "、".join(grain.value for grain in definition.supported_grains),
-            "来源表：" + "、".join(definition.base_tables),
+            "默认日期字段\uff1a" + definition.default_date_field.value,
+            "必需过滤条件\uff1a\n" + "\n".join("- " + item for item in definition.required_filters),
+            "支持粒度\uff1a" + "、".join(grain.value for grain in definition.supported_grains),
+            "来源表\uff1a" + "、".join(definition.base_tables),
         ]
     )
 

@@ -8,33 +8,38 @@ from coverage.exceptions import CoverageException
 from pydantic import ValidationError
 
 from scripts.check_test_coverage import CoverageReport, summarize
-from scripts.ci_evidence import CheckEvidence
+from scripts.ci_evidence import CheckEvidence, CoverageState
 from scripts.ci_junit import FileState, file_state
-from scripts.ci_partitions import PARTITIONS
+from scripts.ci_partitions import PARTITIONS, Partition
 from scripts.ci_policy import Result
 from scripts.ci_result import emit
 
 
-def available_data(root: Path, summary: Path) -> list[str]:
-    """Validate each database separately so one corrupt partition cannot hide another."""
-    available = []
-    for name in PARTITIONS:
-        path = root / f".coverage.{name}"
-        state = file_state(path)
-        if state is not FileState.PRESENT:
-            emit(f"Coverage {name}: {state.value}; evidence incomplete.", summary)
-            continue
-        try:
-            data = CoverageData(basename=str(path))
-            data.read()
-            if not data.measured_files():
-                emit(f"Coverage {name}: no measured files; evidence incomplete.", summary)
-                continue
-        except (CoverageException, OSError, ValueError):
-            emit(f"Coverage {name}: invalid database; evidence incomplete.", summary)
-            continue
-        available.append(str(path))
-    return available
+def partition_state(path: Path, outcome: Result) -> CoverageState:
+    """Missing output is expected only when the upstream partition never ran."""
+    state = file_state(path)
+    if state is FileState.MISSING and outcome is Result.SKIPPED:
+        return CoverageState.EXPECTED_MISSING
+    if state is not FileState.PRESENT:
+        return CoverageState(state.value)
+    try:
+        data = CoverageData(basename=str(path))
+        data.read()
+        return CoverageState.VALID if data.measured_files() else CoverageState.INVALID
+    except (CoverageException, OSError, ValueError):
+        return CoverageState.INVALID
+
+
+def available_data(
+    root: Path, summary: Path, upstream: dict[Partition, Result]
+) -> dict[Partition, CoverageState]:
+    """Validate each database independently and preserve typed failure causes."""
+    states = {
+        name: partition_state(root / f".coverage.{name}", upstream[name]) for name in PARTITIONS
+    }
+    for name, state in states.items():
+        emit(f"Coverage {name}: {state.value}.", summary)
+    return states
 
 
 def collect(
@@ -45,11 +50,18 @@ def collect(
     output: Path | None = None,
 ) -> bool:
     """Report useful measurements even when the authoritative test job failed."""
-    available = available_data(root, summary)
+    upstream = dict(zip(PARTITIONS, outcomes, strict=True))
+    states = available_data(root, summary, upstream)
+    available = [
+        str(root / f".coverage.{name}")
+        for name, state in states.items()
+        if state is CoverageState.VALID
+    ]
     evidence = CheckEvidence(
         checks_passed=None,
         evidence_valid=len(available) == len(PARTITIONS),
-        upstream=dict(zip(PARTITIONS, outcomes, strict=True)),
+        upstream=upstream,
+        partitions=states,
     )
     complete = len(available) == len(PARTITIONS) and all(
         outcome is Result.SUCCESS for outcome in outcomes

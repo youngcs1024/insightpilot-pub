@@ -5,7 +5,13 @@ from pathlib import Path
 
 import yaml
 
-from app.schemas.corpus import CorpusDocument, CorpusEntry, CorpusFormat, CorpusMetadata, DocumentType
+from app.schemas.corpus import (
+    CorpusDocument,
+    CorpusEntry,
+    CorpusFormat,
+    CorpusMetadata,
+    DocumentType,
+)
 from app.schemas.metrics import MetricDefinition
 from data.corpus_metrics import metric_contract_text
 

@@ -109,6 +109,7 @@ files = ["evals", "data", "mcp_server", "alembic", "app", "model_tunnel", "model
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = ["error"]
@@ -119,7 +120,7 @@ markers = [
     "gpu: requires authorized real GPU runtime",
     "external: requires an authorized target host or private credentials",
 ]
-addopts = "--strict-config --strict-markers -m 'not gpu and not external'"
+addopts = "--import-mode=importlib --strict-config --strict-markers -m 'not gpu and not external'"
 xfail_strict = true
 
 [tool.deptry]

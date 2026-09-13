@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.ci_collection import CollectionReport
 from scripts.ci_policy import Reason, full_plan
 from scripts.ci_result import final_result
 from tests.tooling.support import ROOT, condition_holds, needs_for
@@ -25,7 +26,7 @@ def test_real_collection_pipeline_preserves_errors_without_executing_tests(
     step = next(step for step in quality["steps"] if step.get("id") == "collection")
     assert quality["outputs"]["collection_outcome"] == "${{ steps.collection.outcome }}"
     assert "services" not in quality
-    pytester.makeini("[pytest]\nmarkers = integration\n")
+    pytester.makeini(f"[pytest]\npythonpath = {ROOT}\nmarkers = integration\n")
     directory = pytester.path / "tests" / "integration"
     directory.mkdir(parents=True)
     (directory / "test_import.py").write_text(
@@ -40,6 +41,13 @@ def test_real_collection_pipeline_preserves_errors_without_executing_tests(
     result = pytester.run("/bin/bash", "-e", "-c", script, timeout=60)
     expected = pytest.ExitCode.INTERRUPTED if missing_import else pytest.ExitCode.OK
     assert result.ret == expected
+    evidence = CollectionReport.model_validate_json(
+        (pytester.path / "quality-collection.json").read_text()
+    )
+    assert evidence.raw_exit == expected
+    assert evidence.accepted is (not missing_import)
+    assert bool(evidence.failed_nodes) is missing_import
+    assert "NameError" not in evidence.model_dump_json()
     log = (pytester.path / "quality-collection.log").read_text()
     assert "test_import.py" in log
     if missing_import:
@@ -172,3 +180,22 @@ def test_dedicated_modules_are_excluded_before_import(pytester: pytest.Pytester)
     result = pytester.runpytest_subprocess("--collect-only")
     assert result.ret == pytest.ExitCode.OK
     assert 'collect_ignore = ["gpu", "live"]' in (ROOT / "tests/conftest.py").read_text()
+
+
+def test_importlib_keeps_same_name_modules_and_shared_fixtures(pytester: pytest.Pytester) -> None:
+    pytester.makeini(f"[pytest]\npythonpath = . {ROOT}\naddopts = --import-mode=importlib\n")
+    pytester.makepyfile(shared_helper="VALUE = 17")
+    pytester.makeconftest(
+        "import pytest\nfrom shared_helper import VALUE\n"
+        "@pytest.fixture\ndef shared():\n    return VALUE\n"
+    )
+    for directory, identity in (("unit", "unit"), ("integration", "integration")):
+        path = pytester.path / directory
+        path.mkdir()
+        (path / "test_same.py").write_text(
+            f"IDENTITY = {identity!r}\n"
+            f"def test_identity(shared):\n    assert IDENTITY == {identity!r}\n"
+            "    assert shared == 17\n"
+        )
+    result = pytester.runpytest_subprocess("-q", timeout=60)
+    result.assert_outcomes(passed=2)

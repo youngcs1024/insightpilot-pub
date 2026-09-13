@@ -8,11 +8,12 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from scripts.ci_collection import CollectionReport
 from scripts.ci_dependencies import Assessment
-from scripts.ci_evidence import CheckEvidence
+from scripts.ci_evidence import CheckEvidence, CoverageState
 from scripts.ci_junit import CaseOutcome, read_junit
 from scripts.ci_partitions import PARTITIONS
-from scripts.ci_policy import Plan, Result, Results
+from scripts.ci_policy import ALL_IMAGES, Plan, Result, Results, failures
 from scripts.ci_result import (
     QUALITY_CHECKS,
     StepResult,
@@ -82,6 +83,7 @@ class DiagnosticRecord(RunIdentity):
     assessment: CheckEvidence | None = None
     dependencies: Assessment | None = None
     types: TypeReport | None = None
+    collection: CollectionReport | None = None
 
 
 def record(request: DiagnosticRecord, report: Path | None) -> DiagnosticRecord:
@@ -155,7 +157,7 @@ def evidence_categories(value: DiagnosticRecord) -> list[DiagnosticKind]:
     if value.assessment is not None:
         if any(result != Result.SUCCESS for result in value.assessment.upstream.values()):
             categories.append(DiagnosticKind.UPSTREAM_BLOCKED)
-        if not value.assessment.evidence_valid:
+        if value.assessment.artifact_error:
             categories.append(DiagnosticKind.ARTIFACT_ERROR)
     tests = value.steps.get("tests")
     if (
@@ -173,6 +175,12 @@ def render(record: DiagnosticRecord) -> str:
     categories = evidence_categories(record)
     if (category := execution_category(record)) is not None:
         categories.insert(0, category)
+    if record.stage == "quality" and any(
+        (step := record.steps.get(name)) is not None and step.outcome is Result.FAILURE
+        for name in QUALITY_CHECKS
+        if name != "collection"
+    ):
+        categories.append(DiagnosticKind.QUALITY_FAILURE)
     if categories:
         rows.append("Categories: " + ", ".join(dict.fromkeys(categories)))
     rows.extend(
@@ -197,9 +205,156 @@ def render(record: DiagnosticRecord) -> str:
             f"{case_label(item.location.file)}"
             for item in detail.blocking[:MAX_DETAILS]
         )
+    if record.collection is not None:
+        collection_detail = record.collection
+        rows.append(
+            f"Collection: raw exit={collection_detail.raw_exit}; collected={collection_detail.collected}; "
+            f"failed collectors={collection_detail.failed_count}."
+        )
+        rows.extend(f"- Collector: {case_label(node)}" for node in collection_detail.failed_nodes)
     if record.types is not None:
         rows.append(describe_types(record.types))
     return "\n".join(rows)
+
+
+class DiagnosticAssessment(BaseModel):
+    """Evidence validity is an additional gate; it cannot soften raw job failures."""
+
+    summary: str
+    valid: bool
+    raw_passed: bool
+
+    @property
+    def accepted(self) -> bool:
+        """Both authoritative outcomes and current-run evidence must pass."""
+        return self.valid and self.raw_passed
+
+
+def stage_job(stage: str) -> str:
+    """Resolve migration reuse and individual image evidence to their parent job."""
+    if stage in ALL_IMAGES:
+        return "build"
+    return "integration" if stage == "migrations" else stage
+
+
+def successful_record(value: DiagnosticRecord) -> bool:
+    """Reject incomplete or contradictory evidence accompanying a successful job."""
+    required = {
+        "quality": ("setup", *QUALITY_CHECKS, "report"),
+        "coverage": ("setup", "coverage"),
+        "migrations": ("setup", "tests", "migrations_report"),
+    }.get(value.stage, ("setup", "tests", "test_report"))
+    if value.stage in ALL_IMAGES:
+        required = ("setup", "build", "smoke")
+    if any(
+        (step := value.steps.get(name)) is None or step.outcome is not Result.SUCCESS
+        for name in required
+    ) or any(step.outcome in (Result.FAILURE, Result.CANCELLED) for step in value.steps.values()):
+        return False
+    return successful_payload(value)
+
+
+def successful_payload(value: DiagnosticRecord) -> bool:
+    """Check the relevant structured measurements rather than just step labels."""
+    if value.stage == "quality":
+        return (
+            value.collection is not None
+            and value.collection.accepted
+            and value.types is not None
+            and value.types.accepted
+            and value.dependencies is not None
+            and value.dependencies.status == "passed"
+            and not value.dependencies.blocking
+        )
+    if value.stage == "coverage":
+        return (
+            value.assessment is not None
+            and value.assessment.accepted
+            and set(value.assessment.upstream) == set(PARTITIONS)
+            and set(value.assessment.partitions) == set(PARTITIONS)
+            and all(state is CoverageState.VALID for state in value.assessment.partitions.values())
+        )
+    if value.stage == "migrations":
+        return (
+            value.assessment is not None
+            and value.assessment.accepted
+            and value.assessment.upstream == {"integration": Result.SUCCESS}
+            and value.report_valid is True
+        )
+    if value.stage in PARTITIONS:
+        return (
+            value.report_valid is True
+            and value.counts.get(CaseOutcome.PASSED, 0) > 0
+            and all(
+                count == 0 for kind, count in value.counts.items() if kind != CaseOutcome.PASSED
+            )
+        )
+    return True
+
+
+def load_records(
+    directory: Path, run: RunIdentity
+) -> tuple[dict[str, DiagnosticRecord], list[str]]:
+    """Validate every downloaded record, including stale extras and duplicates."""
+    records: dict[str, DiagnosticRecord] = {}
+    problems = []
+    duplicated: set[str] = set()
+    for path in sorted(directory.rglob("*.json")):
+        try:
+            value = DiagnosticRecord.model_validate_json(path.read_text())
+        except (OSError, ValueError, ValidationError):
+            problems.append(f"Unavailable diagnostic: {case_label(path.name)} (invalid evidence).")
+            continue
+        if (value.tested_sha, value.run_id, value.run_attempt) != (
+            run.tested_sha,
+            run.run_id,
+            run.run_attempt,
+        ):
+            problems.append(f"Unavailable diagnostic: {value.stage} (SHA/run/attempt mismatch).")
+            continue
+        if value.stage in records:
+            duplicated.add(value.stage)
+        records[value.stage] = value
+    for stage in duplicated:
+        records.pop(stage)
+        problems.append(f"Unavailable diagnostic: {stage} (duplicate evidence).")
+    return records, problems
+
+
+def assess_diagnostics(
+    directory: Path,
+    *,
+    run: RunIdentity,
+    expected: tuple[str, ...] = (),
+    results: Results | None = None,
+    plan: Plan | None = None,
+) -> DiagnosticAssessment:
+    """Fail closed on missing required evidence while explaining legitimate absence."""
+    records, problems = load_records(directory, run)
+    rows = ["\n## Stage diagnostics (raw job results remain authoritative)", *problems]
+    valid = not problems
+    for stage in expected:
+        job = getattr(results, stage_job(stage)).result if results is not None else None
+        value = records.get(stage)
+        if value is None:
+            rows.append(missing_record_description(stage, results, plan))
+            valid = valid and job in (Result.SKIPPED, Result.CANCELLED)
+        elif job is Result.SUCCESS and not successful_record(value):
+            valid = False
+            rows.append(f"Unavailable diagnostic: {stage} (contradicts raw job success).")
+    if plan is not None:
+        valid = valid and plan.tested_sha == run.tested_sha
+        unexpected = set(records) - set(expected)
+        if unexpected:
+            valid = False
+            rows.append("Unexpected stage evidence: " + ", ".join(sorted(unexpected)))
+    rows.extend(render(value) for value in records.values())
+    if not records:
+        rows.append("No valid stage records; inspect setup, reporting and artifact upload logs.")
+    raw_passed = plan is None or (results is not None and not failures(plan, results))
+    assessment = DiagnosticAssessment(summary="\n\n".join(rows), valid=valid, raw_passed=raw_passed)
+    assessment.summary += f"\n\nDiagnostic acceptance: {'PASS' if assessment.accepted else 'FAIL'}."
+    return assessment
 
 
 def aggregate(
@@ -210,45 +365,15 @@ def aggregate(
     results: Results | None = None,
     plan: Plan | None = None,
 ) -> str:
-    """Reject stale, malformed and duplicated stage evidence in diagnostic displays."""
-    records: dict[str, DiagnosticRecord] = {}
-    invalid: set[str] = set()
-    rows = ["\n## Stage diagnostics (raw job results above remain authoritative)"]
-    for path in sorted(directory.rglob("*.json")):
-        try:
-            value = DiagnosticRecord.model_validate_json(path.read_text())
-        except (OSError, ValueError, ValidationError):
-            rows.append(f"Unavailable diagnostic: {case_label(path.name)} (invalid evidence).")
-            continue
-        if (value.tested_sha, value.run_id, value.run_attempt) != (
-            run.tested_sha,
-            run.run_id,
-            run.run_attempt,
-        ):
-            rows.append(f"Unavailable diagnostic: {value.stage} (SHA/run/attempt mismatch).")
-            continue
-        if value.stage in records:
-            invalid.add(value.stage)
-        records[value.stage] = value
-    for stage, value in records.items():
-        rows.append(
-            f"Unavailable diagnostic: {stage} (duplicate evidence)."
-            if stage in invalid
-            else render(value)
-        )
-    rows.extend(
-        missing_record_description(stage, results, plan)
-        for stage in expected
-        if stage not in records
-    )
-    if not records:
-        rows.append("No valid stage records; inspect setup, reporting and artifact upload logs.")
-    return "\n\n".join(rows)
+    """Keep the human-readable projection available to diagnostic callers."""
+    return assess_diagnostics(
+        directory, run=run, expected=expected, results=results, plan=plan
+    ).summary
 
 
 def missing_record_description(stage: str, results: Results | None, plan: Plan | None) -> str:
     """A blocked job cannot upload a record; retain its upstream cause in the summary."""
-    job = "integration" if stage == "migrations" else stage
+    job = stage_job(stage)
     if results is not None and plan is not None and job in Results.model_fields:
         result = getattr(results, job).result
         if result in (Result.SKIPPED, Result.CANCELLED):
@@ -287,6 +412,7 @@ def main() -> None:
     parser.add_argument("--assessment", type=Path)
     parser.add_argument("--dependencies", type=Path)
     parser.add_argument("--types", type=Path)
+    parser.add_argument("--collection", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args()
@@ -304,22 +430,21 @@ def main() -> None:
                 *plan.images,
             )
         )
+        if plan is None or args.needs is None:
+            parser.error("aggregation requires --plan and --needs")
+        assessment = assess_diagnostics(
+            args.directory,
+            run=RunIdentity(
+                tested_sha=args.tested_sha, run_id=args.run_id, run_attempt=args.run_attempt
+            ),
+            expected=expected,
+            results=Results.model_validate_json(args.needs),
+            plan=plan,
+        )
         with args.summary.open("a") as stream:
-            stream.write(
-                aggregate(
-                    args.directory,
-                    run=RunIdentity(
-                        tested_sha=args.tested_sha,
-                        run_id=args.run_id,
-                        run_attempt=args.run_attempt,
-                    ),
-                    expected=expected,
-                    results=Results.model_validate_json(args.needs) if args.needs else None,
-                    plan=plan,
-                )
-                + "\n"
-            )
-        return
+            stream.write(assessment.summary + "\n")
+        print(assessment.summary)
+        raise SystemExit(0 if assessment.accepted else 1)
     if args.stage is None or args.output is None:
         parser.error("recording requires --stage and --output")
     value = DiagnosticRecord(
@@ -338,6 +463,11 @@ def main() -> None:
         value.dependencies = read_dependencies(args.dependencies)
     if args.types is not None:
         value.types = read_types(args.types)
+    if args.collection is not None:
+        try:
+            value.collection = CollectionReport.model_validate_json(args.collection.read_text())
+        except (OSError, ValueError, ValidationError):
+            value.collection = None
     value = record(value, args.report)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(value.model_dump_json(indent=2) + "\n")

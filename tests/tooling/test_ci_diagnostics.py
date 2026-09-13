@@ -277,3 +277,15 @@ def test_dependency_upload_failure_is_explicit() -> None:
         },
     )
     assert "artifact_error" in render(value)
+
+
+def test_collection_and_other_quality_failures_are_reported_together() -> None:
+    value = evidence(
+        stage="quality",
+        steps={name: {"outcome": "failure"} for name in ("collection", "lint", "format")},
+    )
+    summary = render(value)
+    assert "collection_error" in summary
+    assert "quality_failure" in summary
+    assert "<code>lint</code>: failure" in summary
+    assert "<code>format</code>: failure" in summary
