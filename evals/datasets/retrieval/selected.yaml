@@ -1,0 +1,24 @@
+schema_version: 1
+dataset_identity: e2975bc6b175620eb2b942a15a483c8b6e624e8bcb54b500951f1df09764cbe3
+development_sha: 8a111cbecf7de0e87cb8990cd672c41d8d964254
+arm: D-rerank
+config:
+  use_dense: true
+  use_sparse_learned: true
+  use_bm25: true
+  pool: 20
+  hnsw_ef: 64
+  rrf_k: 60
+  drop_ratio_search: 0.2
+  record_arm_scores: true
+  use_rerank: true
+  filtering:
+    dynamic_ratio: 0.5
+    absolute_floor: 0.3
+    high_ratio: 0.6
+    min_per_doc: 1
+    max_per_doc: 3
+    gap_threshold: 0.15
+    final_k: 8
+rationale: Development pre-filter nDCG@10, Recall@10, client p50, stable arm order;
+  filter sweep uses development labels only.

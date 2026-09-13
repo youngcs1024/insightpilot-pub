@@ -8,6 +8,7 @@ import pytest
 
 from app.core.errors import RetrievalUnavailableError
 from app.schemas.model_runtime import ModelFailureKind
+from app.schemas.retrieval import RetrievalTimings
 from evals.harness.ablation import choose, evaluate, percentiles, tune_filter
 from evals.harness.contracts import EvaluationError
 from evals.harness.retrieval import observe, replay_fp32, verify_precision
@@ -168,3 +169,11 @@ def test_frozen_measurement_rejects_selection_replaced_after_collection() -> Non
     assert "uncommitted_development_selection" in report.issues
     report = evaluate(raw, dataset(Split.FROZEN), selected, selection_commit="c" * 40)
     assert "uncommitted_development_selection" in report.issues
+
+
+def test_missing_client_stage_measurement_is_not_a_zero_time_success() -> None:
+    raw = measurements()
+    raw.attempts[0].observed.result.timings = RetrievalTimings(total_ms=42)
+    report = evaluate(raw, dataset())
+    assert not report.evidence_valid
+    assert report.summaries[0].latency_ms["total_ms"].count == 0

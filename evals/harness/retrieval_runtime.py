@@ -91,6 +91,8 @@ async def collect(
             await validate_active(dataset, database)
     finally:
         await close_resources(database, model)
+    final_sha, final_dirty = await asyncio.to_thread(source_identity)
+    result.source_dirty = result.source_dirty or final_dirty or final_sha != result.client_sha
     return result
 
 
@@ -122,4 +124,6 @@ async def control(raw: Measurements, server: Provenance) -> Measurements:
     finally:
         async with asyncio.timeout(10):
             await model.aclose()
+    final_sha, final_dirty = await asyncio.to_thread(source_identity)
+    result.source_dirty = result.source_dirty or final_dirty or final_sha != result.client_sha
     return result
