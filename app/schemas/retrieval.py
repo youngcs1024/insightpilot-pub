@@ -12,7 +12,15 @@ from app.retrieval.config import RetrievalConfig
 from app.schemas.corpus import DocumentType, relative_source
 from app.schemas.ingestion import ChunkIdentity, Digest
 from app.schemas.mcp import Contract
-from app.schemas.model_runtime import Dense, ModelFailureKind, ModelMetadata, RerankResult, Score, Sparse, Text
+from app.schemas.model_runtime import (
+    Dense,
+    ModelFailureKind,
+    ModelMetadata,
+    RerankResult,
+    Score,
+    Sparse,
+    Text,
+)
 
 SourcePath = Annotated[str, Field(min_length=1, max_length=1024), AfterValidator(relative_source)]
 
@@ -161,7 +169,9 @@ class StageDiagnostic(RetrievalContract):
     input_count: int = Field(ge=0)
     output_count: int = Field(ge=0)
     elapsed_ms: int = Field(default=0, ge=0)
-    score_ranges: dict[Literal["dense", "sparse_learned", "sparse_bm25", "rrf", "rerank"], ScoreRange]
+    score_ranges: dict[
+        Literal["dense", "sparse_learned", "sparse_bm25", "rrf", "rerank"], ScoreRange
+    ]
 
 
 class RankingResult(RetrievalContract):

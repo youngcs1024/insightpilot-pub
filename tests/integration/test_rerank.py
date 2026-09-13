@@ -1,8 +1,8 @@
 """Committed real storage plus deterministic HTTP reranking; no live GPU claims."""
 # ruff: noqa: PLR2004 -- fixed scores and batch contracts are acceptance expectations.
 
-from sqlalchemy import update
 import pytest
+from sqlalchemy import update
 
 from app.db.models.document import Document
 from app.repositories.document import DocumentRepository
@@ -31,7 +31,9 @@ async def test_rerank_is_single_batched_call(harness: RetrievalHarness) -> None:
     assert result.rerank_metadata == result.model_metadata
     assert result.stages[2].input_count == len(original.candidates)
     assert all(item.source_path for item in result.candidates)
-    assert all(item.scores.rrf is not None and item.scores.rerank == 0.8 for item in result.candidates)
+    assert all(
+        item.scores.rrf is not None and item.scores.rerank == 0.8 for item in result.candidates
+    )
     assert any(item.parent_content != item.content for item in result.candidates)
     assert [item.stage for item in result.stages] == list(RetrievalStage)
     assert result.stages[-1].output_count == len(result.candidates)
@@ -75,9 +77,11 @@ async def test_source_path_uses_same_snapshot_as_manifest(
     async def rename_after_snapshot(repository: DocumentRepository) -> ActiveManifest | None:
         manifest = await original(repository)
         async with harness.database.session() as writer, writer.begin():
-            await writer.execute(update(Document).where(Document.source_path == "sku.md").values(
-                source_path="renamed.md"
-            ))
+            await writer.execute(
+                update(Document)
+                .where(Document.source_path == "sku.md")
+                .values(source_path="renamed.md")
+            )
         return manifest
 
     monkeypatch.setattr(DocumentRepository, "manifest", rename_after_snapshot)

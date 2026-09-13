@@ -79,7 +79,9 @@ def search_config(args: argparse.Namespace, configured: RetrievalConfig) -> Retr
     return RetrievalConfig.model_validate(values)
 
 
-async def run(settings: RetrievalProcessSettings, query: RetrievalQuery, *, explain: bool = False) -> int:
+async def run(
+    settings: RetrievalProcessSettings, query: RetrievalQuery, *, explain: bool = False
+) -> int:
     """Close all process-owned resources after success, failure or cancellation."""
     database = Database(settings.database)
     database.start()

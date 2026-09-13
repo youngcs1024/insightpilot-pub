@@ -67,13 +67,17 @@ class DocumentRepository:
         """Read only requested active sources inside the caller's consistent snapshot."""
         if not identifiers:
             return []
-        rows = (await self.session.execute(
-            select(Document.id, Document.source_path).where(
-                Document.id.in_(identifiers), Document.status == "active"
+        rows = (
+            await self.session.execute(
+                select(Document.id, Document.source_path).where(
+                    Document.id.in_(identifiers), Document.status == "active"
+                )
             )
-        )).all()
+        ).all()
         try:
-            return [CandidateSource(document_id=row.id, source_path=row.source_path) for row in rows]
+            return [
+                CandidateSource(document_id=row.id, source_path=row.source_path) for row in rows
+            ]
         except ValidationError as exc:
             raise IngestionRegistryError() from exc
 

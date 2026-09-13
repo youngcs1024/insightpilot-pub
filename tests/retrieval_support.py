@@ -2,6 +2,7 @@
 
 import json
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -11,11 +12,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from collections.abc import AsyncIterator
 from pydantic import SecretStr
-from tests.ingestion_support import clear_registry
-from tests.milvus_support import MilvusStack
-from tests.shared_database import TestPostgres
 
 from app.clients.model_runtime import ModelRuntimeClient
 from app.core.config_models import ModelRuntimeClientSettings
@@ -28,12 +25,14 @@ from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
 from app.schemas.ingestion import digest
 from app.schemas.model_runtime import EmbedResult, ModelFailure, RerankResult
-from model_runtime.errors import ModelError
 from app.schemas.retrieval import Candidate, EncodedQuery, PointTimeScope, RetrievalQuery
 from app.services.ingestion import IngestionService
 from app.services.ingestion_config import IngestionSettings
+from model_runtime.errors import ModelError
 from tests.corpus_support import entry, markdown_source, write_inventory
-from tests.ingestion_support import model_metadata
+from tests.ingestion_support import clear_registry, model_metadata
+from tests.milvus_support import MilvusStack
+from tests.shared_database import TestPostgres
 
 
 def deadline(seconds: float = 30) -> Deadline:
@@ -102,13 +101,22 @@ class QueryEmbeddings:
             self.rerank_calls.append(payload)
             if self.rerank_error is not None:
                 error = self.rerank_error
-                failure = ModelFailure(code=error.kind, message=error.user_message,
-                                       request_id="synthetic-rerank", retryable=error.retryable)
+                failure = ModelFailure(
+                    code=error.kind,
+                    message=error.user_message,
+                    request_id="synthetic-rerank",
+                    retryable=error.retryable,
+                )
                 return httpx.Response(error.http_status, json=failure.model_dump(mode="json"))
             reranked = RerankResult(
-                request_id="synthetic-rerank", ms=1, queue_ms=0, inference_ms=1,
+                request_id="synthetic-rerank",
+                ms=1,
+                queue_ms=0,
+                inference_ms=1,
                 metadata=model_metadata(),
-                scores=self.rerank_scores if self.rerank_scores is not None else [0.8] * len(payload["passages"]),
+                scores=self.rerank_scores
+                if self.rerank_scores is not None
+                else [0.8] * len(payload["passages"]),
             )
             return httpx.Response(200, json=reranked.model_dump(mode="json"))
         self.calls.append(payload)
@@ -177,7 +185,9 @@ class RetrievalHarness:
             self.search,
             self.model,
             RetrievalSettings(
-                search=config or RetrievalConfig(use_rerank=False), search_timeout_s=30, milvus=self.search.settings
+                search=config or RetrievalConfig(use_rerank=False),
+                search_timeout_s=30,
+                milvus=self.search.settings,
             ),
         )
 
@@ -209,4 +219,3 @@ async def harness(
     finally:
         await clear_registry(database)
         await database.aclose()
-

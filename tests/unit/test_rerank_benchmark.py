@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from scripts import bench_retrieval_rerank as bench
 from app.schemas.model_runtime import ReadyResult
+from scripts import bench_retrieval_rerank as bench
 from tests.fakes.model_evidence import artifact
 from tests.rerank_support import model
 
@@ -20,9 +20,13 @@ async def test_benchmark_uses_shared_stage_and_preserves_identity(
     client = model([0.8] * 20)
     if changed_metadata:
         client.rerank.return_value.metadata.rerank_batch = 8
-    client.ready = AsyncMock(return_value=ReadyResult(request_id="ready", metadata=reference.metadata))
+    client.ready = AsyncMock(
+        return_value=ReadyResult(request_id="ready", metadata=reference.metadata)
+    )
     client.aclose = AsyncMock()
-    monkeypatch.setattr(bench.ModelDiagnosticsSettings, "load", lambda: SimpleNamespace(model_runtime=None))
+    monkeypatch.setattr(
+        bench.ModelDiagnosticsSettings, "load", lambda: SimpleNamespace(model_runtime=None)
+    )
     monkeypatch.setattr(bench, "ModelRuntimeClient", lambda config: client)
     result = await bench.benchmark("a" * 40, reference.provenance)
     assert result.accepted is not changed_metadata

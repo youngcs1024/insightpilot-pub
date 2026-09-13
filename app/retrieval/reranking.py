@@ -15,10 +15,14 @@ from app.schemas.retrieval import Candidate, RankingResult, RetrievalStage, Stag
 from model_runtime.errors import ModelError
 
 logger = structlog.get_logger(__name__)
-DEGRADABLE = frozenset({
-    ModelFailureKind.UNAVAILABLE, ModelFailureKind.QUEUE_FULL,
-    ModelFailureKind.OOM, ModelFailureKind.DEADLINE,
-})
+DEGRADABLE = frozenset(
+    {
+        ModelFailureKind.UNAVAILABLE,
+        ModelFailureKind.QUEUE_FULL,
+        ModelFailureKind.OOM,
+        ModelFailureKind.DEADLINE,
+    }
+)
 
 
 async def rerank_candidates(
@@ -34,11 +38,18 @@ async def rerank_candidates(
     detached = [item.model_copy(deep=True) for item in candidates]
     if not config.use_rerank or not detached:
         status = StageStatus.DISABLED if not config.use_rerank else StageStatus.EMPTY
-        return RankingResult(candidates=detached, stages=[
-            diagnostic(stage, len(detached), detached, status=status)
-            for stage in (RetrievalStage.RERANK, RetrievalStage.THRESHOLD,
-                          RetrievalStage.DIVERSITY, RetrievalStage.TRUNCATION)
-        ])
+        return RankingResult(
+            candidates=detached,
+            stages=[
+                diagnostic(stage, len(detached), detached, status=status)
+                for stage in (
+                    RetrievalStage.RERANK,
+                    RetrievalStage.THRESHOLD,
+                    RetrievalStage.DIVERSITY,
+                    RetrievalStage.TRUNCATION,
+                )
+            ],
+        )
     if model is None:
         raise RetrievalConfigurationError(reason="model_client_required")
     for item in detached:
@@ -58,10 +69,16 @@ async def rerank_candidates(
             with observe("retrieval_filter", TraceMetadata(status="degraded")):
                 result = fallback(detached, config.filtering)
             result.degradation = exc.kind
-            result.stages.insert(0, diagnostic(
-                RetrievalStage.RERANK, len(detached), detached,
-                elapsed_ms=rerank_ms, status=StageStatus.DEGRADED,
-            ))
+            result.stages.insert(
+                0,
+                diagnostic(
+                    RetrievalStage.RERANK,
+                    len(detached),
+                    detached,
+                    elapsed_ms=rerank_ms,
+                    status=StageStatus.DEGRADED,
+                ),
+            )
             return result
     deadline.check("retrieval_filter")
     rerank_ms = int((time.monotonic() - started) * 1000)
@@ -70,7 +87,7 @@ async def rerank_candidates(
     with observe("retrieval_filter", TraceMetadata(row_count=len(detached))):
         result = filter_ranked(detached, config.filtering)
     result.response = response
-    result.stages.insert(0, diagnostic(
-        RetrievalStage.RERANK, len(detached), detached, elapsed_ms=rerank_ms
-    ))
+    result.stages.insert(
+        0, diagnostic(RetrievalStage.RERANK, len(detached), detached, elapsed_ms=rerank_ms)
+    )
     return result

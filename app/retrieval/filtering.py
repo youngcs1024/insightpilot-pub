@@ -60,23 +60,32 @@ def diagnostic(
         if values:
             ranges[name] = ScoreRange(minimum=min(values), maximum=max(values))
     return StageDiagnostic(
-        stage=stage, status=status, input_count=input_count, output_count=len(candidates),
-        elapsed_ms=elapsed_ms, score_ranges=ranges,
+        stage=stage,
+        status=status,
+        input_count=input_count,
+        output_count=len(candidates),
+        elapsed_ms=elapsed_ms,
+        score_ranges=ranges,
     )
 
 
-def diversify(candidates: list[Candidate], config: FilterConfig, top: float | None) -> list[Candidate]:
+def diversify(
+    candidates: list[Candidate], config: FilterConfig, top: float | None
+) -> list[Candidate]:
     """Preserve global stable ordering while enforcing per-canonical-source ceilings."""
     keys = [source_key(item) for item in candidates]
     high = Counter(
-        key for key, item in zip(keys, candidates, strict=True)
+        key
+        for key, item in zip(keys, candidates, strict=True)
         if top is not None and score(item) >= top * config.high_ratio
     )
     seen: Counter[str] = Counter()
     output = []
     for key, item in zip(keys, candidates, strict=True):
-        cap = config.max_per_doc if top is None else min(
-            max(high[key], config.min_per_doc), config.max_per_doc
+        cap = (
+            config.max_per_doc
+            if top is None
+            else min(max(high[key], config.min_per_doc), config.max_per_doc)
         )
         # RagMate/backend/core/retriever.py:277-282: dominance "boost" is a no-op
         # for limit <= k and bypasses MAX_PER_SOURCE. Always enforce the hard cap.
@@ -105,19 +114,40 @@ def filter_ranked(candidates: list[Candidate], config: FilterConfig) -> RankingR
     started = time.monotonic()
     threshold = max(top * config.dynamic_ratio, config.absolute_floor) if top is not None else None
     kept = [item for item in ordered if threshold is not None and score(item) >= threshold]
-    stages = [diagnostic(RetrievalStage.THRESHOLD, len(ordered), kept,
-                         elapsed_ms=int((time.monotonic() - started) * 1000))]
+    stages = [
+        diagnostic(
+            RetrievalStage.THRESHOLD,
+            len(ordered),
+            kept,
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
+    ]
     started = time.monotonic()
     diversified = diversify(kept, config, top)
-    stages.append(diagnostic(RetrievalStage.DIVERSITY, len(kept), diversified,
-                             elapsed_ms=int((time.monotonic() - started) * 1000)))
+    stages.append(
+        diagnostic(
+            RetrievalStage.DIVERSITY,
+            len(kept),
+            diversified,
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
+    )
     started = time.monotonic()
     output = truncate(diversified, config)
-    stages.append(diagnostic(RetrievalStage.TRUNCATION, len(diversified), output,
-                             elapsed_ms=int((time.monotonic() - started) * 1000)))
+    stages.append(
+        diagnostic(
+            RetrievalStage.TRUNCATION,
+            len(diversified),
+            output,
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
+    )
     return RankingResult(
-        candidates=output, reranked=bool(ordered), top_rerank_score=top,
-        meets_floor=top is not None and top >= config.absolute_floor, stages=stages,
+        candidates=output,
+        reranked=bool(ordered),
+        top_rerank_score=top,
+        meets_floor=top is not None and top >= config.absolute_floor,
+        stages=stages,
     )
 
 
@@ -131,9 +161,16 @@ def fallback(candidates: list[Candidate], config: FilterConfig) -> RankingResult
     started = time.monotonic()
     diversified = diversify(candidates, config, None)
     diversity_ms = int((time.monotonic() - started) * 1000)
-    output = diversified[:config.final_k]
-    return RankingResult(candidates=output, stages=[
-        diagnostic(RetrievalStage.THRESHOLD, len(candidates), candidates, status=StageStatus.DEGRADED),
-        diagnostic(RetrievalStage.DIVERSITY, len(candidates), diversified, elapsed_ms=diversity_ms),
-        diagnostic(RetrievalStage.TRUNCATION, len(diversified), output),
-    ])
+    output = diversified[: config.final_k]
+    return RankingResult(
+        candidates=output,
+        stages=[
+            diagnostic(
+                RetrievalStage.THRESHOLD, len(candidates), candidates, status=StageStatus.DEGRADED
+            ),
+            diagnostic(
+                RetrievalStage.DIVERSITY, len(candidates), diversified, elapsed_ms=diversity_ms
+            ),
+            diagnostic(RetrievalStage.TRUNCATION, len(diversified), output),
+        ],
+    )

@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.errors import RetrievalConfigurationError, RetrievalUnavailableError
+from app.core.errors import (
+    IngestionRegistryError,
+    RetrievalConfigurationError,
+    RetrievalUnavailableError,
+)
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.retrieval.config import RetrievalConfig, RetrievalSettings
@@ -17,6 +21,7 @@ from app.schemas.ingestion import ChunkIdentity, EncodingProfile
 from app.schemas.model_runtime import EmbedMode, EmbedResult
 from model_runtime.errors import ModelContractError, ModelError
 from tests.ingestion_support import model_metadata
+from tests.rerank_support import model
 from tests.retrieval_support import candidate, deadline, encoded, fake_store, query
 
 EXPECTED_POOL = 20
@@ -43,9 +48,15 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
     )
     monkeypatch.setattr(DocumentRepository, "manifest", AsyncMock(return_value=manifest))
     monkeypatch.setattr(ChunkRepository, "admit", AsyncMock(side_effect=lambda values: values))
-    monkeypatch.setattr(DocumentRepository, "candidate_sources", AsyncMock(
-        side_effect=lambda ids: [SimpleNamespace(document_id=item, source_path="source.md") for item in ids]
-    ))
+    monkeypatch.setattr(
+        DocumentRepository,
+        "candidate_sources",
+        AsyncMock(
+            side_effect=lambda ids: [
+                SimpleNamespace(document_id=item, source_path="source.md") for item in ids
+            ]
+        ),
+    )
     output = EmbedResult(
         request_id="test",
         ms=0,
@@ -81,7 +92,9 @@ async def test_vector_query_is_encoded_once_and_metadata_preserved(
 
 
 async def test_bm25_only_does_not_require_or_call_models(pipeline: RetrievalPipeline) -> None:
-    pipeline.settings.search = RetrievalConfig(use_rerank=False, use_dense=False, use_sparse_learned=False)
+    pipeline.settings.search = RetrievalConfig(
+        use_rerank=False, use_dense=False, use_sparse_learned=False
+    )
     pipeline.model = None
     result = await pipeline.retrieve(query(), deadline=deadline())
     assert result.model_metadata is None
@@ -170,10 +183,8 @@ async def test_outer_deadline_includes_admission(
 
 
 async def test_reranking_begins_after_admission_transaction_closes(
-    pipeline: RetrievalPipeline
+    pipeline: RetrievalPipeline,
 ) -> None:
-    from tests.rerank_support import model
-
     active = False
 
     @asynccontextmanager
@@ -206,8 +217,6 @@ async def test_reranking_begins_after_admission_transaction_closes(
 async def test_missing_registered_source_fails_closed(
     pipeline: RetrievalPipeline, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.core.errors import IngestionRegistryError
-
     monkeypatch.setattr(DocumentRepository, "candidate_sources", AsyncMock(return_value=[]))
     with pytest.raises(IngestionRegistryError):
         await pipeline.retrieve(query(), deadline=deadline())

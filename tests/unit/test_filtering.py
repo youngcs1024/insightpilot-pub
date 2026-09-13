@@ -117,11 +117,19 @@ def test_missing_rerank_score_is_not_fusion_relevance() -> None:
         filter_candidates(values, FilterConfig())
 
 
-@pytest.mark.parametrize("config", [
-    {"dynamic_ratio": -0.1}, {"absolute_floor": 1.1}, {"high_ratio": float("nan")},
-    {"gap_threshold": 1.1}, {"min_per_doc": 0}, {"max_per_doc": 101},
-    {"min_per_doc": 4, "max_per_doc": 3}, {"final_k": 0},
-])
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"dynamic_ratio": -0.1},
+        {"absolute_floor": 1.1},
+        {"high_ratio": float("nan")},
+        {"gap_threshold": 1.1},
+        {"min_per_doc": 0},
+        {"max_per_doc": 101},
+        {"min_per_doc": 4, "max_per_doc": 3},
+        {"final_k": 0},
+    ],
+)
 def test_invalid_filter_config_rejected(config: dict[str, float]) -> None:
     with pytest.raises(ValidationError):
         FilterConfig.model_validate(config)

@@ -15,14 +15,14 @@ from app.schemas.retrieval import PointTimeScope, PolicyPeriod, RangeTimeScope, 
 from tests.milvus_support import milvus_stack
 from tests.retrieval_support import (
     RetrievalHarness,
-    harness,
     deadline,
     encoded,
+    harness,
     query,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["milvus_stack", "harness"]
+__all__ = ["harness", "milvus_stack"]
 
 
 @pytest.mark.parametrize(
@@ -40,8 +40,12 @@ __all__ = ["milvus_stack", "harness"]
 async def test_all_enabled_arm_combinations_return_registered_candidates(
     harness: RetrievalHarness, dense: bool, sparse: bool, bm25: bool
 ) -> None:
-    config = RetrievalConfig(use_rerank=False, 
-        use_dense=dense, use_sparse_learned=sparse, use_bm25=bm25, record_arm_scores=True
+    config = RetrievalConfig(
+        use_rerank=False,
+        use_dense=dense,
+        use_sparse_learned=sparse,
+        use_bm25=bm25,
+        record_arm_scores=True,
     )
     result = await harness.pipeline(config).retrieve(query(), deadline=deadline())
     assert result.candidates
@@ -87,9 +91,9 @@ async def test_bm25_arm_finds_exact_sku_code(harness: RetrievalHarness) -> None:
 
 
 async def test_arm_scores_recorded_when_enabled(harness: RetrievalHarness) -> None:
-    result = await harness.pipeline(RetrievalConfig(use_rerank=False, record_arm_scores=True)).retrieve(
-        query(), deadline=deadline()
-    )
+    result = await harness.pipeline(
+        RetrievalConfig(use_rerank=False, record_arm_scores=True)
+    ).retrieve(query(), deadline=deadline())
     sku = next(item for item in result.candidates if "SKU-A1023" in item.content)
     assert sku.scores.rrf is not None
     assert sku.scores.dense is not None

@@ -12,8 +12,13 @@ from app.retrieval.config import RetrievalConfig
 from app.retrieval.reranking import rerank_candidates
 from app.schemas.retrieval import StageStatus
 from model_runtime.errors import (
-    ModelAuthError, ModelContractError, ModelDeadlineError, ModelError,
-    ModelInputError, ModelOOMError, ModelQueueError,
+    ModelAuthError,
+    ModelContractError,
+    ModelDeadlineError,
+    ModelError,
+    ModelInputError,
+    ModelOOMError,
+    ModelQueueError,
 )
 from tests.rerank_support import model, scored
 from tests.retrieval_support import deadline
@@ -25,7 +30,9 @@ async def test_rerank_is_single_batched_child_call_and_scores_remain_attached() 
     client = model([0.8] * 19 + [0.9])
     result = await rerank_candidates("规则", values, client, RetrievalConfig(), deadline=deadline())
     client.rerank.assert_awaited_once_with(
-        "规则", [item.content for item in values], deadline=client.rerank.call_args.kwargs["deadline"],
+        "规则",
+        [item.content for item in values],
+        deadline=client.rerank.call_args.kwargs["deadline"],
         max_length=320,
     )
     assert result.reranked
@@ -40,7 +47,9 @@ async def test_rerank_is_single_batched_child_call_and_scores_remain_attached() 
     assert result.candidates[1].chunk_uuid == values[0].chunk_uuid
 
 
-@pytest.mark.parametrize("failure", [ModelError(), ModelQueueError(), ModelOOMError(), ModelDeadlineError()])
+@pytest.mark.parametrize(
+    "failure", [ModelError(), ModelQueueError(), ModelOOMError(), ModelDeadlineError()]
+)
 async def test_availability_failures_degrade_with_unknown_relevance(failure: ModelError) -> None:
     values = scored([0.0] * 10, ["a.md"] * 5 + ["b.md"] * 5)
     for item in values:
@@ -63,7 +72,9 @@ async def test_non_availability_failures_are_not_disguised(failure: ModelError) 
     client = model([])
     client.rerank.side_effect = failure
     with pytest.raises(type(failure)):
-        await rerank_candidates("规则", scored([0.8]), client, RetrievalConfig(), deadline=deadline())
+        await rerank_candidates(
+            "规则", scored([0.8]), client, RetrievalConfig(), deadline=deadline()
+        )
 
 
 async def test_empty_pool_makes_no_model_call() -> None:
@@ -95,7 +106,9 @@ async def test_cancellation_propagates() -> None:
     client = model([])
     client.rerank.side_effect = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
-        await rerank_candidates("规则", scored([0.8]), client, RetrievalConfig(), deadline=deadline())
+        await rerank_candidates(
+            "规则", scored([0.8]), client, RetrievalConfig(), deadline=deadline()
+        )
 
 
 async def test_expired_total_deadline_cannot_become_fallback() -> None:

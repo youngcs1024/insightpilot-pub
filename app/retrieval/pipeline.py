@@ -8,7 +8,11 @@ from sqlalchemy import text
 
 from app.clients.model_runtime import ModelRuntimeClient
 from app.core.deadline import Deadline
-from app.core.errors import IngestionRegistryError, RetrievalConfigurationError, RetrievalUnavailableError
+from app.core.errors import (
+    IngestionRegistryError,
+    RetrievalConfigurationError,
+    RetrievalUnavailableError,
+)
 from app.core.observability import TraceMetadata, observe
 from app.db.session import Database
 from app.repositories.chunk import ChunkRepository
@@ -62,7 +66,11 @@ class RetrievalPipeline:
         self.store = store
         self.model = model
         self.settings = settings.model_copy(deep=True)
-        if (settings.search.use_dense or settings.search.use_sparse_learned or settings.search.use_rerank) and model is None:
+        if (
+            settings.search.use_dense
+            or settings.search.use_sparse_learned
+            or settings.search.use_rerank
+        ) and model is None:
             raise RetrievalConfigurationError(reason="model_client_required")
 
     async def retrieve(self, query: RetrievalQuery, *, deadline: Deadline) -> RetrievalResult:
@@ -96,8 +104,12 @@ class RetrievalPipeline:
         admitted_count = len(result.candidates)
         result.stages = [
             diagnostic(RetrievalStage.SEARCH, len(pool), pool, elapsed_ms=timings.search_ms),
-            diagnostic(RetrievalStage.ADMISSION, len(pool), result.candidates,
-                       elapsed_ms=timings.admission_ms),
+            diagnostic(
+                RetrievalStage.ADMISSION,
+                len(pool),
+                result.candidates,
+                elapsed_ms=timings.admission_ms,
+            ),
         ]
         ranked = await rerank_candidates(
             query.standalone, result.candidates, self.model, self.settings.search, deadline=deadline

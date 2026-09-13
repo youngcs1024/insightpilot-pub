@@ -1,5 +1,8 @@
 """Diagnostic CLI time, settings precedence and safe error rendering."""
 
+import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -8,7 +11,11 @@ import pytest
 
 from app.core.errors import PeriodUnresolved, RetrievalConfigurationError
 from app.retrieval.config import RetrievalConfig
+from app.retrieval.filtering import diagnostic, filter_ranked
+from app.schemas.retrieval import RetrievalResult, RetrievalStage, RetrievalTimings
 from scripts import dev_retrieve
+from tests.rerank_support import scored
+from tests.retrieval_support import query
 
 COMPARISON_PERIODS = 2
 NOW = datetime(2026, 8, 1, 20, tzinfo=UTC)
@@ -117,3 +124,56 @@ def test_explain_reaches_cli_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dev_retrieve, "run", operation)
     assert dev_retrieve.main(["规则", "--explain"]) == 0
     assert operation.call_args.kwargs["explain"] is True
+
+
+async def test_explain_prints_typed_stage_counts_and_score_ranges(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = SimpleNamespace(start=lambda: None, aclose=AsyncMock())
+    model = SimpleNamespace(aclose=AsyncMock())
+    config = RetrievalConfig()
+    values = scored([0.8, 0.7])
+    ranked = filter_ranked(values, config.filtering)
+    result = RetrievalResult(
+        query=query(),
+        corpus_version=None,
+        candidates=ranked.candidates,
+        retrieval_config=config,
+        model_metadata=None,
+        timings=RetrievalTimings(),
+        reranked=True,
+        top_rerank_score=ranked.top_rerank_score,
+        meets_floor=ranked.meets_floor,
+        stages=[
+            diagnostic(RetrievalStage.SEARCH, len(values), values),
+            diagnostic(RetrievalStage.ADMISSION, len(values), values),
+            diagnostic(RetrievalStage.RERANK, len(values), values),
+            *ranked.stages,
+        ],
+    )
+
+    @asynccontextmanager
+    async def store(settings: object) -> AsyncIterator[None]:
+        yield None
+
+    monkeypatch.setattr(dev_retrieve, "Database", lambda settings: database)
+    monkeypatch.setattr(dev_retrieve, "ModelRuntimeClient", lambda settings: model)
+    monkeypatch.setattr(dev_retrieve, "HybridSearchStore", store)
+    monkeypatch.setattr(
+        dev_retrieve,
+        "RetrievalPipeline",
+        lambda *args: SimpleNamespace(retrieve=AsyncMock(return_value=result)),
+    )
+    settings = dev_retrieve.RetrievalProcessSettings.model_construct(
+        database=None,
+        model_runtime=True,
+        retrieval=dev_retrieve.RetrievalSettings(search=config),
+    )
+    assert await dev_retrieve.run(settings, query(), explain=True) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert [item["stage"] for item in printed["stages"]] == list(RetrievalStage)
+    assert all(item["input_count"] == len(values) for item in printed["stages"])
+    score_range = printed["stages"][-1]["score_ranges"]["rerank"]
+    assert score_range == {"schema_version": 1, "minimum": 0.7, "maximum": 0.8}
+    database.aclose.assert_awaited_once()
+    model.aclose.assert_awaited_once()
