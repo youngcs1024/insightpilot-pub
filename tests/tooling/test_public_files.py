@@ -21,6 +21,12 @@ from scripts.public_files import PublicIssue, allowed_path, content_issues
         "app/resources/provider_capabilities.json",
         "tests/fixtures/seed_traps.json",
         "scripts/data/tiktoken-LICENSE",
+        "data/corpus/MANIFEST.yaml",
+        "data/corpus/promo_2026_summer.md",
+        "data/corpus/policy/warranty.pdf",
+        "data/corpus/policy/warranty.pdf.meta.yaml",
+        "data/corpus/sop/category_codes.xlsx",
+        "data/corpus/sop/category_codes.xlsx.meta.yaml",
     ],
 )
 def test_required_source_resources_are_allowed(path: str) -> None:
@@ -47,6 +53,11 @@ def test_required_source_resources_are_allowed(path: str) -> None:
         "scripts/.agents/config.py",
         "scripts/../docs/example.py",
         "/app/main.py",
+        "data/corpus/docs/private.md",
+        "data/corpus/.private.md",
+        "data/corpus/raw.json",
+        "data/corpus/config.yaml",
+        "data/corpus/export.zip",
     ],
 )
 def test_private_or_unreviewed_paths_are_rejected(path: str) -> None:

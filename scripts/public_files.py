@@ -101,10 +101,22 @@ def allowed_path(name: str) -> bool:
     if path.parent == PurePosixPath(".") and re.fullmatch(r"\.env(?:\.[a-z-]+)*\.example", name):
         return True
     if path.suffix == ".md":
-        return path.parent.as_posix() in PROMPT_ROOTS
+        return path.parent.as_posix() in PROMPT_ROOTS or _corpus_resource(path)
     if not path.parts or any(part.startswith(".") for part in path.parts):
         return False
-    return _source_path(path)
+    return _corpus_resource(path) or _source_path(path)
+
+
+def _corpus_resource(path: PurePosixPath) -> bool:
+    return (
+        path.parts[:2] == ("data", "corpus")
+        and not any(part.startswith(".") for part in path.parts)
+        and (
+            path.as_posix() == "data/corpus/MANIFEST.yaml"
+            or path.suffix in {".md", ".xlsx", ".pdf"}
+            or path.name.endswith((".xlsx.meta.yaml", ".pdf.meta.yaml"))
+        )
+    )
 
 
 def _source_path(path: PurePosixPath) -> bool:

@@ -46,6 +46,13 @@ class RetrievalSchemaError(InsightPilotError):
     user_message = "Knowledge storage requires an operator schema update."
 
 
+class CorpusValidationError(InsightPilotError):
+    """A corpus resource or its metadata cannot satisfy the authoring contract."""
+
+    code = "CORPUS_VALIDATION_ERROR"
+    user_message = "Knowledge corpus validation failed."
+
+
 class RetrievalConfigurationError(ValidationError):
     """The storage service rejected a schema, analyzer or search parameter."""
 

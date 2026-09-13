@@ -21,6 +21,8 @@ COPY scripts ./scripts
 COPY model_runtime/__init__.py model_runtime/errors.py ./model_runtime/
 COPY model_tunnel ./model_tunnel
 COPY data/seed ./data/seed
+COPY data/corpus ./data/corpus
+COPY data/corpus_io.py data/corpus_metrics.py ./data/
 COPY data/__init__.py ./data/__init__.py
 COPY alembic ./alembic
 COPY alembic.ini ./
