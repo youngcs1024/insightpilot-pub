@@ -21,6 +21,7 @@ from app.core.settings_base import (
 )
 from mcp_server.config import McpServerSettings
 from model_runtime.config import ModelRuntimeSettings
+from scripts.ingest import IngestionProcessSettings
 from model_tunnel.config import TunnelProcessSettings
 from scripts.deployment import DeploymentSettings
 from scripts.migration_settings import MigrationSettings
@@ -131,6 +132,7 @@ def test_url_quotes_special_characters() -> None:
     ("model", "name"),
     [
         (Settings, ".env.example"),
+        (IngestionProcessSettings, ".env.ingest.example"),
         (McpServerSettings, ".env.mcp.example"),
         (MigrationSettings, ".env.migration.example"),
         (Settings, ".env.api.container.example"),

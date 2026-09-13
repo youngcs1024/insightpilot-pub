@@ -24,9 +24,10 @@ def metadata_source() -> str:
     )
 
 
-def markdown_source() -> str:
+def markdown_source(body: str | None = None) -> str:
     """Build a source with visible metadata and a nonempty body."""
-    return "---\n" + metadata_source() + "---\n\n# 测试规则\n\n退款申请需核验商品行。\n"
+    content = body if body is not None else "# 测试规则\n\n退款申请需核验商品行。\n"
+    return "---\n" + metadata_source() + "---\n\n" + content
 
 
 def write_inventory(root: Path, entries: list[CorpusEntry]) -> None:

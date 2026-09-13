@@ -381,3 +381,24 @@ class SqlGenerationError(InsightPilotError):
     code = "SQL_GENERATION_FAILED"
     http_status = 502
     user_message = "The language model could not generate a SQL query."
+
+
+class IngestionAlreadyRunning(ConflictError):  # noqa: N818 -- roadmap public error name.
+    """Another process holds the global corpus ingestion transaction lock."""
+
+    code = "INGESTION_ALREADY_RUNNING"
+    user_message = "Knowledge ingestion is already running."
+
+
+class IngestionConfigurationError(InsightPilotError):
+    """Refuse to mix incompatible embedding profiles or index targets."""
+
+    code = "INGESTION_CONFIGURATION_ERROR"
+    user_message = "The active corpus requires a compatible ingestion configuration."
+
+
+class IngestionRegistryError(InsightPilotError):
+    """Persisted corpus state is invalid, so no candidate may be admitted."""
+
+    code = "INGESTION_REGISTRY_ERROR"
+    user_message = "Knowledge registry validation failed."

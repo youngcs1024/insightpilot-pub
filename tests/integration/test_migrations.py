@@ -77,7 +77,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
         assert str(clarification["type"]) == "JSONB"
         assert (
             await connection.scalar(text("SELECT version_num FROM alembic_version_app"))
-            == "0008_turn_clarification"
+            == "0009_ingestion_registry"
         )
     business = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
     try:
@@ -102,6 +102,31 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
             )
     finally:
         await business.dispose()
+
+
+def test_registry_migration_roundtrip(migrated: MigrationSettings) -> None:
+    """Downgrade only the registry, then prove a fresh upgrade matches ORM metadata."""
+    config = migration_config(MigrationTarget.APP)
+    command.downgrade(config, "0008_turn_clarification")
+
+    async def inspect_registry(expected: bool) -> None:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with resource.connect() as connection:
+                tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
+                registry = {"documents", "chunks", "corpus_manifests"}
+                assert registry <= set(tables) if expected else registry.isdisjoint(tables)
+                assert "data_evidence" in tables
+                if expected:
+                    await connection.run_sync(assert_empty_diff, MigrationTarget.APP)
+        finally:
+            await resource.dispose()
+
+    try:
+        asyncio.run(inspect_registry(False))
+    finally:
+        command.upgrade(config, "head")
+    asyncio.run(inspect_registry(True))
 
 
 async def inspect_base(migrated: MigrationSettings, target: MigrationTarget) -> None:

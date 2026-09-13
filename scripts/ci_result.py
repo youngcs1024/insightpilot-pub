@@ -14,6 +14,7 @@ from scripts.ci_partitions import PARTITIONS
 from scripts.ci_policy import Plan, Result, Results, failures
 
 MIGRATION_CASES = (
+    "test_registry_migration_roundtrip",
     "test_upgrade_head_from_empty",
     "test_downgrade_to_base",
     "test_autogenerate_produces_empty_diff[app]",
