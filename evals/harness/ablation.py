@@ -46,7 +46,9 @@ def validate_attempt(attempt: Attempt, case: RetrievalCase, dataset: Dataset) ->
     if attempt.failure_code or observed is None:
         raise EvaluationError("Missing successful observation")
     result, trace = observed.result, observed.trace
-    if result.timings.model_fields_set != set(type(result.timings).model_fields):
+    if not (set(type(result.timings).model_fields) - {"schema_version"}).issubset(
+        result.timings.model_fields_set
+    ):
         raise EvaluationError("Missing client stage measurement")
     expected = arm_config(attempt.arm, result.retrieval_config.filtering)
     if (
