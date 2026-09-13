@@ -43,10 +43,34 @@ class MilvusSettings(ConfigModel):
         return self
 
 
+class RetrievalConfig(ConfigModel):
+    """Effective search parameters snapshotted with every candidate pool."""
+
+    use_dense: bool = True
+    use_sparse_learned: bool = True
+    use_bm25: bool = True
+    pool: int = Field(default=20, ge=1, le=100)
+    hnsw_ef: int = Field(default=64, ge=1, le=32768)
+    rrf_k: int = Field(default=60, ge=1, le=16384)
+    drop_ratio_search: float = Field(default=0.2, ge=0, lt=1)
+    record_arm_scores: bool = False
+
+    @model_validator(mode="after")
+    def search_invariants(self) -> Self:
+        """Reject unusable search configurations when settings are constructed."""
+        require_configuration(
+            self.use_dense or self.use_sparse_learned or self.use_bm25,
+            "At least one retrieval arm must be enabled",
+        )
+        require_configuration(self.hnsw_ef >= self.pool, "hnsw_ef must be at least pool")
+        return self
+
+
 class RetrievalSettings(ConfigModel):
     """Storage availability does not enable the not-yet-implemented knowledge pipeline."""
 
     enabled: bool = False
+    search: RetrievalConfig = Field(default_factory=RetrievalConfig)
     search_timeout_s: float = Field(default=10, ge=0.01, le=120)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
 
