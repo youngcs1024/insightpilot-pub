@@ -103,13 +103,13 @@ class ConsistencyReport(Contract):
     chunks_deleted: int = Field(default=0, ge=0)
     documents_repaired: int = Field(default=0, ge=0)
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]  # Pydantic serializes this property.
     @property
     def counts(self) -> dict[DriftKind, int]:
         """Always include every drift category, including zero counts."""
         return {kind: sum(item.kind is kind for item in self.remaining) for kind in DriftKind}
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]  # Pydantic serializes this property.
     @property
     def successful(self) -> bool:
         """Only a complete clean rescan with no unresolved work passes."""

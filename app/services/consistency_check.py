@@ -124,29 +124,31 @@ def assess(registry: RegistrySnapshot, index: IndexSnapshot) -> Assessment:
             )
             result.rebuild.add(chunk.document_id)
     for row in index.rows:
-        chunk = chunks.get(row.chunk_uuid)
-        issues = inspect_row(row, chunk)
+        registered_chunk = chunks.get(row.chunk_uuid)
+        issues = inspect_row(row, registered_chunk)
         result.drift.extend(issues)
         if (
-            chunk is not None
-            and chunk.milvus_pk == row.milvus_pk
+            registered_chunk is not None
+            and registered_chunk.milvus_pk == row.milvus_pk
             and any(issue.kind is DriftKind.SHA for issue in issues)
         ):
-            result.rebuild.add(chunk.document_id)
+            result.rebuild.add(registered_chunk.document_id)
     compare_counts(registry, index, result)
     return result
 
 
-def compare_counts(
-    registry: RegistrySnapshot, index: IndexSnapshot, result: Assessment
-) -> None:
+def compare_counts(registry: RegistrySnapshot, index: IndexSnapshot, result: Assessment) -> None:
     """Extra vectors can be cleaned without encoding; missing registry rows cannot."""
     registered = Counter(chunk.document_id for chunk in registry.chunks)
     physical = Counter(row.document_id for row in index.rows)
     for document in registry.documents:
         identifier = document.document_id
         expected = document.chunk_count if document.status is DocumentStatus.ACTIVE else 0
-        if not document.chunk_count == expected == registered[identifier] == physical[identifier]:
+        empty_active = document.status is DocumentStatus.ACTIVE and expected == 0
+        if (
+            not document.chunk_count == expected == registered[identifier] == physical[identifier]
+            or empty_active
+        ):
             result.drift.append(
                 Drift(
                     kind=DriftKind.COUNT,
@@ -157,5 +159,5 @@ def compare_counts(
                     vector_count=physical[identifier],
                 )
             )
-        if document.chunk_count != expected or expected != registered[identifier]:
+        if document.chunk_count != expected or expected != registered[identifier] or empty_active:
             result.rebuild.add(identifier)

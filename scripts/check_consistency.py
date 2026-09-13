@@ -53,34 +53,45 @@ class ConsistencyFailure(Contract):
     code: str
 
 
+class RepairEncoder:
+    """Create and close the model client only when reconstruction requires encoding."""
+
+    def __init__(
+        self, settings: ConsistencyProcessSettings, database: Database, store: ConsistencyStore
+    ) -> None:
+        self.settings = settings
+        self.database = database
+        self.store = store
+
+    async def __call__(
+        self, prepared: list[PreparedDocument], manifest: ActiveManifest, deadline: Deadline
+    ) -> list[VectorRow]:
+        model_settings = self.settings.model_runtime
+        if model_settings is None:
+            raise IngestionConfigurationError()
+        model = ModelRuntimeClient(model_settings)
+        try:
+            service = IngestionService(
+                self.database, self.store, model, self.settings.ingestion, model_settings
+            )
+            rows, _ = await service.encode(IngestionPlan(changed=prepared), manifest, deadline)
+            return rows
+        finally:
+            async with asyncio.timeout(10):
+                await model.aclose()
+
+
 async def run(settings: ConsistencyProcessSettings, root: Path | None) -> int:
     """Own resources, lazily opening model HTTP only for actual reconstruction."""
     database = Database(settings.database)
     database.start()
     try:
         async with ConsistencyStore(settings.retrieval.milvus) as store:
-            async def encode(
-                prepared: list[PreparedDocument], manifest: ActiveManifest, deadline: Deadline
-            ) -> list[VectorRow]:
-                model_settings = settings.model_runtime
-                if model_settings is None:
-                    raise IngestionConfigurationError()
-                model = ModelRuntimeClient(model_settings)
-                try:
-                    service = IngestionService(
-                        database, store, model, settings.ingestion, model_settings
-                    )
-                    rows, _ = await service.encode(
-                        IngestionPlan(changed=prepared), manifest, deadline
-                    )
-                    return rows
-                finally:
-                    async with asyncio.timeout(10):
-                        await model.aclose()
-
             result = await ConsistencyService(
-                database, store, settings.ingestion,
-                encode if settings.model_runtime is not None else None,
+                database,
+                store,
+                settings.ingestion,
+                RepairEncoder(settings, database, store) if settings.model_runtime else None,
             ).check(root=root)
             print(
                 f"{len(result.remaining)} drift findings; "

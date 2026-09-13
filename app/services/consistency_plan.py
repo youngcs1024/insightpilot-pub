@@ -28,7 +28,13 @@ def restore_splitter(raw: str, limits: IngestionSettings) -> IngestionSettings:
         payload = TypeAdapter(dict[str, JsonValue]).validate_python(json.loads(raw))
         values = {
             key: payload[key]
-            for key in ("child_size", "child_overlap", "parent_size", "parent_overlap", "table_size")
+            for key in (
+                "child_size",
+                "child_overlap",
+                "parent_size",
+                "parent_overlap",
+                "table_size",
+            )
         }
         settings = IngestionSettings.model_validate(
             {**values, "timeout_s": limits.timeout_s, "max_source_bytes": limits.max_source_bytes}
@@ -51,8 +57,7 @@ def stage_repair(
         entries = {entry.path: entry for entry in discover(root).documents}
     except CorpusValidationError as exc:
         result.blocked = [
-            RepairBlock(document_id=identifier, code=exc.code)
-            for identifier in sorted(identifiers)
+            RepairBlock(document_id=identifier, code=exc.code) for identifier in sorted(identifiers)
         ]
         return result
     manifest = registry.manifest
@@ -62,9 +67,7 @@ def stage_repair(
         if document.document_id not in identifiers:
             continue
         try:
-            config = restore_splitter(
-                manifest.splitter_configs[document.chunking_version], limits
-            )
+            config = restore_splitter(manifest.splitter_configs[document.chunking_version], limits)
             entry = entries.get(document.source_path)
             if entry is None:
                 raise CorpusValidationError("Committed source is not in the inventory.")

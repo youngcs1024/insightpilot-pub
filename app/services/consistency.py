@@ -123,9 +123,7 @@ class ConsistencyService:
         deadline: Deadline,
     ) -> None:
         active = {
-            item.document_id
-            for item in registry.documents
-            if item.status is DocumentStatus.ACTIVE
+            item.document_id for item in registry.documents if item.status is DocumentStatus.ACTIVE
         }
         plan = await asyncio.to_thread(
             stage_repair, root, registry, assessment.rebuild & active, self.settings
@@ -219,11 +217,20 @@ class ConsistencyService:
             remaining = {row.milvus_pk for row in (await self.store.scan()).rows}
             if remaining.intersection(stale):
                 return
-            async with self.database.session() as session, session.begin():
-                for document in registry.documents:
-                    if document.cleanup_pending and document.document_id not in blocked:
-                        await DocumentRepository(session).finish_cleanup(document.document_id)
+            await self._finish_cleanup(registry, blocked)
         except InsightPilotError as exc:
             logger.exception("consistency_cleanup_failed", code=exc.code)
             # Orphans may have no registry row on which to retain a cleanup flag.
             report.blocked.append(RepairBlock(document_id=UUID_ZERO, code=exc.code))
+
+    async def _finish_cleanup(self, registry: RegistrySnapshot, blocked: set[UUID]) -> None:
+        pending = [
+            item.document_id
+            for item in registry.documents
+            if item.cleanup_pending and item.document_id not in blocked
+        ]
+        if not pending:
+            return
+        async with self.database.session() as session, session.begin():
+            for identifier in pending:
+                await DocumentRepository(session).finish_cleanup(identifier)

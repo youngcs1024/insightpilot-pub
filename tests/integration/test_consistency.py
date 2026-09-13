@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, text, update
 
+from app.clients.model_runtime import ModelRuntimeClient
 from app.core.errors import IngestionAlreadyRunning, IngestionRegistryError, InsightPilotError
 from app.db.models.chunk import Chunk
 from app.db.models.document import CorpusManifestRecord, Document
@@ -20,6 +21,7 @@ from app.schemas.consistency import DriftKind
 from app.schemas.ingestion import RegisteredChunk, canonical, digest, document_id
 from app.services.evidence import EvidenceService
 from app.services.ingestion_config import IngestionSettings
+from scripts import check_consistency as cli
 from tests.agents.support import context, invoke
 from tests.consistency_support import ConsistencyHarness, consistency_harness
 from tests.corpus_support import entry, markdown_source, write_inventory
@@ -69,9 +71,7 @@ async def test_detects_missing_milvus_pk(
 
 
 @pytest.mark.parametrize("damage", ["metadata", "text"])
-async def test_detects_sha_mismatch(
-    consistency_harness: ConsistencyHarness, damage: str
-) -> None:
+async def test_detects_sha_mismatch(consistency_harness: ConsistencyHarness, damage: str) -> None:
     harness = consistency_harness
     await harness.service().ingest(harness.root)
     vector = (await harness.vectors())[0]
@@ -120,7 +120,7 @@ async def test_duplicate_or_stale_vector_cleanup_needs_no_model(
     assert await harness.chunks(document_id("rule.md")) == before
 
 
-@pytest.mark.parametrize("damage", ["count", "registry_row", "foreign_pk"])
+@pytest.mark.parametrize("damage", ["count", "registry_row", "lost_registry", "foreign_pk"])
 async def test_repairs_counts_and_registry_links(
     consistency_harness: ConsistencyHarness, damage: str
 ) -> None:
@@ -131,13 +131,21 @@ async def test_repairs_counts_and_registry_links(
     async with harness.database.session() as session, session.begin():
         if damage == "count":
             await session.execute(
-                update(Document).where(Document.id == identifier).values(chunk_count=len(before) + 1)
+                update(Document)
+                .where(Document.id == identifier)
+                .values(chunk_count=len(before) + 1)
             )
         elif damage == "registry_row":
             await session.execute(delete(Chunk).where(Chunk.id == before[0].chunk_uuid))
+        elif damage == "lost_registry":
+            await session.execute(delete(Chunk).where(Chunk.document_id == identifier))
+            await session.execute(
+                update(Document).where(Document.id == identifier).values(chunk_count=0)
+            )
         else:
             await session.execute(
-                update(Chunk).where(Chunk.id == before[0].chunk_uuid)
+                update(Chunk)
+                .where(Chunk.id == before[0].chunk_uuid)
                 .values(milvus_pk=before[1].milvus_pk)
             )
     report = await harness.checker().check(root=harness.root)
@@ -172,7 +180,9 @@ async def test_frozen_judgments_resolve_after_rebuild(
         "test_drop_isolated_collection",
         lambda: harness.store._client.drop_collection(
             harness.store.settings.collection,
-            timeout=None, retry_times=0, retry_on_rate_limit=False,
+            timeout=None,
+            retry_times=0,
+            retry_on_rate_limit=False,
         ),
     )
     absent = await harness.checker(models=False).check()
@@ -279,13 +289,24 @@ async def test_unsupported_frozen_splitter_blocks_repair(
         manifest = await document_repo.manifest()
         config = canonical({"splitter": "unsupported-v0"})
         version = digest(config)
-        members = [member.model_copy(update={"chunking_version": version}) for member in manifest.members]
-        corpus_version = digest(canonical([
-            (str(item.document_id), item.document_version, item.chunking_version) for item in members
-        ]))
-        changed = manifest.model_copy(update={
-            "members": members, "splitter_configs": {version: config}, "corpus_version": corpus_version
-        })
+        members = [
+            member.model_copy(update={"chunking_version": version}) for member in manifest.members
+        ]
+        corpus_version = digest(
+            canonical(
+                [
+                    (str(item.document_id), item.document_version, item.chunking_version)
+                    for item in members
+                ]
+            )
+        )
+        changed = manifest.model_copy(
+            update={
+                "members": members,
+                "splitter_configs": {version: config},
+                "corpus_version": corpus_version,
+            }
+        )
         await session.execute(update(Document).values(chunking_version=version))
         await document_repo.save_manifest(changed)
     report = await harness.checker().check(root=harness.root)
@@ -304,7 +325,8 @@ async def test_encoding_failure_preserves_registry_and_index(
     await harness.point_to(before[0].chunk_uuid, None)
     indexed = (await harness.store.scan()).rows
     if failure == "unavailable":
-        harness.embeddings.fail_at = len(harness.embeddings.calls) + 1
+        harness.model_settings.embed_batch = 1
+        harness.embeddings.fail_at = len(harness.embeddings.calls) + 2
     elif failure == "profile":
         harness.embeddings.metadata.embed_max_length = 256
     report = await harness.checker(models=failure != "no_config").check(root=harness.root)
@@ -333,7 +355,9 @@ async def test_registry_commit_failure_is_atomic_and_retryable(
     broken = await harness.chunks(document_id("rule.md"))
     original = ChunkRepository.replace
 
-    async def fail(self: ChunkRepository, identifier: object, values: list[RegisteredChunk]) -> None:
+    async def fail(
+        self: ChunkRepository, identifier: object, values: list[RegisteredChunk]
+    ) -> None:
         await original(self, identifier, values)
         await self.session.execute(text("SELECT 1 / 0"))
 
@@ -343,7 +367,9 @@ async def test_registry_commit_failure_is_atomic_and_retryable(
             await harness.checker().check(root=harness.root)
     assert await harness.chunks(document_id("rule.md")) == broken
     async with harness.database.session() as session:
-        assert (await DocumentRepository(session).manifest()).corpus_version == initial.corpus_version
+        assert (
+            await DocumentRepository(session).manifest()
+        ).corpus_version == initial.corpus_version
     assert (await harness.checker().check(root=harness.root)).successful
 
 
@@ -355,7 +381,9 @@ async def test_crash_after_commit_retries_cleanup_without_encoding(
     before = await harness.chunks(document_id("rule.md"))
     await harness.point_to(before[0].chunk_uuid, None)
     with monkeypatch.context() as patch:
-        patch.setattr(harness.store, "delete_observed", AsyncMock(side_effect=asyncio.CancelledError()))
+        patch.setattr(
+            harness.store, "delete_observed", AsyncMock(side_effect=asyncio.CancelledError())
+        )
         with pytest.raises(asyncio.CancelledError):
             await harness.checker().check(root=harness.root)
     assert any(item.cleanup_pending for item in await harness.documents())
@@ -398,9 +426,6 @@ async def test_cli_run_repairs_then_reports_clean_check(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from app.clients.model_runtime import ModelRuntimeClient
-    from scripts import check_consistency as cli
-
     harness = consistency_harness
     await harness.service().ingest(harness.root)
     chunk = (await harness.chunks(document_id("rule.md")))[0]
@@ -411,8 +436,27 @@ async def test_cli_run_repairs_then_reports_clean_check(
         retrieval={"milvus": harness.store.settings},
         model_runtime=harness.model_settings,
     )
-    monkeypatch.setattr(cli, "ModelRuntimeClient", lambda cfg: ModelRuntimeClient(cfg, harness.client))
+    monkeypatch.setattr(
+        cli, "ModelRuntimeClient", lambda cfg: ModelRuntimeClient(cfg, harness.client)
+    )
     assert await cli.run(settings, None) == 1
     assert await cli.run(settings, harness.root) == 0
     assert await cli.run(settings, None) == 0
     assert '"successful":true' in capsys.readouterr().out
+
+
+async def test_tombstone_count_repair_needs_no_source_or_model(
+    consistency_harness: ConsistencyHarness,
+) -> None:
+    harness = consistency_harness
+    await harness.service().ingest(harness.root)
+    write_inventory(harness.root, [entry("other.md")])
+    await harness.service().ingest(harness.root)
+    async with harness.database.session() as session, session.begin():
+        await session.execute(
+            update(Document).where(Document.id == document_id("rule.md")).values(chunk_count=1)
+        )
+    report = await harness.checker(models=False).check(root=Path("/source-not-required"))
+    assert report.successful
+    assert report.before
+    assert not report.remaining

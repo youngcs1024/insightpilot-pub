@@ -139,8 +139,10 @@ def test_splitter_restore_preserves_semantics_and_current_operational_limits() -
 
 def test_empty_repair_selection_does_not_read_corpus() -> None:
     result = stage_repair(
-        Path("/missing-root"), RegistrySnapshot(documents=[], chunks=[], manifest=None),
-        set(), IngestionSettings(),
+        Path("/missing-root"),
+        RegistrySnapshot(documents=[], chunks=[], manifest=None),
+        set(),
+        IngestionSettings(),
     )
     assert not result.prepared
     assert not result.blocked
@@ -149,8 +151,10 @@ def test_empty_repair_selection_does_not_read_corpus() -> None:
 def test_missing_inventory_reports_every_selected_document() -> None:
     identifiers = {uuid4(), uuid4()}
     result = stage_repair(
-        Path("/missing-root"), RegistrySnapshot(documents=[], chunks=[], manifest=None),
-        identifiers, IngestionSettings(),
+        Path("/missing-root"),
+        RegistrySnapshot(documents=[], chunks=[], manifest=None),
+        identifiers,
+        IngestionSettings(),
     )
     assert {item.document_id for item in result.blocked} == identifiers
 
@@ -158,19 +162,30 @@ def test_missing_inventory_reports_every_selected_document() -> None:
 def test_registry_without_manifest_is_rejected() -> None:
     identifier = uuid4()
     chunk = RegisteredChunk(
-        chunk_uuid=uuid4(), document_id=identifier, document_version="a" * 64,
-        chunking_version="b" * 64, content_sha256="c" * 64,
-        ordinal=0, heading_path="", char_len=1,
+        chunk_uuid=uuid4(),
+        document_id=identifier,
+        document_version="a" * 64,
+        chunking_version="b" * 64,
+        content_sha256="c" * 64,
+        ordinal=0,
+        heading_path="",
+        char_len=1,
     )
     with pytest.raises(IngestionRegistryError):
-        validate_registry(RegistrySnapshot(documents=[], chunks=[chunk], manifest=None), "kb_chunks")
+        validate_registry(
+            RegistrySnapshot(documents=[], chunks=[chunk], manifest=None), "kb_chunks"
+        )
 
 
 def test_unknown_document_is_found_in_global_index() -> None:
     physical = StoredChunk(
-        chunk_uuid=uuid4(), document_id=uuid4(), document_version="a" * 64,
-        chunking_version="b" * 64, content_sha256="c" * 64,
-        actual_sha256="c" * 64, milvus_pk=100,
+        chunk_uuid=uuid4(),
+        document_id=uuid4(),
+        document_version="a" * 64,
+        chunking_version="b" * 64,
+        content_sha256="c" * 64,
+        actual_sha256="c" * 64,
+        milvus_pk=100,
     )
     report = assess(
         RegistrySnapshot(documents=[], chunks=[], manifest=None),
@@ -184,9 +199,13 @@ def test_report_counts_are_complete_and_pending_work_never_passes() -> None:
     report = ConsistencyReport()
     assert report.successful
     assert len(report.counts) == 4
-    report.remaining.append(Drift(
-        kind=DriftKind.MISSING, reason=DriftReason.NULL_PK, document_id=uuid4(),
-    ))
+    report.remaining.append(
+        Drift(
+            kind=DriftKind.MISSING,
+            reason=DriftReason.NULL_PK,
+            document_id=uuid4(),
+        )
+    )
     assert report.counts[DriftKind.MISSING] == 1
     assert not report.successful
     report.remaining.clear()
@@ -228,11 +247,13 @@ def test_cli_passes_root_only_when_fix_is_explicit(
     run.assert_awaited_once_with(settings, Path("/configured") if fix else None)
 
 
-@pytest.mark.parametrize("failure", [IngestionAlreadyRunning("private prose"), TimeoutError("private prose")])
+@pytest.mark.parametrize(
+    "failure", [IngestionAlreadyRunning("private prose"), TimeoutError("private prose")]
+)
 def test_cli_failures_are_nonzero_and_safe(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: Exception
 ) -> None:
-    monkeypatch.setattr(cli.ConsistencyProcessSettings, "load", lambda: object())
+    monkeypatch.setattr(cli.ConsistencyProcessSettings, "load", object)
     monkeypatch.setattr(cli, "run", AsyncMock(side_effect=failure))
     assert cli.main([]) == 1
     output = capsys.readouterr().err
@@ -254,7 +275,8 @@ async def test_check_closes_resources_without_constructing_model(
     model = MagicMock(side_effect=AssertionError("Check must not create a model client"))
     monkeypatch.setattr(cli, "ModelRuntimeClient", model)
     settings = cli.ConsistencyProcessSettings(
-        _env_file=None, database={"app_password": "synthetic-only"},
+        _env_file=None,
+        database={"app_password": "synthetic-only"},
         model_runtime={"auth_token": "synthetic-only"},
     )
     assert await cli.run(settings, None) == 0

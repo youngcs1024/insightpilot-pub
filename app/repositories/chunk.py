@@ -50,9 +50,7 @@ class ChunkRepository:
         query = select(Chunk).order_by(Chunk.document_id, Chunk.ordinal)
         if identifier is not None:
             query = query.where(Chunk.document_id == identifier)
-        rows = (
-            await self.session.scalars(query)
-        ).all()
+        rows = (await self.session.scalars(query)).all()
         return [
             RegisteredChunk(
                 chunk_uuid=row.id,
