@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import IngestionRegistryError
 from app.db.models.chunk import Chunk
 from app.db.models.document import CorpusManifestRecord, Document
+from app.schemas.corpus import CorpusMetadata
 from app.schemas.ingestion import ActiveManifest, ChunkIdentity, RegisteredChunk
+from app.schemas.retrieval import CandidateProvenance
 
 
 class ChunkRepository:
@@ -120,3 +122,44 @@ class ChunkRepository:
             )
             in allowed
         ]
+
+    async def provenance(self, candidates: list[ChunkIdentity]) -> list[CandidateProvenance]:
+        """Read global published provenance in the caller's admission transaction."""
+        if not candidates:
+            return []
+        rows = (
+            await self.session.execute(
+                select(Chunk, Document)
+                .join(Document, Document.id == Chunk.document_id)
+                .where(
+                    Chunk.id.in_([item.chunk_uuid for item in candidates]),
+                    Document.status == "active",
+                    Chunk.document_version == Document.document_version,
+                    Chunk.chunking_version == Document.chunking_version,
+                )
+            )
+        ).all()
+        try:
+            result = []
+            for chunk, document in rows:
+                metadata = CorpusMetadata.model_validate_json(document.business_metadata)
+                result.append(
+                    CandidateProvenance(
+                        chunk_uuid=chunk.id,
+                        document_id=chunk.document_id,
+                        document_version=chunk.document_version,
+                        chunking_version=chunk.chunking_version,
+                        content_sha256=chunk.content_sha256,
+                        milvus_pk=chunk.milvus_pk,
+                        source_path=document.source_path,
+                        document_title=metadata.title,
+                        heading_path=chunk.heading_path,
+                        page=chunk.page,
+                        doc_type=metadata.doc_type,
+                        effective_from=metadata.effective_from,
+                        effective_to=metadata.effective_to,
+                    )
+                )
+            return result
+        except ValidationError as exc:
+            raise IngestionRegistryError() from exc

@@ -305,6 +305,20 @@ class ContextBudgetExceeded(InsightPilotError):  # noqa: N818 -- design contract
     code = "context_budget_exceeded"
 
 
+class KnowledgeEvidenceError(InsightPilotError):
+    """Missing or inconsistent provenance cannot become answer evidence."""
+
+    code = "KNOWLEDGE_EVIDENCE_INVALID"
+    user_message = "Knowledge evidence could not be verified."
+
+
+class FabricatedCitation(InsightPilotError):  # noqa: N818 -- roadmap public contract.
+    """An output ID is not in the evidence actually supplied to generation."""
+
+    code = "FABRICATED_CITATION"
+    user_message = "The answer contains an unsupported citation."
+
+
 class CheckpointError(UpstreamUnavailableError):
     """Durable graph storage is unavailable or requires operator migration."""
 

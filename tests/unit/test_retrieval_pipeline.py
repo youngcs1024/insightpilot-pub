@@ -21,6 +21,7 @@ from app.schemas.ingestion import ChunkIdentity, EncodingProfile
 from app.schemas.model_runtime import EmbedMode, EmbedResult
 from model_runtime.errors import ModelContractError, ModelError
 from tests.ingestion_support import model_metadata
+from tests.knowledge_support import provenance
 from tests.rerank_support import model
 from tests.retrieval_support import candidate, deadline, encoded, fake_store, query
 
@@ -49,12 +50,10 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
     monkeypatch.setattr(DocumentRepository, "manifest", AsyncMock(return_value=manifest))
     monkeypatch.setattr(ChunkRepository, "admit", AsyncMock(side_effect=lambda values: values))
     monkeypatch.setattr(
-        DocumentRepository,
-        "candidate_sources",
+        ChunkRepository,
+        "provenance",
         AsyncMock(
-            side_effect=lambda ids: [
-                SimpleNamespace(document_id=item, source_path="source.md") for item in ids
-            ]
+            side_effect=lambda values: [provenance(item) for item in values]
         ),
     )
     output = EmbedResult(
@@ -217,6 +216,6 @@ async def test_reranking_begins_after_admission_transaction_closes(
 async def test_missing_registered_source_fails_closed(
     pipeline: RetrievalPipeline, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(DocumentRepository, "candidate_sources", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ChunkRepository, "provenance", AsyncMock(return_value=[]))
     with pytest.raises(IngestionRegistryError):
         await pipeline.retrieve(query(), deadline=deadline())

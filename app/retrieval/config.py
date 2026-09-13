@@ -86,11 +86,18 @@ class RetrievalConfig(ConfigModel):
         return self
 
 
+class EvidenceConfig(ConfigModel):
+    """The complete rendered evidence slot, measured with the bundled tokenizer."""
+
+    max_tokens: int = Field(default=6000, ge=1, le=6000)
+
+
 class RetrievalSettings(ConfigModel):
     """Storage availability does not enable the not-yet-implemented knowledge pipeline."""
 
     enabled: bool = False
     search: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    evidence: EvidenceConfig = Field(default_factory=EvidenceConfig)
     search_timeout_s: float = Field(default=10, ge=0.01, le=120)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
 

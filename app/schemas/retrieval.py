@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AfterValidator, Field, FiniteFloat, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, model_validator
 from pydantic_core import PydanticCustomError
 
 from app.retrieval.config import RetrievalConfig
@@ -186,9 +186,24 @@ class RankingResult(RetrievalContract):
     stages: list[StageDiagnostic] = Field(default_factory=list)
 
 
-class RetrievalResult(RetrievalContract):
+class CandidateProvenance(ChunkIdentity):
+    """Detached registry metadata from the same transaction as candidate admission."""
+
+    model_config = ConfigDict(frozen=True)
+    schema_version: Literal[1] = 1
+    source_path: SourcePath
+    document_title: str = Field(min_length=1, max_length=200)
+    heading_path: str = Field(max_length=512)
+    page: int | None = Field(ge=1)
+    doc_type: DocumentType
+    effective_from: date | None
+    effective_to: date | None
+
+
+class RetrievalResult(Contract):
     """Registered retrieval results and explicit ranking state; evidence packaging is separate."""
 
+    schema_version: Literal[2] = 2
     query: RetrievalQuery
     corpus_version: Digest | None
     candidates: list[Candidate]
@@ -201,3 +216,4 @@ class RetrievalResult(RetrievalContract):
     meets_floor: bool | None = None
     rerank_metadata: ModelMetadata | None = None
     stages: list[StageDiagnostic] = Field(default_factory=list)
+    provenance: list[CandidateProvenance] = Field(default_factory=list, max_length=100)

@@ -181,19 +181,17 @@ class RetrievalPipeline:
                 if digest(item.content) == item.content_sha256
             ]
             allowed = await ChunkRepository(session).admit(identities)
-            sources = await DocumentRepository(session).candidate_sources(
-                list({item.document_id for item in allowed})
-            )
-        paths = {item.document_id: item.source_path for item in sources}
+            provenance = await ChunkRepository(session).provenance(allowed)
+        registered = {identity_key(item): item for item in provenance}
         keys = {identity_key(item) for item in allowed}
         accepted = []
         for item in pool:
             key = identity_key(item)
             if key in keys and digest(item.content) == item.content_sha256:
-                if item.document_id not in paths:
+                if key not in registered:
                     raise IngestionRegistryError()
                 admitted = item.model_copy(deep=True)
-                admitted.source_path = paths[item.document_id]
+                admitted.source_path = registered[key].source_path
                 accepted.append(admitted)
                 keys.remove(key)
         return RetrievalResult(
@@ -203,4 +201,5 @@ class RetrievalPipeline:
             retrieval_config=self.settings.search.model_copy(deep=True),
             model_metadata=encoded.metadata,
             timings=timings,
+            provenance=[registered[identity_key(item)] for item in accepted],
         )
