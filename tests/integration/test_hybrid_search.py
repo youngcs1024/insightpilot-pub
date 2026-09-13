@@ -283,7 +283,10 @@ async def test_concurrent_publication_keeps_admission_snapshot_consistent(
     members = [item for item in before.members if item.document_id != identifier]
     version = digest(
         canonical(
-            [(str(item.document_id), item.document_version, item.chunking_version) for item in members]
+            [
+                (str(item.document_id), item.document_version, item.chunking_version)
+                for item in members
+            ]
         )
     )
     after = before.model_copy(update={"members": members, "corpus_version": version})

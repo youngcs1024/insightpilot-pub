@@ -21,7 +21,6 @@ from app.retrieval.fusion import (
 from app.schemas.retrieval import PolicyPeriod, RangeTimeScope
 from tests.retrieval_support import deadline, encoded, fake_store, query, raw_hit
 
-
 EXPECTED_RRF_K = 60
 NATIVE_SCORE = 0.8
 
@@ -75,7 +74,8 @@ def test_disjoint_periods_are_parenthesized_or() -> None:
 
 
 @pytest.mark.parametrize(
-    ("start", "end"), [("2026-08-01", "2026-08-01"), ("2026-09-01", "2026-08-01"), ("bad", "2026-08-01")]
+    ("start", "end"),
+    [("2026-08-01", "2026-08-01"), ("2026-09-01", "2026-08-01"), ("bad", "2026-08-01")],
 )
 def test_invalid_period_cannot_become_unbounded(start: str, end: str) -> None:
     with pytest.raises(ValidationError):
@@ -245,7 +245,9 @@ def test_score_join_requires_complete_identity() -> None:
     assert fused[0].scores.dense == NATIVE_SCORE
 
 
-@pytest.mark.parametrize(("arm", "field"), [(SearchArm.DENSE, "dense"), (SearchArm.LEARNED, "sparse")])
+@pytest.mark.parametrize(
+    ("arm", "field"), [(SearchArm.DENSE, "dense"), (SearchArm.LEARNED, "sparse")]
+)
 def test_enabled_vectors_cannot_be_absent(arm: SearchArm, field: str) -> None:
     value = encoded().model_copy(update={field: None})
     with pytest.raises(RetrievalConfigurationError):

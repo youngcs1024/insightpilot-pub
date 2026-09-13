@@ -19,7 +19,6 @@ from model_runtime.errors import ModelContractError, ModelError
 from tests.ingestion_support import model_metadata
 from tests.retrieval_support import candidate, deadline, encoded, fake_store, query
 
-
 EXPECTED_POOL = 20
 
 
