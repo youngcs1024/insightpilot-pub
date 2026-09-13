@@ -56,9 +56,7 @@ async def benchmark(provenance: Provenance) -> Benchmark:
                 [pair.passage for pair in workload[:20]],
                 deadline=Deadline(start + 30),
             )
-            latency_calls.append(
-                RerankMeasurement.from_response(result, time.monotonic() - start)
-            )
+            latency_calls.append(RerankMeasurement.from_response(result, time.monotonic() - start))
         return Benchmark(
             provenance=provenance,
             input_sha256=input_hash(),

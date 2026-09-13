@@ -232,3 +232,48 @@ def test_quality_collection_is_the_original_failure() -> None:
     summary = render(value)
     assert "collection_error" in summary
     assert "test_failure" not in summary
+
+
+@pytest.mark.parametrize("check", ["structure", "lint", "format", "types", "dependencies"])
+def test_independent_quality_failures_have_an_explicit_category(check: str) -> None:
+    value = evidence(
+        stage="quality",
+        steps={"collection": {"outcome": "success"}, check: {"outcome": "failure"}},
+    )
+    assert "quality_failure" in render(value)
+    assert "collection_error" not in render(value)
+
+
+def test_upstream_and_invalid_evidence_are_both_reported() -> None:
+    value = evidence(
+        stage="coverage",
+        assessment=CheckEvidence(
+            checks_passed=None, evidence_valid=False, upstream={"unit": Result.FAILURE}
+        ),
+    )
+    summary = render(value)
+    assert "upstream_blocked" in summary
+    assert "artifact_error" in summary
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure"])
+@pytest.mark.parametrize("content", [None, "<broken"])
+def test_executed_tests_require_valid_junit(
+    tmp_path: Path, outcome: str, content: str | None
+) -> None:
+    path = tmp_path / "junit.xml"
+    if content is not None:
+        path.write_text(content)
+    value = record(evidence(steps={"tests": {"outcome": outcome}}), path)
+    assert "artifact_error" in render(value)
+
+
+def test_dependency_upload_failure_is_explicit() -> None:
+    value = evidence(
+        stage="quality",
+        steps={
+            "collection": {"outcome": "success"},
+            "dependencies_upload": {"outcome": "failure"},
+        },
+    )
+    assert "artifact_error" in render(value)

@@ -23,6 +23,23 @@ def command(arguments: list[str], *, timeout: int = 120) -> str:
     return result.stdout
 
 
+def http_ready(client: httpx.Client, url: str) -> bool:
+    try:
+        return client.get(url).status_code == httpx.codes.OK
+    except httpx.HTTPError:
+        return False
+
+
+def wait_for_http(url: str) -> None:
+    until = time.monotonic() + 10
+    with httpx.Client(timeout=2, trust_env=False) as client:
+        while time.monotonic() < until:
+            if http_ready(client, url):
+                return
+            time.sleep(0.1)
+    pytest.fail("The remote model network did not deliver loopback HTTP traffic")
+
+
 def test_remote_model_network_publishes_loopback_port(tmp_path: Path) -> None:
     docker = shutil.which("docker")
     assert docker is not None
@@ -56,16 +73,7 @@ def test_remote_model_network_publishes_loopback_port(tmp_path: Path) -> None:
         assert len(bindings) == 1
         assert bindings[0]["HostIp"] == "127.0.0.1"
         url = "http://127.0.0.1:" + bindings[0]["HostPort"]
-        until = time.monotonic() + 10
-        with httpx.Client(timeout=2, trust_env=False) as client:
-            while time.monotonic() < until:
-                try:
-                    if client.get(url).status_code == httpx.codes.OK:
-                        return
-                except httpx.HTTPError:
-                    pass
-                time.sleep(0.1)
-        pytest.fail("The remote model network did not deliver loopback HTTP traffic")
+        wait_for_http(url)
     finally:
         command([*prefix, "stop", "--timeout", "5"], timeout=30)
         # Retain the isolated containers and networks; no shared daemon cleanup.

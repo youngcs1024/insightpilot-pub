@@ -86,13 +86,16 @@ def test_auxiliary_data_does_not_replace_successful_raw_gate(tmp_path: Path) -> 
     assert "contradicts raw job success" in summary.read_text()
 
 
+@pytest.mark.parametrize("check", ["lint", "structure"])
 @pytest.mark.parametrize("first", ["success", "failure", "cancelled", "skipped", None])
-def test_quality_raw_outcomes_cannot_be_softened(tmp_path: Path, first: str | None) -> None:
+def test_quality_raw_outcomes_cannot_be_softened(
+    tmp_path: Path, first: str | None, check: str
+) -> None:
     steps = {name: {"outcome": "success"} for name in ("setup", *QUALITY_CHECKS)}
     if first is None:
-        del steps["lint"]
+        del steps[check]
     else:
-        steps["lint"] = {"outcome": first, "conclusion": "success"}
+        steps[check] = {"outcome": first, "conclusion": "success"}
     summary = tmp_path / "summary.md"
     assert quality_summary(json.dumps(steps), summary) is (first == "success")
     for name in QUALITY_CHECKS:

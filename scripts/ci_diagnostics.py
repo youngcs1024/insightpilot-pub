@@ -13,7 +13,13 @@ from scripts.ci_evidence import CheckEvidence
 from scripts.ci_junit import CaseOutcome, read_junit
 from scripts.ci_partitions import PARTITIONS
 from scripts.ci_policy import Plan, Result, Results
-from scripts.ci_result import StepResult, case_label, job_description, migration_assessment
+from scripts.ci_result import (
+    QUALITY_CHECKS,
+    StepResult,
+    case_label,
+    job_description,
+    migration_assessment,
+)
 from scripts.ci_types import TypeReport
 from scripts.ci_types import describe as describe_types
 
@@ -34,6 +40,7 @@ ARTIFACT_STEPS = (
     "coverage_upload",
     "test_upload",
     "types_upload",
+    "dependencies_upload",
     "repair_upload",
     "quality_logs",
     "unit_download",
@@ -46,6 +53,7 @@ ARTIFACT_STEPS = (
 class DiagnosticKind(StrEnum):
     """Separate originating failures from unexecuted work and broken evidence transfer."""
 
+    QUALITY_FAILURE = "quality_failure"
     COLLECTION_ERROR = "collection_error"
     TEST_FAILURE = "test_failure"
     NOT_RUN = "not_run"
@@ -103,13 +111,29 @@ def record(request: DiagnosticRecord, report: Path | None) -> DiagnosticRecord:
     )
 
 
+def quality_category(value: DiagnosticRecord) -> DiagnosticKind | None:
+    """Collection and independent quality failures retain distinct categories."""
+    collection = value.steps.get("collection")
+    if collection is not None and collection.outcome == Result.FAILURE:
+        return DiagnosticKind.COLLECTION_ERROR
+    if any(
+        (check := value.steps.get(name)) is not None and check.outcome == Result.FAILURE
+        for name in QUALITY_CHECKS
+    ):
+        return DiagnosticKind.QUALITY_FAILURE
+    if collection is None or collection.outcome != Result.SUCCESS:
+        return DiagnosticKind.NOT_RUN
+    return None
+
+
 def execution_category(value: DiagnosticRecord) -> DiagnosticKind | None:
     """Classify execution using structured outcomes, never exception text or filenames."""
-    if value.stage in ("quality", *PARTITIONS):
-        quality = value.stage == "quality"
-        step = value.steps.get("collection" if quality else "tests")
+    if value.stage == "quality":
+        return quality_category(value)
+    if value.stage in PARTITIONS:
+        step = value.steps.get("tests")
         if step is not None and step.outcome == Result.FAILURE:
-            return DiagnosticKind.COLLECTION_ERROR if quality else DiagnosticKind.TEST_FAILURE
+            return DiagnosticKind.TEST_FAILURE
         return None if step and step.outcome == Result.SUCCESS else DiagnosticKind.NOT_RUN
     if value.stage == "migrations":
         if not value.counts:
@@ -131,8 +155,15 @@ def evidence_categories(value: DiagnosticRecord) -> list[DiagnosticKind]:
     if value.assessment is not None:
         if any(result != Result.SUCCESS for result in value.assessment.upstream.values()):
             categories.append(DiagnosticKind.UPSTREAM_BLOCKED)
-        elif not value.assessment.evidence_valid:
+        if not value.assessment.evidence_valid:
             categories.append(DiagnosticKind.ARTIFACT_ERROR)
+    tests = value.steps.get("tests")
+    if (
+        value.report_valid is False
+        and tests is not None
+        and tests.outcome in (Result.SUCCESS, Result.FAILURE)
+    ):
+        categories.append(DiagnosticKind.ARTIFACT_ERROR)
     return categories
 
 

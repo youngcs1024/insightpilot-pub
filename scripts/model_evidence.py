@@ -65,9 +65,7 @@ class RerankMeasurement(Evidence):
     @classmethod
     def from_response(cls, result: RerankResult, elapsed: float) -> Self:
         """Detach the scored response from mutable client objects."""
-        return cls(
-            call=CallMeasurement.from_response(result, elapsed), scores=list(result.scores)
-        )
+        return cls(call=CallMeasurement.from_response(result, elapsed), scores=list(result.scores))
 
 
 class Benchmark(Evidence):

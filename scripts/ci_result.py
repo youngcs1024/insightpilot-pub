@@ -22,8 +22,9 @@ MIGRATION_CASES = (
     "test_real_autogenerate_file_is_empty[app]",
     "test_real_autogenerate_file_is_empty[business]",
 )
-QUALITY_CHECKS = ("contracts", "collection", "lint", "format", "types", "dependencies")
+QUALITY_CHECKS = ("contracts", "structure", "collection", "lint", "format", "types", "dependencies")
 QUALITY_COMMANDS = {
+    "structure": ".venv/bin/python -m scripts.check_test_structure",
     "contracts": ".venv/bin/python -m scripts.check_deployment_contracts",
     "collection": '.venv/bin/pytest tests --collect-only --no-cov -m "not gpu and not external"',
     "lint": "make lint-check ENV=test",
@@ -45,6 +46,7 @@ class QualitySteps(BaseModel):
     """Missing steps remain visible and cannot satisfy the quality gate."""
 
     setup: StepResult | None = None
+    structure: StepResult | None = None
     contracts: StepResult | None = None
     collection: StepResult | None = None
     lint: StepResult | None = None

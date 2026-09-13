@@ -7,7 +7,7 @@ from app.clients.model_runtime import ModelRuntimeClient
 from app.core.config_models import ModelRuntimeClientSettings
 from app.schemas.model_runtime import EmbedResult, ReadyResult, RerankResult
 from scripts import bench_model_runtime
-from tests.unit.test_model_precision import artifact
+from tests.fakes.model_evidence import artifact
 
 
 @pytest.mark.parametrize("recover", [False, True])
@@ -71,3 +71,10 @@ async def test_benchmark_records_every_effective_response(
     assert result.latency_calls[0].call.metadata.rerank_batch == (8 if recover else 16)
     assert result.accepted is not recover
     assert closed == [True]
+
+
+def test_shared_artifact_factory_returns_independent_objects() -> None:
+    left, right = artifact("fp16"), artifact("fp16")
+    left.latency_calls[0].call.metadata.rerank_batch = 8
+    assert right.accepted
+    assert right.latency_calls[0].call.metadata.rerank_batch == 16

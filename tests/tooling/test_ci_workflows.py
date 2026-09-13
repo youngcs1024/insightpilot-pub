@@ -355,3 +355,15 @@ def test_storage_job_is_isolated_and_marker_expressions_match_shared_contract() 
         step = next(step for step in jobs[name]["steps"] if step.get("id") == "tests")
         assert f'-m "{selection}"' in step["run"]
     assert "milvus-evidence/" in str(storage)
+
+
+def test_structure_check_precedes_collection_and_uploads_have_diagnostic_ids() -> None:
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
+    steps = jobs["quality"]["steps"]
+    ids = [step.get("id") for step in steps]
+    assert ids.index("contracts") < ids.index("structure") < ids.index("collection")
+    structure = next(step for step in steps if step.get("id") == "structure")
+    assert "scripts.check_test_structure" in structure["run"]
+    assert "pytest" not in structure["run"]
+    upload = next(step for step in steps if step.get("id") == "dependencies_upload")
+    assert upload["with"]["name"] == "dependency-evidence"

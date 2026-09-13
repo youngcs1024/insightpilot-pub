@@ -76,6 +76,13 @@ jobs:
         run: |
           set -o pipefail
           .venv/bin/python -m scripts.check_deployment_contracts 2>&1 | tee quality-contracts.log
+      - name: Check test source boundaries without importing modules
+        id: structure
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          .venv/bin/python -m scripts.check_test_structure 2>&1 | tee quality-structure.log
       - name: Collect all ordinary tests without executing fixtures or test bodies
         id: collection
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
@@ -122,6 +129,7 @@ jobs:
           path: type-evidence/
           if-no-files-found: error
       - name: Save dependency audit evidence
+        id: dependencies_upload
         if: ${{ always() && hashFiles('dependency-evidence/*') != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
