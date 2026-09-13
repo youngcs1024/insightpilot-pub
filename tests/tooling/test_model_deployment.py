@@ -43,6 +43,9 @@ def test_no_default_host_tunnel_port_and_remote_loopback_only() -> None:
     assert service["ports"] == ["127.0.0.1:8100:8100"]
     assert service["user"] == "10001:10001"
     assert service["volumes"][0]["read_only"]
+    assert set(service["networks"]) == {"model-backend", "model-access"}
+    assert remote["networks"]["model-backend"]["internal"] is True
+    assert remote["networks"]["model-access"] == {"driver": "bridge"}
 
 
 def test_immutable_local_image_id_and_repository_digest_supported(tmp_path: Path) -> None:

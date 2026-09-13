@@ -29,7 +29,7 @@ services:
         target: /models
         read_only: true
         bind: {create_host_path: false}
-    networks: [model-backend]
+    networks: [model-backend, model-access]
     healthcheck:
       test: [CMD, python, -m, model_runtime.probe, --ready]
       interval: 10s
@@ -49,3 +49,6 @@ services:
       options: {max-size: 10m, max-file: '3'}
 networks:
   model-backend: {internal: true}
+  # Docker does not publish host ports for a container on internal networks only.
+  # A separate project bridge supplies the gateway; ingress remains loopback-only.
+  model-access: {driver: bridge}
