@@ -20,23 +20,32 @@ class DocumentRepository:
 
     async def try_lock(self) -> bool:
         """Hold a transaction lock on a dedicated session through post-commit cleanup."""
-        return bool(await self.session.scalar(
-            text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": "insightpilot:corpus:ingestion"},
-        ))
+        return bool(
+            await self.session.scalar(
+                text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": "insightpilot:corpus:ingestion"},
+            )
+        )
 
     async def list_documents(self) -> list[RegisteredDocument]:
         """Validate persisted fields before using them for decisions or cleanup."""
         rows = (await self.session.scalars(select(Document).order_by(Document.source_path))).all()
         try:
-            return [RegisteredDocument(
-                document_id=row.id, source_path=row.source_path,
-                source_fingerprint=row.source_fingerprint, content_sha256=row.content_sha256,
-                document_version=row.document_version, chunking_version=row.chunking_version,
-                metadata=CorpusMetadata.model_validate_json(row.business_metadata),
-                chunk_count=row.chunk_count, status=DocumentStatus(row.status),
-                cleanup_pending=row.cleanup_pending,
-            ) for row in rows]
+            return [
+                RegisteredDocument(
+                    document_id=row.id,
+                    source_path=row.source_path,
+                    source_fingerprint=row.source_fingerprint,
+                    content_sha256=row.content_sha256,
+                    document_version=row.document_version,
+                    chunking_version=row.chunking_version,
+                    metadata=CorpusMetadata.model_validate_json(row.business_metadata),
+                    chunk_count=row.chunk_count,
+                    status=DocumentStatus(row.status),
+                    cleanup_pending=row.cleanup_pending,
+                )
+                for row in rows
+            ]
         except (ValidationError, ValueError) as exc:
             raise IngestionRegistryError() from exc
 
@@ -83,4 +92,6 @@ class DocumentRepository:
 
     async def finish_cleanup(self, identifier: UUID) -> None:
         """A failure to commit this flag merely causes another idempotent cleanup."""
-        await self.session.execute(update(Document).where(Document.id == identifier).values(cleanup_pending=False))
+        await self.session.execute(
+            update(Document).where(Document.id == identifier).values(cleanup_pending=False)
+        )

@@ -103,7 +103,8 @@ def test_migrations_do_not_claim_failure_from_unrelated_api_tests(tmp_path: Path
     )
     summary = tmp_path / "summary"
     assert not migration_summary(xml, summary, Result.FAILURE)
-    assert "7/7 passed" in summary.read_text()
+    count = len(MIGRATION_CASES)
+    assert f"{count}/{count} passed" in summary.read_text()
     assert "tests.api.broken" not in summary.read_text()
     detail = record(evidence(stage="migrations"), xml)
     assert not detail.affected

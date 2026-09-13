@@ -18,6 +18,8 @@ from app.retrieval.ingestion_store import IngestionStore
 from app.services.ingestion import IngestionService
 from app.services.ingestion_config import IngestionSettings
 
+MIN_CONNECTIONS = 2
+
 
 class IngestionProcessSettings(ProcessSettings):
     """Only the application DML, storage and model-client settings are accepted."""
@@ -31,7 +33,10 @@ class IngestionProcessSettings(ProcessSettings):
     @model_validator(mode="after")
     def independent_connections(self) -> Self:
         """Guard and publication require two simultaneous database connections."""
-        require_configuration(self.database.pool_size + self.database.max_overflow >= 2, "Ingestion needs two connections")
+        require_configuration(
+            self.database.pool_size + self.database.max_overflow >= MIN_CONNECTIONS,
+            "Ingestion needs two connections",
+        )
         return self
 
 
@@ -42,8 +47,12 @@ async def run(settings: IngestionProcessSettings, root: Path) -> int:
     model = ModelRuntimeClient(settings.model_runtime)
     try:
         async with IngestionStore(settings.retrieval.milvus) as store:
-            result = await IngestionService(database, store, model, settings.ingestion, settings.model_runtime).ingest(root)
-            print(f"{result.documents_changed} documents changed, {result.chunks_inserted} chunks inserted, {result.chunks_deleted} chunks deleted")
+            result = await IngestionService(
+                database, store, model, settings.ingestion, settings.model_runtime
+            ).ingest(root)
+            print(
+                f"{result.documents_changed} documents changed, {result.chunks_inserted} chunks inserted, {result.chunks_deleted} chunks deleted"
+            )
             print(result.model_dump_json())
             return 0 if result.successful else 1
     finally:

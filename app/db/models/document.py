@@ -28,7 +28,9 @@ class Document(Base, TimestampMixin):
     chunk_count: Mapped[int]
     status: Mapped[str] = mapped_column(String(16))
     cleanup_pending: Mapped[bool]
-    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class CorpusManifestRecord(Base, TimestampMixin):

@@ -103,8 +103,13 @@ class ActiveManifest(Contract):
     @model_validator(mode="after")
     def verify_identity(self) -> Self:
         """A corrupted pointer must fail closed instead of admitting vector candidates."""
-        members = [(str(item.document_id), item.document_version, item.chunking_version) for item in self.members]
-        if members != sorted(members) or len({item.document_id for item in self.members}) != len(members):
+        members = [
+            (str(item.document_id), item.document_version, item.chunking_version)
+            for item in self.members
+        ]
+        if members != sorted(members) or len({item.document_id for item in self.members}) != len(
+            members
+        ):
             raise PydanticCustomError("manifest_members", "Invalid manifest membership")
         if digest(canonical(members)) != self.corpus_version:
             raise PydanticCustomError("manifest_digest", "Invalid manifest identity")

@@ -14,8 +14,21 @@ from pypdf.errors import PyPdfError
 
 from app.core.errors import CorpusValidationError
 from app.schemas.corpus import CorpusEntry, CorpusFormat, CorpusManifest, CorpusMetadata
-from app.schemas.ingestion import LoadedSource, SourcePart, SourceSnapshot, canonical, digest, normalize
-from app.services.corpus_sources import markdown_parts, parse_yaml, read_utf8, source_path, table_row
+from app.schemas.ingestion import (
+    LoadedSource,
+    SourcePart,
+    SourceSnapshot,
+    canonical,
+    digest,
+    normalize,
+)
+from app.services.corpus_sources import (
+    markdown_parts,
+    parse_yaml,
+    read_utf8,
+    source_path,
+    table_row,
+)
 
 
 class IngestionInventory(CorpusManifest):
@@ -49,9 +62,15 @@ def snapshot(root: Path, entry: CorpusEntry, limit: int) -> SourceSnapshot:
     """Source and sidecar bytes are retained so extraction cannot race a second read."""
     raw = read_bytes(root, entry.path, limit)
     sidecar = read_bytes(root, entry.metadata_path, limit) if entry.metadata_path else b""
-    fingerprint = digest(canonical([
-        hashlib.sha256(raw).hexdigest(), hashlib.sha256(sidecar).hexdigest(), entry.format.value,
-    ]))
+    fingerprint = digest(
+        canonical(
+            [
+                hashlib.sha256(raw).hexdigest(),
+                hashlib.sha256(sidecar).hexdigest(),
+                entry.format.value,
+            ]
+        )
+    )
     return SourceSnapshot(raw=raw, sidecar=sidecar, fingerprint=fingerprint)
 
 
@@ -98,9 +117,19 @@ def load_source(entry: CorpusEntry, raw: bytes, sidecar: bytes, fingerprint: str
             parts = excel_parts(raw) if entry.format is CorpusFormat.EXCEL else pdf_parts(raw)
         # Business strings are normalized as part of the version contract too.
         metadata = CorpusMetadata.model_validate_json(normalize(metadata.model_dump_json()))
-        return LoadedSource(entry=entry, metadata=metadata, source_fingerprint=fingerprint, parts=parts)
+        return LoadedSource(
+            entry=entry, metadata=metadata, source_fingerprint=fingerprint, parts=parts
+        )
     except (
-        OSError, UnicodeError, BadZipFile, PyPdfError, InvalidFileException, ParseError,
-        ValidationError, ValueError, KeyError, TypeError,
+        OSError,
+        UnicodeError,
+        BadZipFile,
+        PyPdfError,
+        InvalidFileException,
+        ParseError,
+        ValidationError,
+        ValueError,
+        KeyError,
+        TypeError,
     ) as exc:
         raise CorpusValidationError("Cannot extract document.", path=entry.path) from exc

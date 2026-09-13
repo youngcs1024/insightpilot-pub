@@ -7,12 +7,29 @@ from statistics import mean
 from app.core.errors import CorpusValidationError
 from app.schemas.corpus import CorpusDocument, CorpusManifest, CorpusStatistics, DocumentStatistics
 from app.services.corpus_sources import (
-    excel_text, markdown_parts, parse_yaml, pdf_text, read_document, read_utf8, source_path, table_row,
+    excel_text,
+    markdown_parts,
+    parse_yaml,
+    pdf_text,
+    read_document,
+    read_utf8,
+    source_path,
+    table_row,
 )
 
 # Retain the authoring API while sharing its parser with ingestion.
-__all__ = ["excel_text", "markdown_parts", "parse_yaml", "pdf_text", "read_document",
-           "read_utf8", "source_path", "table_row", "load_corpus", "corpus_statistics"]
+__all__ = [
+    "corpus_statistics",
+    "excel_text",
+    "load_corpus",
+    "markdown_parts",
+    "parse_yaml",
+    "pdf_text",
+    "read_document",
+    "read_utf8",
+    "source_path",
+    "table_row",
+]
 CORPUS_ROOT = Path(__file__).resolve().parent / "corpus"
 
 

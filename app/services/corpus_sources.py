@@ -133,5 +133,3 @@ def read_document(root: Path, entry: CorpusEntry) -> CorpusDocument:
         TypeError,
     ) as exc:
         raise CorpusValidationError("Cannot extract corpus document.", path=entry.path) from exc
-
-

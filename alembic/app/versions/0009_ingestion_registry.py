@@ -34,7 +34,9 @@ def upgrade() -> None:
         sa.Column("chunk_count", sa.Integer, nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("cleanup_pending", sa.Boolean, nullable=False),
-        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         *timestamps(),
         sa.CheckConstraint("status IN ('active', 'deleted')", name="status"),
         sa.CheckConstraint("chunk_count >= 0", name="chunk_count"),
@@ -42,7 +44,12 @@ def upgrade() -> None:
     op.create_table(
         "chunks",
         sa.Column("id", sa.Uuid, primary_key=True),
-        sa.Column("document_id", sa.Uuid, sa.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "document_id",
+            sa.Uuid,
+            sa.ForeignKey("documents.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("document_version", sa.String(64), nullable=False),
         sa.Column("chunking_version", sa.String(64), nullable=False),
         sa.Column("ordinal", sa.Integer, nullable=False),
