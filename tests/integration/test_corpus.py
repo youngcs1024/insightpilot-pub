@@ -106,14 +106,35 @@ def test_at_least_three_refund_policy_versions(corpus: list[CorpusDocument]) -> 
 
 
 def test_binary_sources_have_real_chinese_text(corpus: list[CorpusDocument]) -> None:
+    pdf_facts = {
+        "policy/inventory_reservation.pdf": (
+            "预占不是销售",
+            "库存台账与销售指标",
+            "当前库存不能还原",
+            "GMV",
+            "inventory",
+        ),
+        "policy/warranty.pdf": (
+            "保修讨论商品质量与维修安排",
+            "不自动等同于退货或退款",
+            "退款金额",
+            "证据使用",
+        ),
+    }
+    assert {item.entry.path for item in corpus if item.entry.format is CorpusFormat.PDF} == set(
+        pdf_facts
+    )
     for document in corpus:
         if document.entry.format is CorpusFormat.EXCEL:
             assert document.text.count("## ") >= 2
             assert document.text.count("| --- |") >= 2
         if document.entry.format is CorpusFormat.PDF:
-            assert "商品" in document.text
-            assert "退款" in document.text
-            assert "\ufffd" not in document.text
+            # PDF line wrapping is layout; each source has its own business topic.
+            text = "".join(document.text.split())
+            assert document.metadata.title in text
+            for fact in pdf_facts[document.entry.path]:
+                assert fact in text, document.entry.path
+            assert "\ufffd" not in text
 
 
 def test_corpus_variety_and_negative_controls(corpus: list[CorpusDocument]) -> None:
