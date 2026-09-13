@@ -18,8 +18,17 @@ from app.schemas.retrieval import (
 
 EPOCH = date(1970, 1, 1)
 OUTPUT_FIELDS = [
-    "chunk_uuid", "document_id", "doc_type", "heading_path", "content", "parent_content",
-    "effective_from", "effective_to", "document_version", "chunking_version", "content_sha256",
+    "chunk_uuid",
+    "document_id",
+    "doc_type",
+    "heading_path",
+    "content",
+    "parent_content",
+    "effective_from",
+    "effective_to",
+    "document_version",
+    "chunking_version",
+    "content_sha256",
 ]
 
 
@@ -34,11 +43,13 @@ class SearchArm(StrEnum):
 def enabled_arms(config: RetrievalConfig) -> list[SearchArm]:
     """Keep the same deterministic arm order for requests and diagnostics."""
     return [
-        arm for arm, enabled in (
+        arm
+        for arm, enabled in (
             (SearchArm.DENSE, config.use_dense),
             (SearchArm.LEARNED, config.use_sparse_learned),
             (SearchArm.BM25, config.use_bm25),
-        ) if enabled
+        )
+        if enabled
     ]
 
 
@@ -71,21 +82,28 @@ def arm_request(
         if query.dense is None:
             raise RetrievalConfigurationError(reason="missing_dense_query")
         return AnnSearchRequest(
-            data=[query.dense], anns_field=arm.value,
+            data=[query.dense],
+            anns_field=arm.value,
             param={"metric_type": "IP", "params": {"ef": config.hnsw_ef}},
-            limit=config.pool, expr=expression,
+            limit=config.pool,
+            expr=expression,
         )
     if arm is SearchArm.LEARNED:
         if query.sparse is None:
             raise RetrievalConfigurationError(reason="missing_sparse_query")
         return AnnSearchRequest(
-            data=[query.sparse], anns_field=arm.value,
+            data=[query.sparse],
+            anns_field=arm.value,
             param={"metric_type": "IP", "params": {"drop_ratio_search": config.drop_ratio_search}},
-            limit=config.pool, expr=expression,
+            limit=config.pool,
+            expr=expression,
         )
     return AnnSearchRequest(
-        data=[query.text], anns_field=arm.value, param={"metric_type": "BM25"},
-        limit=config.pool, expr=expression,
+        data=[query.text],
+        anns_field=arm.value,
+        param={"metric_type": "BM25"},
+        limit=config.pool,
+        expr=expression,
     )
 
 
@@ -125,10 +143,15 @@ def candidates(raw: object, arm: SearchArm | None) -> list[Candidate]:
             for field in ("effective_from", "effective_to"):
                 day = getattr(hit.entity, field)
                 entity[field] = None if day == -1 else EPOCH + timedelta(days=day)
-            result.append(Candidate(
-                **entity, milvus_pk=hit.pk,
-                scores=RetrievalScores.model_validate({arm.value if arm else "rrf": hit.distance}),
-            ))
+            result.append(
+                Candidate(
+                    **entity,
+                    milvus_pk=hit.pk,
+                    scores=RetrievalScores.model_validate(
+                        {arm.value if arm else "rrf": hit.distance}
+                    ),
+                )
+            )
         return result
     except (ValidationError, OverflowError) as exc:
         raise RetrievalUnavailableError(reason="invalid_search_response") from exc
@@ -137,13 +160,25 @@ def candidates(raw: object, arm: SearchArm | None) -> list[Candidate]:
 def attach_scores(fused: list[Candidate], diagnostic: list[Candidate], arm: SearchArm) -> None:
     """A physical hit cannot borrow the score of a different version or duplicate row."""
     indexed = {
-        (item.milvus_pk, item.chunk_uuid, item.document_id, item.document_version,
-         item.chunking_version, item.content_sha256): getattr(item.scores, arm.value)
+        (
+            item.milvus_pk,
+            item.chunk_uuid,
+            item.document_id,
+            item.document_version,
+            item.chunking_version,
+            item.content_sha256,
+        ): getattr(item.scores, arm.value)
         for item in diagnostic
     }
     for item in fused:
-        score = indexed.get((
-            item.milvus_pk, item.chunk_uuid, item.document_id, item.document_version,
-            item.chunking_version, item.content_sha256,
-        ))
+        score = indexed.get(
+            (
+                item.milvus_pk,
+                item.chunk_uuid,
+                item.document_id,
+                item.document_version,
+                item.chunking_version,
+                item.content_sha256,
+            )
+        )
         setattr(item.scores, arm.value, score)

@@ -18,7 +18,11 @@ from app.retrieval.search_store import HybridSearchStore
 from app.schemas.ingestion import ChunkIdentity, EncodingProfile, digest
 from app.schemas.model_runtime import EmbedMode
 from app.schemas.retrieval import (
-    Candidate, EncodedQuery, RetrievalQuery, RetrievalResult, RetrievalTimings,
+    Candidate,
+    EncodedQuery,
+    RetrievalQuery,
+    RetrievalResult,
+    RetrievalTimings,
 )
 
 logger = structlog.get_logger(__name__)
@@ -32,8 +36,12 @@ def elapsed(start: float) -> int:
 def identity_key(item: ChunkIdentity) -> tuple[str, ...]:
     """Compare every registered identity field, even for repeated SDK hits."""
     return (
-        str(item.chunk_uuid), str(item.document_id), str(item.milvus_pk),
-        item.document_version, item.chunking_version, item.content_sha256,
+        str(item.chunk_uuid),
+        str(item.document_id),
+        str(item.milvus_pk),
+        item.document_version,
+        item.chunking_version,
+        item.content_sha256,
     )
 
 
@@ -41,8 +49,11 @@ class RetrievalPipeline:
     """Owners inject resources and their lifetime; no model weights or business DB access."""
 
     def __init__(
-        self, database: Database, store: HybridSearchStore,
-        model: ModelRuntimeClient | None, settings: RetrievalSettings,
+        self,
+        database: Database,
+        store: HybridSearchStore,
+        model: ModelRuntimeClient | None,
+        settings: RetrievalSettings,
     ) -> None:
         self.database = database
         self.store = store
@@ -68,7 +79,10 @@ class RetrievalPipeline:
         timings.encode_ms = elapsed(started)
         stage = time.monotonic()
         pool = await self.store.hybrid_search(
-            encoded, self.settings.search, query.time_scope, deadline=deadline,
+            encoded,
+            self.settings.search,
+            query.time_scope,
+            deadline=deadline,
             timeout_s=self.settings.search_timeout_s,
         )
         timings.search_ms = elapsed(stage)
@@ -79,8 +93,10 @@ class RetrievalPipeline:
         timings.total_ms = elapsed(started)
         result.timings = timings
         logger.info(
-            "retrieval_completed", candidates=len(result.candidates),
-            rejected=len(pool) - len(result.candidates), corpus_version=result.corpus_version,
+            "retrieval_completed",
+            candidates=len(result.candidates),
+            rejected=len(pool) - len(result.candidates),
+            corpus_version=result.corpus_version,
             duration_ms=timings.total_ms,
         )
         return result
@@ -93,29 +109,41 @@ class RetrievalPipeline:
             raise RetrievalConfigurationError(reason="model_client_required")
         result = await self.model.embed([query.standalone], EmbedMode.QUERY, deadline=deadline)
         return EncodedQuery(
-            text=query.standalone, dense=result.dense[0], sparse=result.sparse[0],
+            text=query.standalone,
+            dense=result.dense[0],
+            sparse=result.sparse[0],
             metadata=result.metadata,
         )
 
     async def _admit(
-        self, pool: list[Candidate], encoded: EncodedQuery, query: RetrievalQuery,
+        self,
+        pool: list[Candidate],
+        encoded: EncodedQuery,
+        query: RetrievalQuery,
         timings: RetrievalTimings,
     ) -> RetrievalResult:
         # The read-only snapshot begins AFTER all network/model calls. No ingestion
         # lock is held; manifest identity and registry admission see the same commit.
         async with self.database.session() as session, session.begin():
-            await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+            await session.execute(
+                text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            )
             manifest = await DocumentRepository(session).manifest()
             if manifest is not None and manifest.collection != self.store.settings.collection:
                 raise RetrievalConfigurationError(reason="manifest_collection")
             if (
-                manifest is not None and manifest.members and encoded.metadata is not None
+                manifest is not None
+                and manifest.members
+                and encoded.metadata is not None
                 and manifest.encoding != EncodingProfile.from_metadata(encoded.metadata)
             ):
                 raise RetrievalConfigurationError(reason="manifest_encoding")
             identities = [
-                ChunkIdentity.model_validate(item.model_dump(include=set(ChunkIdentity.model_fields)))
-                for item in pool if digest(item.content) == item.content_sha256
+                ChunkIdentity.model_validate(
+                    item.model_dump(include=set(ChunkIdentity.model_fields))
+                )
+                for item in pool
+                if digest(item.content) == item.content_sha256
             ]
             allowed = await ChunkRepository(session).admit(identities)
         keys = {identity_key(item) for item in allowed}
@@ -126,7 +154,10 @@ class RetrievalPipeline:
                 accepted.append(item)
                 keys.remove(key)
         return RetrievalResult(
-            query=query.model_copy(deep=True), corpus_version=manifest.corpus_version if manifest else None,
-            candidates=accepted, retrieval_config=self.settings.search.model_copy(deep=True),
-            model_metadata=encoded.metadata, timings=timings,
+            query=query.model_copy(deep=True),
+            corpus_version=manifest.corpus_version if manifest else None,
+            candidates=accepted,
+            retrieval_config=self.settings.search.model_copy(deep=True),
+            model_metadata=encoded.metadata,
+            timings=timings,
         )

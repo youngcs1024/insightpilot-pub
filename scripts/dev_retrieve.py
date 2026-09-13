@@ -19,7 +19,7 @@ from app.db.session import Database
 from app.retrieval.config import RetrievalConfig, RetrievalSettings
 from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
-from app.schemas.retrieval import PolicyPeriod, PointTimeScope, RangeTimeScope, RetrievalQuery
+from app.schemas.retrieval import PointTimeScope, PolicyPeriod, RangeTimeScope, RetrievalQuery
 
 
 class RetrievalProcessSettings(ProcessSettings):
@@ -39,11 +39,23 @@ def parse_query(args: argparse.Namespace, now: datetime) -> RetrievalQuery:
             periods = []
             for value in args.period:
                 start, end = value.split(":")
-                periods.append(PolicyPeriod(start=date.fromisoformat(start), end=date.fromisoformat(end), label=value))
+                periods.append(
+                    PolicyPeriod(
+                        start=date.fromisoformat(start), end=date.fromisoformat(end), label=value
+                    )
+                )
             return RetrievalQuery(standalone=args.query, time_scope=RangeTimeScope(periods=periods))
-        day = date.fromisoformat(args.as_of) if args.as_of else now.astimezone(ZoneInfo("Asia/Shanghai")).date()
-        assumptions = [] if args.as_of else [f"未指定日期，按 Asia/Shanghai 的 {day.isoformat()} 查询。"]
-        return RetrievalQuery(standalone=args.query, time_scope=PointTimeScope(as_of=day), assumptions=assumptions)
+        day = (
+            date.fromisoformat(args.as_of)
+            if args.as_of
+            else now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+        )
+        assumptions = (
+            [] if args.as_of else [f"未指定日期，按 Asia/Shanghai 的 {day.isoformat()} 查询。"]
+        )
+        return RetrievalQuery(
+            standalone=args.query, time_scope=PointTimeScope(as_of=day), assumptions=assumptions
+        )
     except (ValueError, ValidationError) as exc:
         raise PeriodUnresolved() from exc
 
@@ -55,7 +67,9 @@ def search_config(args: argparse.Namespace, configured: RetrievalConfig) -> Retr
         arms = args.arms.split(",")
         if not arms or len(set(arms)) != len(arms) or set(arms) - {"dense", "sparse", "bm25"}:
             raise RetrievalConfigurationError(reason="invalid_arms")
-        values.update(use_dense="dense" in arms, use_sparse_learned="sparse" in arms, use_bm25="bm25" in arms)
+        values.update(
+            use_dense="dense" in arms, use_sparse_learned="sparse" in arms, use_bm25="bm25" in arms
+        )
     if args.record_arm_scores is not None:
         values["record_arm_scores"] = args.record_arm_scores
     elif "record_arm_scores" not in configured.model_fields_set:
@@ -69,22 +83,32 @@ async def run(settings: RetrievalProcessSettings, query: RetrievalQuery) -> int:
     database.start()
     config = settings.retrieval.search
     needs_model = config.use_dense or config.use_sparse_learned
-    model = ModelRuntimeClient(settings.model_runtime) if needs_model and settings.model_runtime else None
+    model = (
+        ModelRuntimeClient(settings.model_runtime)
+        if needs_model and settings.model_runtime
+        else None
+    )
     try:
         async with HybridSearchStore(settings.retrieval.milvus) as store:
             result = await RetrievalPipeline(database, store, model, settings.retrieval).retrieve(
-                query, deadline=Deadline(time.monotonic() + settings.timeout_s),
+                query,
+                deadline=Deadline(time.monotonic() + settings.timeout_s),
             )
             print(result.model_dump_json())
             return 0
     finally:
-        try:
-            if model is not None:
-                async with asyncio.timeout(10):
-                    await model.aclose()
-        finally:
+        await close_resources(database, model)
+
+
+async def close_resources(database: Database, model: ModelRuntimeClient | None) -> None:
+    """Release the database even when model connection cleanup fails."""
+    try:
+        if model is not None:
             async with asyncio.timeout(10):
-                await database.aclose()
+                await model.aclose()
+    finally:
+        async with asyncio.timeout(10):
+            await database.aclose()
 
 
 def parser() -> argparse.ArgumentParser:

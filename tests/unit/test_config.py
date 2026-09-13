@@ -23,8 +23,8 @@ from mcp_server.config import McpServerSettings
 from model_runtime.config import ModelRuntimeSettings
 from model_tunnel.config import TunnelProcessSettings
 from scripts.deployment import DeploymentSettings
-from scripts.ingest import IngestionProcessSettings
 from scripts.dev_retrieve import RetrievalProcessSettings
+from scripts.ingest import IngestionProcessSettings
 from scripts.migration_settings import MigrationSettings
 from scripts.model_deployment_settings import ModelDeploymentSettings
 

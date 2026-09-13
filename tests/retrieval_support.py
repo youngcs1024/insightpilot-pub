@@ -34,23 +34,34 @@ def deadline(seconds: float = 30) -> Deadline:
 
 
 def query() -> RetrievalQuery:
-    return RetrievalQuery(standalone="SKU-A1023", time_scope=PointTimeScope(as_of=date(2026, 8, 15)))
+    return RetrievalQuery(
+        standalone="SKU-A1023", time_scope=PointTimeScope(as_of=date(2026, 8, 15))
+    )
 
 
 def encoded() -> EncodedQuery:
-    return EncodedQuery(text="SKU-A1023", dense=[1.0, *([0.0] * 1023)], sparse={7: 1.0}, metadata=model_metadata())
+    return EncodedQuery(
+        text="SKU-A1023", dense=[1.0, *([0.0] * 1023)], sparse={7: 1.0}, metadata=model_metadata()
+    )
 
 
 def raw_hit(pk: int = 1, score: float = 0.8) -> dict[str, object]:
     content = "SKU-A1023 七天退款规则。"
     return {
-        "pk": pk, "distance": score,
+        "pk": pk,
+        "distance": score,
         "entity": {
-            "chunk_uuid": str(uuid4()), "document_id": str(uuid4()),
-            "document_version": "a" * 64, "chunking_version": "b" * 64,
-            "content_sha256": digest(content), "doc_type": "policy", "heading_path": "政策",
-            "content": content, "parent_content": "完整政策章节。" + content,
-            "effective_from": -1, "effective_to": -1,
+            "chunk_uuid": str(uuid4()),
+            "document_id": str(uuid4()),
+            "document_version": "a" * 64,
+            "chunking_version": "b" * 64,
+            "content_sha256": digest(content),
+            "doc_type": "policy",
+            "heading_path": "政策",
+            "content": content,
+            "parent_content": "完整政策章节。" + content,
+            "effective_from": -1,
+            "effective_to": -1,
         },
     }
 
@@ -80,11 +91,17 @@ class QueryEmbeddings:
         is_query = payload["mode"] == "query"
         vectors = []
         for value in texts:
-            sku_document = ("SKU-A1023" in value or "商品包装" in value) and not is_query
+            sku_document = any(term in value for term in ("SKU-A1023", "商品包装", "商品规则"))
+            sku_document = sku_document and not is_query
             vectors.append([0.0, 1.0, *([0.0] * 1022)] if sku_document else [1.0, *([0.0] * 1023)])
         response = EmbedResult(
-            request_id="synthetic-retrieval", ms=0, queue_ms=0, inference_ms=0,
-            metadata=model_metadata(), dense=vectors, sparse=[{7: 1.0} for _ in texts],
+            request_id="synthetic-retrieval",
+            ms=0,
+            queue_ms=0,
+            inference_ms=0,
+            metadata=model_metadata(),
+            dense=vectors,
+            sparse=[{7: 1.0} for _ in texts],
         )
         return httpx.Response(200, json=response.model_dump(mode="json"))
 
@@ -92,7 +109,12 @@ class QueryEmbeddings:
 def corpus(root: Path) -> None:
     """Separate July/August sources are both members of the committed corpus."""
     sources = [
-        ("sku.md", "# 商品规则\n\nSKU-A1023 七天退款规则。" + "商品包装必须完整。" * 90, "2026-01-01", None),
+        (
+            "sku.md",
+            "# 商品规则\n\nSKU-A1023 七天退款规则。" + "商品包装必须完整。" * 90,
+            "2026-01-01",
+            None,
+        ),
         ("july.md", "# 七月政策\n\n七天退款规则。七月版本。", "2026-07-01", "2026-08-01"),
         ("august.md", "# 八月政策\n\n七天退款规则。八月版本。", "2026-08-01", None),
     ]
@@ -116,12 +138,20 @@ class RetrievalHarness:
 
     async def ingest(self) -> None:
         result = await IngestionService(
-            self.database, self.ingestion, self.model, IngestionSettings(), self.model_settings,
+            self.database,
+            self.ingestion,
+            self.model,
+            IngestionSettings(),
+            self.model_settings,
         ).ingest(self.root)
         assert result.successful
 
     def pipeline(self, config: RetrievalConfig | None = None) -> RetrievalPipeline:
         return RetrievalPipeline(
-            self.database, self.search, self.model,
-            RetrievalSettings(search=config or RetrievalConfig(), search_timeout_s=30, milvus=self.search.settings),
+            self.database,
+            self.search,
+            self.model,
+            RetrievalSettings(
+                search=config or RetrievalConfig(), search_timeout_s=30, milvus=self.search.settings
+            ),
         )
