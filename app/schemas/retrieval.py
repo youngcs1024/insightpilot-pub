@@ -217,3 +217,19 @@ class RetrievalResult(Contract):
     rerank_metadata: ModelMetadata | None = None
     stages: list[StageDiagnostic] = Field(default_factory=list)
     provenance: list[CandidateProvenance] = Field(default_factory=list, max_length=100)
+
+
+class RetrievalTrace(RetrievalContract):
+    """Opt-in detached measurements; never persisted in ordinary answer evidence."""
+
+    encoded: EncodedQuery | None = None
+    admitted: list[Candidate] = Field(default_factory=list, max_length=100)
+    ranked: list[Candidate] = Field(default_factory=list, max_length=100)
+    rerank_response: RerankResult | None = None
+
+
+class ObservedRetrieval(RetrievalContract):
+    """Production result plus the otherwise discarded pre-filter candidate ranking."""
+
+    result: RetrievalResult
+    trace: RetrievalTrace

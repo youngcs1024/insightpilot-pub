@@ -11,7 +11,9 @@ from app.core.observability import TraceMetadata, observe
 from app.retrieval.config import RetrievalConfig
 from app.retrieval.filtering import diagnostic, fallback, filter_ranked
 from app.schemas.model_runtime import ModelFailureKind
-from app.schemas.retrieval import Candidate, RankingResult, RetrievalStage, StageStatus
+from app.schemas.retrieval import (
+    Candidate, RankingResult, RetrievalStage, RetrievalTrace, StageStatus,
+)
 from model_runtime.errors import ModelError
 
 logger = structlog.get_logger(__name__)
@@ -32,10 +34,14 @@ async def rerank_candidates(
     config: RetrievalConfig,
     *,
     deadline: Deadline,
+    trace: RetrievalTrace | None = None,
 ) -> RankingResult:
     """Retain child/parent text and native scores; reject contract and authorization failures."""
     deadline.check("rerank")
     detached = [item.model_copy(deep=True) for item in candidates]
+    if trace is not None:
+        trace.admitted = [item.model_copy(deep=True) for item in detached]
+        trace.ranked = [item.model_copy(deep=True) for item in detached]
     if not config.use_rerank or not detached:
         status = StageStatus.DISABLED if not config.use_rerank else StageStatus.EMPTY
         return RankingResult(
@@ -84,6 +90,12 @@ async def rerank_candidates(
     rerank_ms = int((time.monotonic() - started) * 1000)
     for item, value in zip(detached, response.scores, strict=True):
         item.scores.rerank = value
+    if trace is not None:
+        trace.rerank_response = response.model_copy(deep=True)
+        trace.ranked = [
+            item.model_copy(deep=True)
+            for item in sorted(detached, key=lambda item: item.scores.rerank or 0, reverse=True)
+        ]
     with observe("retrieval_filter", TraceMetadata(row_count=len(detached))):
         result = filter_ranked(detached, config.filtering)
     result.response = response

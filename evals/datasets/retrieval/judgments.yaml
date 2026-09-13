@@ -1,0 +1,1156 @@
+schema_version: 1
+corpus_version: f1f7e92ae32837e1c84157c1511c8b30a802d1c81b19b42163d3c582c76c59b8
+chunking_version: dfc301513eedec5cff17269f340337417c82c24f8df5c11869f655919e4161e7
+queries_sha256: e7c619eda55ae84703dd3f625b6883e35bc51361c67a2f2c1afc586b464e5f92
+judgments_sha256:
+  development: 84408f6a3339091f1c3847065c62c5a57ef89270436b56e3e94b10a019ba7983
+  frozen: f8a7c9c8dac182a12705aab6b3be24bc9cc82f119928e6e930ca24fe98534531
+chunk_ids:
+- 50984cbf-b185-568a-b7eb-86265a3488f5
+- ec4a3f01-a63b-564b-8b51-30ca2b4bc1c7
+- 83132221-972a-569a-9a05-dea899dbdc0d
+- b8b9ecdd-ca07-54ec-b26a-2f3e615863bf
+- 261d2fc1-14a6-5ca3-ba32-43a5840ae0b5
+- d1364ad8-a944-5d4b-99ce-f133df883a7c
+- 80dc39c9-1ef0-5db3-a623-934ac329c263
+- 3f9db00e-ebb8-5c94-8532-65043aaff561
+- ec225454-2256-53c9-87ef-924885a8fe98
+- 8ffef53f-27aa-521f-8169-116e4bf7fea1
+- f39fc4bd-9c51-5e48-8408-f2faa5e1919b
+- 128f87f6-5f06-5860-bdf7-57a10c4d1efd
+- 0922848a-0108-56c2-ace9-522992b0dab3
+- e3620d48-6578-55db-9893-ca2b265a6036
+- 567d6013-0875-5d64-9511-af39e9df7580
+- da76b130-23cb-595d-a524-669368ca081c
+- 7860b6df-7520-59f1-ad0a-c18123e1aa85
+- be3bd88f-b76f-5838-8875-583837dbcbf7
+- 2f0309a8-66e7-5d1c-9ce7-d03a1c2b6776
+- c3747ea9-3d70-57ef-a68c-527064143dd3
+- 7b9c2cdf-fdb4-5224-b018-cdfd8790c758
+- 74795f6c-b1b8-51db-ab2f-a914bd9ac750
+- 3298ceb8-3cd6-5fa3-aaa5-544a00a51470
+- 8736ee19-19db-53a8-a0a9-baf182997fab
+- 5d3c5433-79f1-5dac-9037-c71321796456
+- 9900e060-a9bd-5087-b600-f2b3e49db538
+- 593d779c-0325-5e8f-9e8e-5644b7cb2f42
+- b726cf80-f2b5-5cbd-9053-f3de7c884827
+- 5de08181-ad6f-5786-8441-1fcbc0790626
+- f73f0244-4de7-5c48-b945-deca13264c2a
+- 4c60fdb8-af44-5fc0-9ea7-f15850976a73
+- 816a75c5-fbf9-5912-8c00-9964c3524483
+- 38d9248a-4c98-559f-af4a-d58eed4515a7
+- 630176cf-f026-50c5-bba8-f26aca80c3b9
+- 71c370ad-3ade-5995-a1df-4fb7faa7576e
+- 34cb0f8a-b6be-5f4b-a399-0088d28dcf13
+- b220ba13-a902-5b33-abe2-9a946fcfbb51
+- dc25a0b1-13ba-5c64-904b-4968f1864a3f
+- 8066d223-f7fc-5223-a7be-6a8fd80b466c
+- 98410f8d-bdc5-54f0-998e-1d709d41a8e1
+- c6e1bacf-9fb6-56e2-b362-d310c2af7559
+- c1a1c7e6-e509-564a-adde-3c0b4f50c6e0
+- aead610b-1db0-5766-9c46-1c6bbec2045d
+- e0384707-f0fc-55aa-ab82-a89c04a03bb0
+- 8f238993-cddc-5099-9ea1-d40f137bb845
+- d0f8c59f-62c6-52b1-ac91-cc6220554406
+- dcafba5f-2d1b-584c-a515-a6d6bfec6a33
+- 908f0150-9353-5d4a-88b7-1cdd4dd6eba6
+- 72510fa7-5e66-5d78-87a1-10d0a8a9e4d0
+- 68640e93-c75f-5122-8928-e261100f649e
+- 67ca9628-0f17-586a-8a1c-d45ae958f2d8
+- cf8fc325-35b5-5451-9afb-0847b49c7130
+- a2bc80e6-1780-5c75-8b14-89bf48d3f94a
+- 602fde9a-2ec2-5ada-a633-86c090add216
+- 1828dbf5-2b57-52ec-9d33-cf093cdc938b
+- 2fbed09d-abc7-5571-9c84-ecb8c0ebc6c9
+- 990df62f-6387-5f27-96ea-0966e2b429c3
+- 8a74b083-4bab-5d90-8549-c146c1b66bb1
+- b3838da1-148b-5434-95ad-b20e48cb49f6
+- 92122458-dbaf-5734-8e78-5300f835a881
+- 80edb922-9700-581d-8c9f-53f7aebe38e5
+- 1b8b35cb-2376-5a1b-834b-18be0063ddca
+- f67886e0-fc8e-5a14-9d3f-d38536067ebb
+- 460a41de-b4cd-5ad1-b5a6-2034982f5784
+- 06f5417a-ecfc-5390-ba68-e4f0dac2cd0e
+- a27eeed8-3092-51e0-9e79-4478a9962c42
+- 033bcf1a-af44-5521-aa39-7e7f52ee0eab
+- 94a7951a-4f86-55f7-a8c2-834154535bc2
+- d353bb30-1cf2-5302-b175-f503a68a9da8
+- a82a3c98-8e90-59ae-aa8a-3119cf5d0523
+- 6da41e4c-cd40-5551-938b-be2f98fdc443
+- a8317426-8950-5b00-8615-f3947003a579
+- 7fe2c8c4-a9dd-5644-b127-db6c400fab83
+- cf8d0b98-ef6c-5f5c-b6da-0a8578768701
+- 0f0f63e3-b269-5afa-a2c7-326cc68af08c
+- d7492e4f-7b84-55cd-a222-569210cf6ed5
+- 77343289-db35-5ad3-a3dd-457135fc4a4d
+- f17c19f5-1691-59a8-b3d9-51ef0e497a96
+- 8ad5eeae-4bfa-57da-b46a-eb63b6e01827
+- db72ef16-aa31-50ac-b316-66acf1d77181
+- 62ce6ca3-4fbb-5fdf-97ec-98bd112e0554
+- 17d10f11-7ec8-5d87-b871-8bade1500a3f
+- fe60766c-38a3-54d9-981e-b71ea60258a0
+- 2e0e97d5-1695-50cd-8b6d-7a692cdb8e9d
+- 9d357fe1-ee94-5d12-9f17-1ce7fb495520
+- 122fa484-a13c-58ea-8dc8-1f1b464c267d
+- 079bd0ec-b96b-5324-b98b-2320cafd965d
+- 2a82dfd2-c240-5530-92f4-3d4a7c11fdf1
+- 3c0914c0-df43-5c2f-9561-c3f3be98abc4
+- 36903f7a-2501-5bb8-9090-b6bf4a7cc18d
+- 3ec0f7a5-a182-5bef-a559-94460fdb665f
+- 06e32972-d671-5198-80f8-cccdd370fcbe
+- 646d33af-798d-53fc-b68a-77257525b247
+- 134c0fe3-09bb-5241-9b8f-51ab792d8865
+- 7ef07e26-b9f1-56cc-a646-675527431a45
+- 0bef72d4-1732-553e-a7fd-5181e0b50105
+- ef613b7e-8d03-5cf8-8961-fdf44efe7811
+- 9697d1bb-32d0-5a86-9e8f-c1dabb664988
+- 4fd963d6-62a2-5d24-97c7-27105431b766
+- 2a51b4bb-9c43-5839-b29a-09d8ebd51230
+- 6e158b7b-1d8e-5226-9ee1-835eb87189bf
+- c8cfac4c-7b17-5602-81cf-67765847d61e
+- ad3d2552-0149-5be1-80f8-4a50c9f849db
+- 4159962e-9314-5303-bb3e-89ba2e162deb
+- e6167d5f-a540-5117-aa01-88c8a64f71f5
+- ec51ce31-2e86-54be-9afa-832f1c36f0f9
+- a48aeffa-e507-52a0-ba70-3f48e4a88507
+- e3d98b70-0e53-5ea3-8787-acb1de87b8d5
+- 4e8493e3-3ed8-581b-bea3-5e97bc6755b5
+- 69c6fbf7-26fe-5cc0-ae82-37282029390b
+- 4924fc2b-df48-5b7a-8a5a-bfeacee43062
+- 1f23e342-06d1-5579-8d91-7b869c3d9052
+- 7c38b637-475c-577c-adb0-cfdabb4fa33a
+- bcd1b777-120d-51e6-8b0d-a5823fe49a85
+- 531901fc-dc37-50d4-8a5c-6d988cd8c2dd
+- 7b2f16e2-20be-5169-913f-a1955f3f60f6
+- 53b4f526-466a-5359-962c-d8b95906e5bd
+- 3572be7c-4f86-502d-915a-be30740c7425
+- 2aa33f58-5abe-5630-99c9-9b1f2fdc530d
+- 42d79589-e81e-5439-bd5a-abcb5216e76e
+- c77f205a-2a32-5089-b792-ece1275db209
+- 5130d8f0-b656-5e09-a665-550101f25888
+- 680864a6-9aae-5b2d-a816-b11e63958c3c
+- a48d2ef3-9aab-5a03-a6a5-875ba307fa18
+- 8b969002-830a-575d-8708-04c47e473753
+- 983e5e64-131d-514b-93d3-12cf0caacc83
+- 1fe06770-98d3-5a61-8e01-a136d217ec18
+- cc072680-18d2-53f3-a30a-b2b81d0c8fd4
+- 4311863e-5079-523f-8425-264186182276
+- 7b4fd28e-7d9f-544b-957b-6ba2fa5c8061
+- a5a59634-d5e7-5918-bc97-44420c0b75de
+- b3243ccd-2944-59a3-a12e-0265eb783b49
+- 3e4d86ac-e792-578a-8bca-cda50441e92c
+- 4957c291-463e-547e-93ce-30c7b0a3b20d
+- 69c31545-238f-5065-9676-48d794263107
+- 6283fcd8-9cd8-595e-a9d1-e85ed64fa91e
+- 2d29661c-e92d-54be-ac6b-5d304eb4390b
+- dcb3be10-bd4a-55de-b928-071ad8008754
+- 32ae46cf-afbd-52bc-8088-07baacb1d6db
+- 9976206f-45d8-583c-bd13-f6ab420ab9a3
+- 8eebf629-088f-57d5-b4df-2d18dc67f12f
+- 59c03f78-9f84-5192-9694-b77846822ac9
+- 28a1db8f-76e7-5ede-a8da-ca20a4a2e646
+- 0998bec3-3e37-5d48-b161-8910689f242d
+- 659af726-f339-537e-974f-b5886555e502
+- 4b2ecf90-22c5-551f-9644-b2bd46f51c4a
+- ec033757-46e2-54ac-8d51-1f3fb057e4d5
+- 9812de20-d487-5e22-bfc0-2161f17e521d
+- 29b663b0-0db3-5e0e-a0a5-fe19f37a4fee
+- e73ec0a8-b30e-539a-930a-ac6c7e629fa0
+- 99e93c35-3dd3-5032-aeca-a1efe2bccf5b
+- 7a02fa70-199b-5cc0-b0b6-8dff3860d821
+- f1de289d-0795-5928-8255-9414803264e7
+- 78f9faa6-e4a2-5bef-a6d9-6b8bdf0e8ecf
+- ea7d05e2-fc74-505e-91f6-15d373a321f1
+- 0297e078-0905-56a9-af1c-b4fa7c86b607
+- 6452a352-f81d-5b04-9ad3-16851302f319
+- 6cf345ad-43fd-502a-bc14-08200a487628
+- 35a53930-cad8-5eb5-9606-8b9985aa2b8d
+- 52246c4f-6c79-5906-93fd-fdcc8efad96d
+- 6ee4af65-eed6-5192-b037-91ebe7b8d0f1
+- 4161ce90-62ce-5216-aad9-a44453f23c3c
+- 7fc70cd0-2afd-56c0-a17c-d60e5f2faaf9
+- 46996200-3518-59f8-9f01-e936bfc408f8
+- 44c5c199-ee2f-5b74-9ae0-4e1cd375568f
+- ebf57b44-7990-5a8b-afc5-b336e1a884bd
+- ea04ac6b-f09e-5346-9466-f6b6631842b7
+- 7afb018f-fcbb-56fc-b1a2-e71fd1bc53b7
+- 00e343be-e1ec-52cc-9b6c-f2c746fc2871
+- d5a612ae-3fc3-514a-924a-67484a7cb260
+- a13b224d-7796-550a-bf87-2188115239ca
+- 8b4c4647-1b3b-5991-b8a9-a3657498b949
+- 6f87560b-4033-5e56-b027-1bac0d69edc8
+- 147f5f56-0c4f-5832-bf45-9d6eaae1010a
+- bb8b6981-0b61-5e1f-a388-a92cdcab033f
+- 1c994741-85be-5d5b-a1c5-0eb17e620d8f
+- 43ff5046-19c1-5531-9c5d-1e32e3a6700b
+- 6c8f0943-3533-597d-a9b9-414fdafb59e2
+- d50dedff-fa53-53e5-a1db-e5bb82bf7ebb
+- 9ea7aabe-ffbb-5c3f-9196-8a628b4f6c00
+- 4c701540-da25-5969-a193-e36119e8f35b
+- ae250023-60cc-5600-80a9-b35c3f24573a
+- 7070b478-dfa0-557d-a465-135d36e519ba
+- a693fb52-8f3e-53fd-93a9-87962658c453
+- 050c0083-5d11-5fe9-8fca-8d9919eb18e7
+- 2448ad11-cacc-5105-abbf-27938c6cf087
+- 81813f6f-a929-52be-b48c-a0a5bbf1c0d8
+- d40b6f44-1e55-54aa-8fe3-7cf41f8f0381
+- 4d1f29a2-a48d-586a-8067-334f78ae9a76
+- c67d86ff-528a-5379-a8fe-8e95a0d3b762
+- f0cba707-b351-5237-ad9f-e0622804198e
+chunks:
+- chunk_id: 50984cbf-b185-568a-b7eb-86265a3488f5
+  source_path: analysis/august_refunds.md
+  content_sha256: 03f0b961059348099908c4d466df92aa9a989d1266b4f01ff670c36cc46f4adc
+  effective_from: '2026-08-25'
+  effective_to: null
+- chunk_id: ec4a3f01-a63b-564b-8b51-30ca2b4bc1c7
+  source_path: analysis/august_refunds.md
+  content_sha256: 6db37be7807f6484b7f4677ae307c0df0089aaf5cc62045c7db286f0f0cd57a7
+  effective_from: '2026-08-25'
+  effective_to: null
+- chunk_id: 83132221-972a-569a-9a05-dea899dbdc0d
+  source_path: analysis/august_refunds.md
+  content_sha256: 3796079fbc014072b0a8974f1e63c58ebd1b24e72616a9c54e6dabab22b7158b
+  effective_from: '2026-08-25'
+  effective_to: null
+- chunk_id: b8b9ecdd-ca07-54ec-b26a-2f3e615863bf
+  source_path: analysis/august_refunds.md
+  content_sha256: 62f091144cf70aa8c694ad0d9e6aa7925b4625f543ad2c6761df209db743dc70
+  effective_from: '2026-08-25'
+  effective_to: null
+- chunk_id: 261d2fc1-14a6-5ca3-ba32-43a5840ae0b5
+  source_path: analysis/employee_travel.md
+  content_sha256: e4c6fed5fffba7faba9ee48ffe973bd7f4b64a9d6d4a7b5f98263c89139b4f71
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: d1364ad8-a944-5d4b-99ce-f133df883a7c
+  source_path: analysis/employee_travel.md
+  content_sha256: dd5080de7ec7379676982205ad419efb4eeedf0246ce5aeb3b01ac6b739559b7
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 80dc39c9-1ef0-5db3-a623-934ac329c263
+  source_path: analysis/employee_travel.md
+  content_sha256: 7c20456c5c0f77f2da27aa36273b883fdd94ac116dfb679cf207f67f6234818a
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 3f9db00e-ebb8-5c94-8532-65043aaff561
+  source_path: analysis/inventory_snapshot.md
+  content_sha256: d3f17552530e3724db9443a6022364e158b2dc7caf9fabd1f1615a9e03b97745
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: ec225454-2256-53c9-87ef-924885a8fe98
+  source_path: analysis/inventory_snapshot.md
+  content_sha256: 0ab9d865f36244353ce24f663e7ab047db90b6f53ac72848bda1071bb5dfdb48
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 8ffef53f-27aa-521f-8169-116e4bf7fea1
+  source_path: analysis/inventory_snapshot.md
+  content_sha256: 6ac28939ed1a0872e9559ea62acd8b75296a8a6170b3d34a088cc69e1706c3c0
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: f39fc4bd-9c51-5e48-8408-f2faa5e1919b
+  source_path: analysis/july_aov.md
+  content_sha256: 06b98d106067155354efcd8174a1d85d7868b213042cf796df560705947c53a9
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 128f87f6-5f06-5860-bdf7-57a10c4d1efd
+  source_path: analysis/july_aov.md
+  content_sha256: 0013fc37ff37986d51b0e058047005978a298470791a685d95310a4f7812b5df
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 0922848a-0108-56c2-ace9-522992b0dab3
+  source_path: analysis/july_aov.md
+  content_sha256: 74fcbafbbb491f238b21f89a26afadb3dc57d741ac6f5d7c52180e710a530c95
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: e3620d48-6578-55db-9893-ca2b265a6036
+  source_path: analysis/office_equipment_return.md
+  content_sha256: f80fda6ccf4af8fbf6be404c5b0ef40bf921856f026f4ffdf103343bebc671c8
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 567d6013-0875-5d64-9511-af39e9df7580
+  source_path: analysis/office_equipment_return.md
+  content_sha256: d1cb400f7193a6b2de7141febadf9406ea3161c7ea3a9f2d1d6fc8768944818c
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: da76b130-23cb-595d-a524-669368ca081c
+  source_path: analysis/office_equipment_return.md
+  content_sha256: 33d81c276fd7ef60619a2377a16339387a99a2811df98d65274b3ef7f5cb1e2c
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 7860b6df-7520-59f1-ad0a-c18123e1aa85
+  source_path: analysis/refund_duplicates.md
+  content_sha256: ff3899f7a4363f6410c79b6aaf61d3acab34370ad9c4045e33e63d083675778c
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: be3bd88f-b76f-5838-8875-583837dbcbf7
+  source_path: analysis/refund_duplicates.md
+  content_sha256: 067dbccf3e6e2da5b803feb9fa1ce90cc3e740ac7e956dbd3161dc7bdbbd104b
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 2f0309a8-66e7-5d1c-9ce7-d03a1c2b6776
+  source_path: analysis/refund_duplicates.md
+  content_sha256: f08fd1c551ccf796046e9fc4d4484f995ea0de89149384733ac8d5008750275a
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: c3747ea9-3d70-57ef-a68c-527064143dd3
+  source_path: analysis/region_comparison.md
+  content_sha256: d3838040e4171a1dc1098535e3da8ba088cb418110d3a1dc201391055d096e10
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 7b9c2cdf-fdb4-5224-b018-cdfd8790c758
+  source_path: analysis/region_comparison.md
+  content_sha256: bea220a7c5f406663f259e83449c0e155fe2b1029e597ca2d2419f3feb01ede3
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 74795f6c-b1b8-51db-ab2f-a914bd9ac750
+  source_path: analysis/region_comparison.md
+  content_sha256: 03f4c230c95474ef9929dda36013fb1f30dc1bb9a916ab6a8a7a80ef304e6470
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 3298ceb8-3cd6-5fa3-aaa5-544a00a51470
+  source_path: analysis/shipping_feedback.md
+  content_sha256: 5e81f367b2a35de87b2299b8265831e007a711cb8b704ea41fe1ddc51e079ecd
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 8736ee19-19db-53a8-a0a9-baf182997fab
+  source_path: analysis/shipping_feedback.md
+  content_sha256: fc3a832d2c1d408c4adc4728b939b1ab477e244e1cd6343acce999b8274c289f
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 5d3c5433-79f1-5dac-9037-c71321796456
+  source_path: analysis/shipping_feedback.md
+  content_sha256: 5d7d3dc4c511456ad7d7f1673522c4d03265902003315cc6f32eb58c2621626a
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 9900e060-a9bd-5087-b600-f2b3e49db538
+  source_path: analysis/sku_search.md
+  content_sha256: 21e5eb157564c5849d960dd5e966301c475d9f4ddd9ea623e50e0cd9393a5933
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 593d779c-0325-5e8f-9e8e-5644b7cb2f42
+  source_path: analysis/sku_search.md
+  content_sha256: 0b79f0495f79a0f5aa10aa69b63407f5861b1389e37d2153d9929c9f508efc91
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: b726cf80-f2b5-5cbd-9053-f3de7c884827
+  source_path: analysis/sku_search.md
+  content_sha256: 9bca54b6a659f3dfd938e35713b1f1e37b80fe1dcffa2f8801fdc1685853ecf8
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 5de08181-ad6f-5786-8441-1fcbc0790626
+  source_path: metrics/active_customer.md
+  content_sha256: c7fcb461751cfea9efc3002c10a675531427b8d9ea80ee92efd0139903265e07
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: f73f0244-4de7-5c48-b945-deca13264c2a
+  source_path: metrics/active_customer.md
+  content_sha256: 1f57bd658f2bd09b63475decf3aa46eaf0b4b860fb1d7b5bbfceb86e8f7e4a79
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 4c60fdb8-af44-5fc0-9ea7-f15850976a73
+  source_path: metrics/aov.md
+  content_sha256: ca0b0983cbab815b734a4774a5ed6451121edb77aad046cb9e1bbac62c02552e
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 816a75c5-fbf9-5912-8c00-9964c3524483
+  source_path: metrics/aov.md
+  content_sha256: f06bf226394e16bb6b69fa78f0746e5c02c514bbba62dbf3e7233c57c9aaf3fb
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 38d9248a-4c98-559f-af4a-d58eed4515a7
+  source_path: metrics/category_rollup.md
+  content_sha256: 0dfa284c085cb024e6d8a14b1a56a8fcee46db3ea99694d0a26a2e56cdb6ecef
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 630176cf-f026-50c5-bba8-f26aca80c3b9
+  source_path: metrics/category_rollup.md
+  content_sha256: 48443a560e6fcfee2c6305302114af81fc51b9b7df635037364e8ec2d8568031
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 71c370ad-3ade-5995-a1df-4fb7faa7576e
+  source_path: metrics/category_rollup.md
+  content_sha256: b1f683b440870d8a16cefda0317a8532fbb7118cea432e1f075d15c6f33196d0
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 34cb0f8a-b6be-5f4b-a399-0088d28dcf13
+  source_path: metrics/gmv.md
+  content_sha256: 941a63149e6739228c48deb200aaeb6653ba4a433f72a38a4d03813d0605f7d1
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: b220ba13-a902-5b33-abe2-9a946fcfbb51
+  source_path: metrics/gmv.md
+  content_sha256: 9f1569a27a08e80a2f0e517b0dce615fe0366c9315a06370c70c7ae02cdb6342
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: dc25a0b1-13ba-5c64-904b-4968f1864a3f
+  source_path: metrics/order_count.md
+  content_sha256: 401f099b374ae52a71ac59d5b1fc4189a104f73803c83f9730bcdf018f6b5da5
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 8066d223-f7fc-5223-a7be-6a8fd80b466c
+  source_path: metrics/order_count.md
+  content_sha256: e34a1085f3fe015b5f9db6f086c98a7f49de6c823e86c1c8ef13e2ccd3b6405d
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 98410f8d-bdc5-54f0-998e-1d709d41a8e1
+  source_path: metrics/refund_count.md
+  content_sha256: 520ee7773bdbb4d8fd240cb510e25f26ce6f91d9bd45b771af6d93842bdd0401
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: c6e1bacf-9fb6-56e2-b362-d310c2af7559
+  source_path: metrics/refund_count.md
+  content_sha256: b03bfba4b8f0b43d6ff6734345ecb57398780e544868fe1931b89acc6da4b280
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: c1a1c7e6-e509-564a-adde-3c0b4f50c6e0
+  source_path: metrics/refund_cross_month.md
+  content_sha256: acbdaee998130c7358c04aba83f781c337ab65d86c8289627bf78f70020efc4f
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: aead610b-1db0-5766-9c46-1c6bbec2045d
+  source_path: metrics/refund_cross_month.md
+  content_sha256: f2b0144567109406c2ce1359ee200efb3c0bde3f1c01d17d98dd2a7ba18f60ae
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: e0384707-f0fc-55aa-ab82-a89c04a03bb0
+  source_path: metrics/refund_cross_month.md
+  content_sha256: 31a9cb5c327aad5ce8ad8ee6eb6d80721613620a274129b3e67ea400dcbd980d
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 8f238993-cddc-5099-9ea1-d40f137bb845
+  source_path: metrics/refund_rate.md
+  content_sha256: 91245e278ce80158ad2b65f902c78ef928804df2cf148f7c6b0269babd2f8d03
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: d0f8c59f-62c6-52b1-ac91-cc6220554406
+  source_path: metrics/refund_rate.md
+  content_sha256: 5b3f3376954ab1f35238c1ca5543a38d16de99f5ed87f6878085bcea0d674ccb
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: dcafba5f-2d1b-584c-a515-a6d6bfec6a33
+  source_path: policy/after_sales.md
+  content_sha256: 2c72cc3443b22f495f9d8454e595bb906845149cac2d289934b82912eab3b417
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 908f0150-9353-5d4a-88b7-1cdd4dd6eba6
+  source_path: policy/after_sales.md
+  content_sha256: d3df31f437b7041b65c80ae8a3a46855f82c2357fb13541a1729f77bca2b56ce
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 72510fa7-5e66-5d78-87a1-10d0a8a9e4d0
+  source_path: policy/after_sales.md
+  content_sha256: 8e83f92c2c4c89f0712e1adce2170532b58e90d4b00500d810e3327836be3a69
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 68640e93-c75f-5122-8928-e261100f649e
+  source_path: policy/coupons.md
+  content_sha256: 506040ebe936fa93e3a20a9459cb9479013a1172634e56a9c970ed806e819412
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 67ca9628-0f17-586a-8a1c-d45ae958f2d8
+  source_path: policy/coupons.md
+  content_sha256: fa769e6ae1d8be2026e6b8be1cc6216341adfa6e97a1721b83d7ea0d1955e455
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: cf8fc325-35b5-5451-9afb-0847b49c7130
+  source_path: policy/coupons.md
+  content_sha256: d0a61e60bd50fb51e2c1d7cad8d60f5d5a4c57a173e44732ba92324110098e34
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: a2bc80e6-1780-5c75-8b14-89bf48d3f94a
+  source_path: policy/inventory_reservation.pdf
+  content_sha256: 5a00d7e3e9a81e16824ab422a1a86ed87ea0f27e609e8b1e0d2ee6255ac02ede
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 602fde9a-2ec2-5ada-a633-86c090add216
+  source_path: policy/membership.md
+  content_sha256: 2fef2e6fa15aec8c36d09cdcc5e600532d485b27d385494dff26501f27553a22
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 1828dbf5-2b57-52ec-9d33-cf093cdc938b
+  source_path: policy/membership.md
+  content_sha256: d7283e706685a846ebed1f6f99612d2a6d0a5ad73df812278cf222964016c61e
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 2fbed09d-abc7-5571-9c84-ecb8c0ebc6c9
+  source_path: policy/membership.md
+  content_sha256: 6584449f1551733432ec9264b6054d129b1e098c76a42324ad60e00b90790270
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 990df62f-6387-5f27-96ea-0966e2b429c3
+  source_path: policy/membership.md
+  content_sha256: 6b174d1d21a56656ac08b1ad6de631b802b2d0d282b57d7f4e150bb7eb2e2f09
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 8a74b083-4bab-5d90-8549-c146c1b66bb1
+  source_path: policy/privacy.md
+  content_sha256: e238381f6680a7bf75b780664308d54431292492869792c8cf160fadf0a04899
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: b3838da1-148b-5434-95ad-b20e48cb49f6
+  source_path: policy/privacy.md
+  content_sha256: e8cfe8732ea83288b2186890762129ae9628a4aa565c24b70b24b330b385421c
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 92122458-dbaf-5734-8e78-5300f835a881
+  source_path: policy/privacy.md
+  content_sha256: 2adce03eed1e5c59496dd11e3d80ba05911f740e38ab3a629e857a1ad213d9c6
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 80edb922-9700-581d-8c9f-53f7aebe38e5
+  source_path: policy/returns.md
+  content_sha256: 93664de308b725d844e8bfee84023e1aecea795aeae74bd653c07fbb815fafe1
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 1b8b35cb-2376-5a1b-834b-18be0063ddca
+  source_path: policy/returns.md
+  content_sha256: 5da9dfcbbc896db88ec3596bc765d7276a20ad77d3359d3519b5b25fdad45ef5
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: f67886e0-fc8e-5a14-9d3f-d38536067ebb
+  source_path: policy/returns.md
+  content_sha256: 33fa7909b5ac2bbdd69176cc37a3a504a2352e615ca94760515e3cfdcb12f582
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 460a41de-b4cd-5ad1-b5a6-2034982f5784
+  source_path: policy/service_responsibilities.xlsx
+  content_sha256: a7019f2cd6da0110261382ce2d5979877805e7d032ab1e2687a739a22ae9c3d4
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 06f5417a-ecfc-5390-ba68-e4f0dac2cd0e
+  source_path: policy/service_responsibilities.xlsx
+  content_sha256: d16ca809c54511ed27fdf11da4e06b3c76cf1912e34d9158a544c253ea5e70bb
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: a27eeed8-3092-51e0-9e79-4478a9962c42
+  source_path: policy/shipping.md
+  content_sha256: 912f6d2192184d20da6049a67540aa6e7219a11f805800bde5fd55fd5857abe5
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 033bcf1a-af44-5521-aa39-7e7f52ee0eab
+  source_path: policy/shipping.md
+  content_sha256: 35aac444d2e93fb1d6c8608f239e05541d937b359ed68d3c18dc0d55af0c4e5b
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 94a7951a-4f86-55f7-a8c2-834154535bc2
+  source_path: policy/shipping.md
+  content_sha256: b4827102d1cc27006009ae38d3434eb630dbc4e6d3a77018cb8d2bb22618b895
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: d353bb30-1cf2-5302-b175-f503a68a9da8
+  source_path: policy/warranty.pdf
+  content_sha256: 6ef5bca7a6dae3b64592b1f1557a31e9c570f83e49a3f24de608b13f59c7116b
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: a82a3c98-8e90-59ae-aa8a-3119cf5d0523
+  source_path: promo/autumn_preview.md
+  content_sha256: 1073496be26dd563c6c93a2f2701517937a47e6c451fc1a213d28b51fd750529
+  effective_from: '2026-08-15'
+  effective_to: '2026-08-29'
+- chunk_id: 6da41e4c-cd40-5551-938b-be2f98fdc443
+  source_path: promo/autumn_preview.md
+  content_sha256: 800c726785eaba9e72174e419bbbc229fa019562f530c6e93a8c927ac54f00ad
+  effective_from: '2026-08-15'
+  effective_to: '2026-08-29'
+- chunk_id: a8317426-8950-5b00-8615-f3947003a579
+  source_path: promo/autumn_preview.md
+  content_sha256: b069fe14272b2bffc808929d7c34326fe80a721d0a44e6662d4840f9cbbe1f8b
+  effective_from: '2026-08-15'
+  effective_to: '2026-08-29'
+- chunk_id: 7fe2c8c4-a9dd-5644-b127-db6c400fab83
+  source_path: promo/beauty_bundle.md
+  content_sha256: 3ba6ceb04f89ad8274f47ac08fcd9b3c3a28e6809ea0d4c4befd08e68fb16dd6
+  effective_from: '2026-04-01'
+  effective_to: '2026-04-12'
+- chunk_id: cf8d0b98-ef6c-5f5c-b6da-0a8578768701
+  source_path: promo/beauty_bundle.md
+  content_sha256: e61bd08007de56993e929448df9c3038c8941c3fb0475f5836137ba673de107d
+  effective_from: '2026-04-01'
+  effective_to: '2026-04-12'
+- chunk_id: 0f0f63e3-b269-5afa-a2c7-326cc68af08c
+  source_path: promo/beauty_bundle.md
+  content_sha256: 4a791e395ccb5dc049401737160021a13f68bb9ab1b063da3c7daba2f5ed34b2
+  effective_from: '2026-04-01'
+  effective_to: '2026-04-12'
+- chunk_id: d7492e4f-7b84-55cd-a222-569210cf6ed5
+  source_path: promo/campaign_fee_schedule.xlsx
+  content_sha256: 0b4889e0732fdb14359822d3e34e7b08cda1d07e5e70b947ca61470def17908b
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 77343289-db35-5ad3-a3dd-457135fc4a4d
+  source_path: promo/campaign_fee_schedule.xlsx
+  content_sha256: 2ef46c13e19924abe45aa3effa7f3cf3f0b7c39e3a54ce02d6f72535c8936855
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: f17c19f5-1691-59a8-b3d9-51ef0e497a96
+  source_path: promo/clearance.md
+  content_sha256: 6270f394e22490ddca8fc294d4d1e68c40e257fee0c0b447507eb694764f7ecf
+  effective_from: '2026-07-15'
+  effective_to: '2026-07-26'
+- chunk_id: 8ad5eeae-4bfa-57da-b46a-eb63b6e01827
+  source_path: promo/clearance.md
+  content_sha256: d6bd9edefd8187b63941c8bbc7eaa542ae3f93273ad906c1c60c9ae1c5211e3b
+  effective_from: '2026-07-15'
+  effective_to: '2026-07-26'
+- chunk_id: db72ef16-aa31-50ac-b316-66acf1d77181
+  source_path: promo/clearance.md
+  content_sha256: 0ad3fb0d916342b691f9c6dfbb53408c3c0e53fd237a87672987362210207fa2
+  effective_from: '2026-07-15'
+  effective_to: '2026-07-26'
+- chunk_id: 62ce6ca3-4fbb-5fdf-97ec-98bd112e0554
+  source_path: promo/electronics_accessory.md
+  content_sha256: 97275e29ac1c5a7a8f6cdf56da8fef273aeb91e4d0adb3280c82c9a563a11346
+  effective_from: '2026-05-15'
+  effective_to: '2026-05-25'
+- chunk_id: 17d10f11-7ec8-5d87-b871-8bade1500a3f
+  source_path: promo/electronics_accessory.md
+  content_sha256: c454099997a3dcdcd7e2188a507bef3eea62407f6fee55dd657c41e6f1c97c82
+  effective_from: '2026-05-15'
+  effective_to: '2026-05-25'
+- chunk_id: fe60766c-38a3-54d9-981e-b71ea60258a0
+  source_path: promo/electronics_accessory.md
+  content_sha256: f536d67ece78adda13bf6c3c3931dc3ce5867b2522de426be6d0b1cb40d9499e
+  effective_from: '2026-05-15'
+  effective_to: '2026-05-25'
+- chunk_id: 2e0e97d5-1695-50cd-8b6d-7a692cdb8e9d
+  source_path: promo/food_fresh.md
+  content_sha256: 03004942b86edc3287d5a487bcbeb07898b3dd03ac6c1c797b35292869c1ecdb
+  effective_from: '2026-06-01'
+  effective_to: '2026-06-08'
+- chunk_id: 9d357fe1-ee94-5d12-9f17-1ce7fb495520
+  source_path: promo/food_fresh.md
+  content_sha256: 57bae146f43b78f1aba086d3b66e8bfb225700c8f217a099c3312239cef0843f
+  effective_from: '2026-06-01'
+  effective_to: '2026-06-08'
+- chunk_id: 122fa484-a13c-58ea-8dc8-1f1b464c267d
+  source_path: promo/food_fresh.md
+  content_sha256: 181fa52cda5d8cb24522273d385765892791dfe0912df93678586985b2093a60
+  effective_from: '2026-06-01'
+  effective_to: '2026-06-08'
+- chunk_id: 079bd0ec-b96b-5324-b98b-2320cafd965d
+  source_path: promo/gift_threshold.md
+  content_sha256: c16a8c21482dd18567c88b9de939b518a748cdceda54713c2095e2c8ad3c11b3
+  effective_from: '2026-07-28'
+  effective_to: '2026-08-08'
+- chunk_id: 2a82dfd2-c240-5530-92f4-3d4a7c11fdf1
+  source_path: promo/gift_threshold.md
+  content_sha256: a5243566653ccf3bc49ca9b2905cfd8006017e38611054fdfb42990441e0ba1d
+  effective_from: '2026-07-28'
+  effective_to: '2026-08-08'
+- chunk_id: 3c0914c0-df43-5c2f-9561-c3f3be98abc4
+  source_path: promo/gift_threshold.md
+  content_sha256: ada76128cc639441132ce7ccccd0c60997e90fdcc364dc189c308b475bfe6f56
+  effective_from: '2026-07-28'
+  effective_to: '2026-08-08'
+- chunk_id: 36903f7a-2501-5bb8-9090-b6bf4a7cc18d
+  source_path: promo/home_refresh.md
+  content_sha256: 34cd8d962b2429e3959a88dfc4162c70708d67dbd4b43c46b85bc81c6d717cd6
+  effective_from: '2026-05-01'
+  effective_to: '2026-05-11'
+- chunk_id: 3ec0f7a5-a182-5bef-a559-94460fdb665f
+  source_path: promo/home_refresh.md
+  content_sha256: 5a3027d0a5849346178f5f05ebbc175f105af5f22dc556c3af5a16e1b8620109
+  effective_from: '2026-05-01'
+  effective_to: '2026-05-11'
+- chunk_id: 06e32972-d671-5198-80f8-cccdd370fcbe
+  source_path: promo/home_refresh.md
+  content_sha256: 990ee5756884dc55122db23f74147e0213546d65c87655fb3e8c4efc89d38559
+  effective_from: '2026-05-01'
+  effective_to: '2026-05-11'
+- chunk_id: 646d33af-798d-53fc-b68a-77257525b247
+  source_path: promo/member_day.md
+  content_sha256: b91fc5184466a8d0e5390d84cb8ea3b630ad5716bf197163315ca9508e5c4419
+  effective_from: '2026-07-01'
+  effective_to: '2026-07-04'
+- chunk_id: 134c0fe3-09bb-5241-9b8f-51ab792d8865
+  source_path: promo/member_day.md
+  content_sha256: 69850edaeec2d3cd35981c335dea61331b38d79f33db132a469357dd61f8ef4e
+  effective_from: '2026-07-01'
+  effective_to: '2026-07-04'
+- chunk_id: 7ef07e26-b9f1-56cc-a646-675527431a45
+  source_path: promo/member_day.md
+  content_sha256: 6dc57ef115103945b473f3578a8dec7e44aba4c94eed067c5fd378c603aeb0bd
+  effective_from: '2026-07-01'
+  effective_to: '2026-07-04'
+- chunk_id: 0bef72d4-1732-553e-a7fd-5181e0b50105
+  source_path: promo/midyear_shipping.md
+  content_sha256: 012c090da0a7e7c5f282cf0f11c4f5b26d8f1b05d138a5a2a7c324d17d27a5ce
+  effective_from: '2026-06-10'
+  effective_to: '2026-06-21'
+- chunk_id: ef613b7e-8d03-5cf8-8961-fdf44efe7811
+  source_path: promo/midyear_shipping.md
+  content_sha256: 5daba60a57d750279eb2754bfa6e952695bea2a7462e63f76f06df66482d78ca
+  effective_from: '2026-06-10'
+  effective_to: '2026-06-21'
+- chunk_id: 9697d1bb-32d0-5a86-9e8f-c1dabb664988
+  source_path: promo/midyear_shipping.md
+  content_sha256: 1d096e19240163a78ad526a322ab0742136cde04436cb121ff685c9a19bcf958
+  effective_from: '2026-06-10'
+  effective_to: '2026-06-21'
+- chunk_id: 4fd963d6-62a2-5d24-97c7-27105431b766
+  source_path: promo/new_customer.md
+  content_sha256: 5b19373ec4ebfbb608919339d5e7d8e656df4c9827278fed7fe9b57fa2c66acd
+  effective_from: '2026-02-01'
+  effective_to: '2026-02-11'
+- chunk_id: 2a51b4bb-9c43-5839-b29a-09d8ebd51230
+  source_path: promo/new_customer.md
+  content_sha256: baab73cdd36e3fd93821feaca38c37eb5c1304304937c34bbf8cbfc38d746c9f
+  effective_from: '2026-02-01'
+  effective_to: '2026-02-11'
+- chunk_id: 6e158b7b-1d8e-5226-9ee1-835eb87189bf
+  source_path: promo/new_customer.md
+  content_sha256: 1508a7091f838e2c6f7256ccde3539f7c37b775716d27484c137a9b76b9252de
+  effective_from: '2026-02-01'
+  effective_to: '2026-02-11'
+- chunk_id: c8cfac4c-7b17-5602-81cf-67765847d61e
+  source_path: promo/regional_coupon.md
+  content_sha256: 1a02bbdcfe62e0d95535bc3274b0eed17f951eaed4c65604df220b63df027a38
+  effective_from: '2026-04-15'
+  effective_to: '2026-04-25'
+- chunk_id: ad3d2552-0149-5be1-80f8-4a50c9f849db
+  source_path: promo/regional_coupon.md
+  content_sha256: 89625b4b0dee263fc5f1920cf907e76b777842342d3883fd682f683cc615156b
+  effective_from: '2026-04-15'
+  effective_to: '2026-04-25'
+- chunk_id: 4159962e-9314-5303-bb3e-89ba2e162deb
+  source_path: promo/regional_coupon.md
+  content_sha256: 632e14c75128113a046171f51c6fbf8204670ff4e0e61d575a66cab5cafc9606
+  effective_from: '2026-04-15'
+  effective_to: '2026-04-25'
+- chunk_id: e6167d5f-a540-5117-aa01-88c8a64f71f5
+  source_path: promo/school_home.md
+  content_sha256: 3d1f0396b8c98d2fb22f2d44239ca4ed91f38fe41cb30070a973c6066851fbb9
+  effective_from: '2026-08-01'
+  effective_to: '2026-08-12'
+- chunk_id: ec51ce31-2e86-54be-9afa-832f1c36f0f9
+  source_path: promo/school_home.md
+  content_sha256: 96637312ce161b511a038b557cebc07291db6984c316bf81ea15d38fd7e33b3b
+  effective_from: '2026-08-01'
+  effective_to: '2026-08-12'
+- chunk_id: a48aeffa-e507-52a0-ba70-3f48e4a88507
+  source_path: promo/school_home.md
+  content_sha256: 536540df122e10b9f4d9e20e273e9069e024a846db307b367e9cc3fac30d398c
+  effective_from: '2026-08-01'
+  effective_to: '2026-08-12'
+- chunk_id: e3d98b70-0e53-5ea3-8787-acb1de87b8d5
+  source_path: promo/spring_apparel.md
+  content_sha256: 0333f1662f5acb2206c4bd5f3918f636fdfef915818354d2e6991b4c42ab6003
+  effective_from: '2026-03-01'
+  effective_to: '2026-03-16'
+- chunk_id: 4e8493e3-3ed8-581b-bea3-5e97bc6755b5
+  source_path: promo/spring_apparel.md
+  content_sha256: a0333bb253f0caae884136171716c79aa46664245e1c97f763d6d61ddd27551b
+  effective_from: '2026-03-01'
+  effective_to: '2026-03-16'
+- chunk_id: 69c6fbf7-26fe-5cc0-ae82-37282029390b
+  source_path: promo/spring_apparel.md
+  content_sha256: 838cf4625cb663a1922a17a1fd95d45809eccd5e7f691975cfdb92c077046d01
+  effective_from: '2026-03-01'
+  effective_to: '2026-03-16'
+- chunk_id: 4924fc2b-df48-5b7a-8a5a-bfeacee43062
+  source_path: promo_2026_summer.md
+  content_sha256: 96618d2afc3ee5eaf3d9258aef0ff2625aff949bc9d1ba7b7d8f6f36cfddc1e5
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: 1f23e342-06d1-5579-8d91-7b869c3d9052
+  source_path: promo_2026_summer.md
+  content_sha256: a4568d7dc4dd7b06602c3c32fc5344979ab1644f24a171d22d5d8d1ae9891468
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: 7c38b637-475c-577c-adb0-cfdabb4fa33a
+  source_path: promo_2026_summer.md
+  content_sha256: bc2c1a9774ce1b9a740e70ce0c817360d9071deed1746ed20feeb9cafd44cdbc
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: bcd1b777-120d-51e6-8b0d-a5823fe49a85
+  source_path: promo_2026_summer.md
+  content_sha256: 0702d3e0530ebdc62c3863569def67fbc2362d7e71bc9c1aa59d3fbe7bb9bdde
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: 531901fc-dc37-50d4-8a5c-6d988cd8c2dd
+  source_path: promo_2026_summer.md
+  content_sha256: d7cad8a94a8bb5f38d0174180861ea03a51f2284499376d7c7ac378df8088562
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: 7b2f16e2-20be-5169-913f-a1955f3f60f6
+  source_path: promo_2026_summer.md
+  content_sha256: 6b7b08ba1c54e03920d3675bc1eb045f8907be81f89bcc4773f4e9dac3e6fdbb
+  effective_from: '2026-08-05'
+  effective_to: '2026-08-21'
+- chunk_id: 53b4f526-466a-5359-962c-d8b95906e5bd
+  source_path: refund_policy_v1.md
+  content_sha256: e0fec141acbc2b52e2919e89069b5ad5bd1c7200f3a80f7e9c4fe6f193f65418
+  effective_from: '2025-03-01'
+  effective_to: '2026-01-01'
+- chunk_id: 3572be7c-4f86-502d-915a-be30740c7425
+  source_path: refund_policy_v1.md
+  content_sha256: 5b7f7cf3b369a472645492b36e7c8d40346dffbd56b5498213322329ba41d26b
+  effective_from: '2025-03-01'
+  effective_to: '2026-01-01'
+- chunk_id: 2aa33f58-5abe-5630-99c9-9b1f2fdc530d
+  source_path: refund_policy_v1.md
+  content_sha256: 0b3ab683832462ab147196c4996c87e19329c87b0ff3045a6643176a22bea1c5
+  effective_from: '2025-03-01'
+  effective_to: '2026-01-01'
+- chunk_id: 42d79589-e81e-5439-bd5a-abcb5216e76e
+  source_path: refund_policy_v1.md
+  content_sha256: 431445356a1e0f7b554e9ce38bba01308805dd687e371b6acd98e868d958bde8
+  effective_from: '2025-03-01'
+  effective_to: '2026-01-01'
+- chunk_id: c77f205a-2a32-5089-b792-ece1275db209
+  source_path: refund_policy_v2.md
+  content_sha256: 336b922f0b799917ab202ea0c26d0868cd566974f7b59996ca7857cddcad559e
+  effective_from: '2026-01-01'
+  effective_to: '2026-08-01'
+- chunk_id: 5130d8f0-b656-5e09-a665-550101f25888
+  source_path: refund_policy_v2.md
+  content_sha256: 2d27934a9dbbe8922cd335797570d93d481d13e5fac24458427fd0788179fda4
+  effective_from: '2026-01-01'
+  effective_to: '2026-08-01'
+- chunk_id: 680864a6-9aae-5b2d-a816-b11e63958c3c
+  source_path: refund_policy_v2.md
+  content_sha256: 719d09a1ffbd93cd91dc9a17de90a6b1c196e39e33036fdf0eecca379199b74b
+  effective_from: '2026-01-01'
+  effective_to: '2026-08-01'
+- chunk_id: a48d2ef3-9aab-5a03-a6a5-875ba307fa18
+  source_path: refund_policy_v2.md
+  content_sha256: b48db87424ee087608d120336a7bff6aff109cf49914da9dfb32fa7c585a5b88
+  effective_from: '2026-01-01'
+  effective_to: '2026-08-01'
+- chunk_id: 8b969002-830a-575d-8708-04c47e473753
+  source_path: refund_policy_v2.md
+  content_sha256: c4c4c876b3ca3b9dd1c17367ea3d830294ff763d8c90875a89d3f173ceb9566c
+  effective_from: '2026-01-01'
+  effective_to: '2026-08-01'
+- chunk_id: 983e5e64-131d-514b-93d3-12cf0caacc83
+  source_path: refund_policy_v3.md
+  content_sha256: c34206e9273ce53e76d28cc27d1ec34279472725b3207666872ee6c1deb6a3d6
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 1fe06770-98d3-5a61-8e01-a136d217ec18
+  source_path: refund_policy_v3.md
+  content_sha256: f39737eff2af3ed0c6a29587157f7bf4559f8e601e49cd7e0bad0b40fb2a6ba2
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: cc072680-18d2-53f3-a30a-b2b81d0c8fd4
+  source_path: refund_policy_v3.md
+  content_sha256: 33171ba0447094157d0b353446d2465486581e4589ac80867663f3db751d8e44
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 4311863e-5079-523f-8425-264186182276
+  source_path: refund_policy_v3.md
+  content_sha256: fc4f42245a27d46b5679c406a4fdaea9c75df1c7b31ef9921a0696ee24c42ef4
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 7b4fd28e-7d9f-544b-957b-6ba2fa5c8061
+  source_path: refund_policy_v3.md
+  content_sha256: a2f1ea48f56cf2bd68e9e476c8b153177bc1515ab0df1ecbdc549a7c6addfe2a
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: a5a59634-d5e7-5918-bc97-44420c0b75de
+  source_path: refund_policy_v3.md
+  content_sha256: 07ac5633c868fbfecf30e3a7aec401601163dce6d3473f330b59ba7680f53002
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: b3243ccd-2944-59a3-a12e-0265eb783b49
+  source_path: refund_policy_v3.md
+  content_sha256: dffc419871ac7b3d52fac6e36223ee9c720457923b5cdeb70763a17d5eac3c80
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 3e4d86ac-e792-578a-8bca-cda50441e92c
+  source_path: refund_policy_v3.md
+  content_sha256: 0e4d80ec604e88927bd718d4b0074f45d1c8008fa38b0b50411c10d03c63cc00
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 4957c291-463e-547e-93ce-30c7b0a3b20d
+  source_path: refund_policy_v3.md
+  content_sha256: f7354d2ee39cfea7e2bfa73e66a02303d0fdec6057c6b3ead31e2b91c6f2a886
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 69c31545-238f-5065-9676-48d794263107
+  source_path: refund_policy_v3.md
+  content_sha256: a7f90f3731241f475768c87a504c9056f1c1f4c7a35116e5735b90097418b89c
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 6283fcd8-9cd8-595e-a9d1-e85ed64fa91e
+  source_path: refund_policy_v3.md
+  content_sha256: 2515ef781047898ca099872eadeb4b690efa6cae5d11f34c710ba6e84c6e1ebb
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 2d29661c-e92d-54be-ac6b-5d304eb4390b
+  source_path: refund_policy_v3.md
+  content_sha256: ccd830fa0acec875ddb1f7c31837dbb70f88d5178ec716be36f046283cb07a6a
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: dcb3be10-bd4a-55de-b928-071ad8008754
+  source_path: refund_policy_v3.md
+  content_sha256: fd07979b51412a7933a07b18d66d5a3193066fa30d77f08bc635fa9474ccd865
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 32ae46cf-afbd-52bc-8088-07baacb1d6db
+  source_path: refund_policy_v3.md
+  content_sha256: 96ebf2dd25e2514801f66ac865b742ac9debc4e59115900c40be40d1e6e7d964
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 9976206f-45d8-583c-bd13-f6ab420ab9a3
+  source_path: refund_policy_v3.md
+  content_sha256: 7ac7d21a4e578be9d5dca76b4ebdf915f1ca37bed02d5e438a83798ad447d209
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 8eebf629-088f-57d5-b4df-2d18dc67f12f
+  source_path: refund_policy_v3.md
+  content_sha256: 06149c980a51e582672ca312aa529cac0b6d7b83fa745d5b908ab844f8cd2fa1
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 59c03f78-9f84-5192-9694-b77846822ac9
+  source_path: refund_policy_v3.md
+  content_sha256: d9146f7b77b2e011ae1db023f1850c0a5402aeb3ab6d7bd4a7d0df6eccb3cf2d
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 28a1db8f-76e7-5ede-a8da-ca20a4a2e646
+  source_path: refund_policy_v3.md
+  content_sha256: 20c42a35c9d7196764f83280b5c512bfc37367d9683d57b9998b46ad9f2a96d7
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 0998bec3-3e37-5d48-b161-8910689f242d
+  source_path: refund_policy_v3.md
+  content_sha256: 310f2cc99212a55ca51a1eb256752c4d33fe0b4676155c08e05b967f65be128c
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 659af726-f339-537e-974f-b5886555e502
+  source_path: refund_policy_v3.md
+  content_sha256: 84fa6edb9e15e6e9b905aa909509be06679c5cae8c7fb1bf07c05dc001dec0e9
+  effective_from: '2026-08-01'
+  effective_to: null
+- chunk_id: 4b2ecf90-22c5-551f-9644-b2bd46f51c4a
+  source_path: regions/central.md
+  content_sha256: a416ed038396e246075d7d8747fd89516edd2656f2dca1623451667aa97a2205
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: ec033757-46e2-54ac-8d51-1f3fb057e4d5
+  source_path: regions/central.md
+  content_sha256: ab310d5fe8987e9faafbbb541a7535e83cf47b08ed006bd54aaae9c52a289daf
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 9812de20-d487-5e22-bfc0-2161f17e521d
+  source_path: regions/central.md
+  content_sha256: 37ceb91edb0a35dee31de06579bc0759949b068deadf4528d0c65923d9df1472
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 29b663b0-0db3-5e0e-a0a5-fe19f37a4fee
+  source_path: regions/east_rename.md
+  content_sha256: ac36c886982a6349c6e798dea1a962c4439e48207eab3e333fd455179495b552
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: e73ec0a8-b30e-539a-930a-ac6c7e629fa0
+  source_path: regions/east_rename.md
+  content_sha256: 8a6a974c975689b24c6df2a6720216cc62d8f9c019fd3da6c12e1d312f35dae1
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 99e93c35-3dd3-5032-aeca-a1efe2bccf5b
+  source_path: regions/east_rename.md
+  content_sha256: dc3e707c93107b10d211e8d662d4cfaa1df9330392a4ed2d209c9848f79673bd
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 7a02fa70-199b-5cc0-b0b6-8dff3860d821
+  source_path: regions/north.md
+  content_sha256: 04f5545586ccb4d7fbb07ddb2e068c72dfa6dcde601e5f61fea53e6463a630f2
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: f1de289d-0795-5928-8255-9414803264e7
+  source_path: regions/north.md
+  content_sha256: 5ea7ec8735700683949aabf8b9f0664fe0bf74edaeb52ffe7bd0002e5109a29d
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 78f9faa6-e4a2-5bef-a6d9-6b8bdf0e8ecf
+  source_path: regions/north.md
+  content_sha256: 396fb75fe0ceb97fb0487725d8cdf41d11b4ce01b1dd1075e10c9893a86d2dea
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: ea7d05e2-fc74-505e-91f6-15d373a321f1
+  source_path: regions/routing_schedule.xlsx
+  content_sha256: 909028395c1d4a41c14ab8c93ee8c2bb40aa1aca3623070e87a4ec9fe3e756a0
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 0297e078-0905-56a9-af1c-b4fa7c86b607
+  source_path: regions/routing_schedule.xlsx
+  content_sha256: 3b4f8ef5bfd0c78fe3d33d667ff06c585e2e425207c9a62d311cee829e1d6569
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 6452a352-f81d-5b04-9ad3-16851302f319
+  source_path: regions/south.md
+  content_sha256: 06deca6fc3384c72ba7a92a899910b6519bc13c201b8645476b169b5e25f4a24
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 6cf345ad-43fd-502a-bc14-08200a487628
+  source_path: regions/south.md
+  content_sha256: 10bd913b41810f9e0c16e48a6e2c7bdb1f0e9e50bff1c2054f2ee9b83024519c
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 35a53930-cad8-5eb5-9606-8b9985aa2b8d
+  source_path: regions/south.md
+  content_sha256: e5eb94eba81276ee201b87e7b2a4225edaf0bbd9da986830001d02b0b68e7845
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 52246c4f-6c79-5906-93fd-fdcc8efad96d
+  source_path: regions/west.md
+  content_sha256: 16968ba4c6c8a11d4f1f1656b7ec3b17dfccbeb8ca92953ceeae5a98ab485966
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 6ee4af65-eed6-5192-b037-91ebe7b8d0f1
+  source_path: regions/west.md
+  content_sha256: 8baa40ac660c50ddd0afd655f1402dc73de99ffdfa26e51468795a597901ba70
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 4161ce90-62ce-5216-aad9-a44453f23c3c
+  source_path: regions/west.md
+  content_sha256: 97abefa215e081b17732a5c1c407436340be4635800d670c4ec8f4eca6778f54
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 7fc70cd0-2afd-56c0-a17c-d60e5f2faaf9
+  source_path: sop/analysis_review.md
+  content_sha256: 47ceb891fec641277996857f9738bf94135fee33567573f13e6e81c4e33ce07a
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 46996200-3518-59f8-9f01-e936bfc408f8
+  source_path: sop/analysis_review.md
+  content_sha256: 23959440134eb91eb7568aa341ee297908b67b86c64bfac941872bb87e64ad30
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 44c5c199-ee2f-5b74-9ae0-4e1cd375568f
+  source_path: sop/analysis_review.md
+  content_sha256: 921e32dc930675d15b42cb6039727f2bf7a57c7f8c2415186449aa539f01ab92
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: ebf57b44-7990-5a8b-afc5-b336e1a884bd
+  source_path: sop/campaign_launch.md
+  content_sha256: 4b01c7e36031c37a0fbde173bc7e4153eb34953478bfd68f0b24f2dea50cdccc
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: ea04ac6b-f09e-5346-9466-f6b6631842b7
+  source_path: sop/campaign_launch.md
+  content_sha256: b74207001b5b65eec53c3c77960ea8c327b07d94dc4c24a103e16fd7fb1df4bb
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 7afb018f-fcbb-56fc-b1a2-e71fd1bc53b7
+  source_path: sop/campaign_launch.md
+  content_sha256: b3b7292c9fb0aadaa4b7392894e85ab6f0fead67b5bb7c3f6b827100895b84ef
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 00e343be-e1ec-52cc-9b6c-f2c746fc2871
+  source_path: sop/category_codes.xlsx
+  content_sha256: bcdabcfa1e65dbf3bf4cb93c64cb660df2d9de2f8cc2bf8f641940ef3dc3575f
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: d5a612ae-3fc3-514a-924a-67484a7cb260
+  source_path: sop/category_codes.xlsx
+  content_sha256: e23380065ae5c22a5b8728986aeca93314b10debd3dfa8bcd9c4f7410bbb2b8b
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: a13b224d-7796-550a-bf87-2188115239ca
+  source_path: sop/complaint_escalation.md
+  content_sha256: de74b8e3348bbf7d3d7ac384bf533288c49ace634f16572d98bd616e1c966bcf
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 8b4c4647-1b3b-5991-b8a9-a3657498b949
+  source_path: sop/complaint_escalation.md
+  content_sha256: 5f92122ca30caeb474ccbb6fe353ce58f26df816cc69d7378b2c30e54e35290a
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 6f87560b-4033-5e56-b027-1bac0d69edc8
+  source_path: sop/complaint_escalation.md
+  content_sha256: 53b3040c337a48a1c8e67f83ab131683951197d416f9f256372d94ac603636e6
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 147f5f56-0c4f-5832-bf45-9d6eaae1010a
+  source_path: sop/handover.md
+  content_sha256: 84dfaa6638ead66cf8d1b2a51e95cd7261174a5f1d320a88925d7ce597f80819
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: bb8b6981-0b61-5e1f-a388-a92cdcab033f
+  source_path: sop/handover.md
+  content_sha256: 06e305c1774934402d825ec77fe49f734c5cb22d5c82385ad73d102ff50a8d73
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 1c994741-85be-5d5b-a1c5-0eb17e620d8f
+  source_path: sop/handover.md
+  content_sha256: a701236bcff8533ae1a1aacd740dfd927c72680c623eacaeeea85e0a26a540b2
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 43ff5046-19c1-5531-9c5d-1e32e3a6700b
+  source_path: sop/payment_reconcile.md
+  content_sha256: 5b23e2885cf9b085ed2ebafe73e7987f323474fbe09515d49fa2ebd233d68637
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 6c8f0943-3533-597d-a9b9-414fdafb59e2
+  source_path: sop/payment_reconcile.md
+  content_sha256: 9a13d0fcc89c0f8d0cb1485532f0152ba3a3d99f7742b8bc667eeaee7180d3eb
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: d50dedff-fa53-53e5-a1db-e5bb82bf7ebb
+  source_path: sop/payment_reconcile.md
+  content_sha256: f573c758bdf02a06196e2b4774cd798b7a63513e2babc9011c0fbfd30cc12104
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 9ea7aabe-ffbb-5c3f-9196-8a628b4f6c00
+  source_path: sop/refund_intake.md
+  content_sha256: 78e4ea16ff946c5019b0703410bfc2df4d1a21591ba2561bbab6a24a69466b39
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 4c701540-da25-5969-a193-e36119e8f35b
+  source_path: sop/refund_intake.md
+  content_sha256: 1883efd7b73554c2e8760164aad6dfe42fc093c536e409846e656b903dbe3d5b
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: ae250023-60cc-5600-80a9-b35c3f24573a
+  source_path: sop/refund_intake.md
+  content_sha256: de8f55ff3228c295a18ec467d206f364fc48ff4c68dbb309b73f5086ac8433af
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 7070b478-dfa0-557d-a465-135d36e519ba
+  source_path: sop/replenishment.md
+  content_sha256: 0852b0fec60828925956951b4ed50ac52243a1a7bc9380e0a426cedb7300e0db
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: a693fb52-8f3e-53fd-93a9-87962658c453
+  source_path: sop/replenishment.md
+  content_sha256: ceb41ff4fb23aebb8b345a7fc6fd9d4976244bdc114674a4175c60c4c6d9f1f4
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 050c0083-5d11-5fe9-8fca-8d9919eb18e7
+  source_path: sop/replenishment.md
+  content_sha256: e217c24d1e5905d8f2df5f2393b24e8fc92d83ae7acbe0268b9841f4fbef1ef2
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 2448ad11-cacc-5105-abbf-27938c6cf087
+  source_path: sop/sku_lookup.md
+  content_sha256: b9574a234e4f9a27c430d476a4324688fa1c76caebc6b45dde350150fd31c34a
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 81813f6f-a929-52be-b48c-a0a5bbf1c0d8
+  source_path: sop/sku_lookup.md
+  content_sha256: 73b5de515e2c9e580397c58f2827a8e558987d97ac40682b31576c4c61d109bf
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: d40b6f44-1e55-54aa-8fe3-7cf41f8f0381
+  source_path: sop/sku_lookup.md
+  content_sha256: 6f45cdd03796e13ff8c2d1fb8470f3d3cfb11424a83a788f2aaf619b6af30a91
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: 4d1f29a2-a48d-586a-8067-334f78ae9a76
+  source_path: sop/warehouse_return.md
+  content_sha256: 8063b44d4fc8456b50dd2ca091e58dfaf268feacace729d6543df1ccae9bde36
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: c67d86ff-528a-5379-a8fe-8e95a0d3b762
+  source_path: sop/warehouse_return.md
+  content_sha256: d29b067d79875d035757b18259599ab0d4f39afef7443b163c4fdac35c8bc8cf
+  effective_from: '2025-03-01'
+  effective_to: null
+- chunk_id: f0cba707-b351-5237-ad9f-e0622804198e
+  source_path: sop/warehouse_return.md
+  content_sha256: b0e897108cfc7c8ddd58a0351ddc5be273c7eb536c0056c1fdffe22218bc1725
+  effective_from: '2025-03-01'
+  effective_to: null
+review_policy: agent_authorized_by_user

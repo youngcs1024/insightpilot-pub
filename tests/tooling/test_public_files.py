@@ -27,6 +27,11 @@ from scripts.public_files import PublicIssue, allowed_path, content_issues
         "data/corpus/policy/warranty.pdf.meta.yaml",
         "data/corpus/sop/category_codes.xlsx",
         "data/corpus/sop/category_codes.xlsx.meta.yaml",
+        "evals/datasets/retrieval/queries.yaml",
+        "evals/datasets/retrieval/judgments.yaml",
+        "evals/datasets/retrieval/development.yaml",
+        "evals/datasets/retrieval/frozen.yaml",
+        "evals/datasets/retrieval/selected.yaml",
     ],
 )
 def test_required_source_resources_are_allowed(path: str) -> None:

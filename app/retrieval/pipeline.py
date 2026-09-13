@@ -26,10 +26,12 @@ from app.schemas.model_runtime import EmbedMode
 from app.schemas.retrieval import (
     Candidate,
     EncodedQuery,
+    ObservedRetrieval,
     RetrievalQuery,
     RetrievalResult,
     RetrievalStage,
     RetrievalTimings,
+    RetrievalTrace,
 )
 
 logger = structlog.get_logger(__name__)
@@ -82,12 +84,29 @@ class RetrievalPipeline:
         except TimeoutError as exc:
             raise RetrievalUnavailableError(operation="retrieval_deadline") from exc
 
-    async def _retrieve(self, query: RetrievalQuery, deadline: Deadline) -> RetrievalResult:
+    async def retrieve_observed(
+        self, query: RetrievalQuery, *, deadline: Deadline
+    ) -> ObservedRetrieval:
+        """Measure the same bounded production path without a second search or model call."""
+        trace = RetrievalTrace()
+        deadline.check("retrieval")
+        try:
+            async with asyncio.timeout(deadline.remaining()):
+                result = await self._retrieve(query, deadline, trace)
+        except TimeoutError as exc:
+            raise RetrievalUnavailableError(operation="retrieval_deadline") from exc
+        return ObservedRetrieval(result=result, trace=trace)
+
+    async def _retrieve(
+        self, query: RetrievalQuery, deadline: Deadline, trace: RetrievalTrace | None = None
+    ) -> RetrievalResult:
         started = time.monotonic()
         timings = RetrievalTimings()
         with observe("retrieval_encode", TraceMetadata()):
             encoded = await self._encode(query, deadline)
         timings.encode_ms = elapsed(started)
+        if trace is not None:
+            trace.encoded = encoded.model_copy(deep=True)
         stage = time.monotonic()
         pool = await self.store.hybrid_search(
             encoded,
@@ -112,7 +131,8 @@ class RetrievalPipeline:
             ),
         ]
         ranked = await rerank_candidates(
-            query.standalone, result.candidates, self.model, self.settings.search, deadline=deadline
+            query.standalone, result.candidates, self.model, self.settings.search,
+            deadline=deadline, trace=trace,
         )
         result.candidates = ranked.candidates
         result.reranked = ranked.reranked

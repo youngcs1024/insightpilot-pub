@@ -217,3 +217,22 @@ async def test_missing_registered_source_fails_closed(
     monkeypatch.setattr(ChunkRepository, "provenance", AsyncMock(return_value=[]))
     with pytest.raises(IngestionRegistryError):
         await pipeline.retrieve(query(), deadline=deadline())
+
+
+async def test_observed_path_captures_without_repeating_io(pipeline: RetrievalPipeline) -> None:
+    result = await pipeline.retrieve_observed(query(), deadline=deadline())
+    pipeline.model.embed.assert_awaited_once()
+    pipeline.store.hybrid_search.assert_awaited_once()
+    assert result.trace.encoded.metadata == result.result.model_metadata
+    assert result.trace.admitted == result.trace.ranked == result.result.candidates
+    result.result.candidates[0].content = "changed result"
+    assert result.trace.ranked[0].content != "changed result"
+    result.trace.ranked[0].content = "changed trace"
+    assert result.trace.admitted[0].content != "changed trace"
+
+
+async def test_observed_path_translates_deadline(pipeline: RetrievalPipeline) -> None:
+    pipeline.model.embed.side_effect = TimeoutError()
+    with pytest.raises(RetrievalUnavailableError):
+        await pipeline.retrieve_observed(query(), deadline=deadline())
+    pipeline.store.hybrid_search.assert_not_called()

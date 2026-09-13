@@ -16,6 +16,7 @@ from evals.harness.nl2sql import observe
 from evals.harness.report import exit_code, write_report
 from evals.harness.runner import run_suite
 from evals.harness.runtime import execute, fresh, live_context, snapshot
+from evals.harness import retrieval_cli
 
 
 async def run(options: Options) -> Report:
@@ -39,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     """Write reports before applying gates; failures never print secret inputs."""
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    retrieval_cli.add_parser(commands)
     command = commands.add_parser("run")
     command.add_argument("--suite", choices=["nl2sql"], default="nl2sql")
     command.add_argument("--repeats", type=int, default=1)
@@ -46,8 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     command.add_argument("--seed-manifest", type=Path, default=Options().seed_manifest)
     command.add_argument("--threshold-result-accuracy", type=float)
     args = vars(parser.parse_args(argv))
-    args.pop("command")
+    command_name = args.pop("command")
     try:
+        if command_name == "ablation":
+            return retrieval_cli.run(retrieval_cli.Options.model_validate(args))
         options = Options.model_validate(args)
         report = asyncio.run(run(options))
         write_report(report, options.report)

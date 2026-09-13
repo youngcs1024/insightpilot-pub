@@ -1,0 +1,313 @@
+queries:
+- id: r-001
+  text: 七月的退款政策如何划分材料要求和客服、售后、财务职责？
+  time_scope:
+    kind: point
+    as_of: '2026-07-15'
+  semantic_group_id: refund-process-versions
+  split: development
+  category: policy
+  notes: 七月应适用 v2 的材料分组与职责，不得引用八月 v3。
+  answerable: true
+- id: r-002
+  text: 九月处理退款时，客服、售后与财务各核验什么，活动清单增加了什么？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: refund-process-versions
+  split: development
+  category: policy
+  notes: 当前适用 v3，材料、实物争议、渠道状态与活动清单须区分。
+  answerable: true
+- id: r-003
+  text: 比较七月和八月退款流程：先用后付核验清单是在什么时候增加的？
+  time_scope:
+    kind: ranges
+    periods:
+    - start: '2026-07-01'
+      end: '2026-08-01'
+      label: 七月
+    - start: '2026-08-01'
+      end: '2026-09-01'
+      label: 八月
+  semantic_group_id: refund-process-versions
+  split: development
+  category: temporal
+  notes: 对比 v2 未启用与 v3 新增清单，保留两段有效时期。
+  answerable: true
+- id: r-004
+  text: GMV 是否要包含运费并减掉退款，优惠会不会扣两遍？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: gmv-components
+  split: development
+  category: metric
+  notes: GMV 商品净额不含运费、不扣退款、优惠不能重复扣。
+  answerable: true
+- id: r-005
+  text: 汇总不同月份或地区的 AOV，能直接平均已有客单价吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: aov-aggregation
+  split: development
+  category: metric
+  notes: AOV 必须汇总同粒度分子分母后相除，不能简单平均。
+  answerable: true
+- id: r-006
+  text: refund_count 是按申请日还是按到账日归入月份？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: refund-count-date
+  split: development
+  category: metric
+  notes: 最终 completed 的退款笔数仍按 requested_at 归期，财务到账另定义。
+  answerable: true
+- id: r-007
+  text: SKU-A1023 是业务库真实商品编码吗，与 ZH-000001 能直接映射吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: sku-code-identity
+  split: development
+  category: sku
+  notes: 培训供应商样例不等于真实 ZH- 六位种子编码，不能虚构映射。
+  answerable: true
+- id: r-008
+  text: 能用今天的库存快照算出七月缺货天数和损失销量吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: inventory-history
+  split: development
+  category: analysis
+  notes: 快照缺乏历史轨迹，不能重建历史缺货或销量损失。
+  answerable: true
+- id: r-009
+  text: 8 月 15 日夏季先用后付适用哪些品类，试用有何限制？
+  time_scope:
+    kind: point
+    as_of: '2026-08-15'
+  semantic_group_id: summer-eligibility
+  split: development
+  category: promotion
+  notes: 活动扩围 apparel，须确认资格渠道，不能污损或缺配件。
+  answerable: true
+- id: r-010
+  text: 普通自营商品七天无理由退货从哪天起算，哪些情况要另行核查？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: return-window
+  split: development
+  category: policy
+  notes: 签收次日起七个自然日，食品贴身拆封限制，质量问题单独处理。
+  answerable: true
+- id: r-011
+  text: 客服处理订单争议需要哪些材料，能索取验证码或完整银行卡吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: privacy-materials
+  split: development
+  category: policy
+  notes: 只收必要订单与问题材料，禁止密码验证码和完整银行卡。
+  answerable: true
+- id: r-012
+  text: 8 月 6 日赠品门槛用优惠前还是优惠后金额，运费能凑门槛吗？
+  time_scope:
+    kind: point
+    as_of: '2026-08-06'
+  semantic_group_id: gift-qualification
+  split: development
+  category: promotion
+  notes: 赠品门槛按参与商品优惠后金额，运费不凑单。
+  answerable: true
+- id: r-013
+  text: 什么案件必须升级复核，交接时要写什么？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: complaint-escalation
+  split: development
+  category: sop
+  notes: 证据冲突、重复补偿、反复未决、版本争议要升级并记录事实条款责任人。
+  answerable: true
+- id: r-014
+  text: 公司的无人机送货电池回收押金标准是多少？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: missing-drone
+  split: development
+  category: unanswerable
+  notes: 完整语料没有无人机电池回收押金标准。
+  answerable: false
+- id: r-015
+  text: 公司员工购买虚拟货币的报销汇率采用哪个交易所？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: missing-crypto
+  split: development
+  category: unanswerable
+  notes: 差旅补件材料没有虚拟货币报销或交易所汇率规则。
+  answerable: false
+- id: r-016
+  text: 退款申请订单率为什么可能超过 100%，没有同期支付订单怎么办？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: refund-rate-flow
+  split: frozen
+  category: metric
+  notes: 两侧不同时间流量，可能超过100%，无分母保留NULL。
+  answerable: true
+- id: r-017
+  text: 华东在五月更名后，历史订单是否要拆成两个地区统计？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: east-region-continuity
+  split: frozen
+  category: region
+  notes: 华东与华东一区同一region_id=3，标签更名不排除历史销售。
+  answerable: true
+- id: r-018
+  text: active_customer 按 customer_id、会员等级还是手机号去重？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: active-customer-identity
+  split: frozen
+  category: metric
+  notes: 合成数据按规范化非空phone及合格支付行为去重，区别会员账户。
+  answerable: true
+- id: r-019
+  text: 已发布的退款率能直接按品类计算吗？可以把订单退款平均分给商品吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: refund-category-unsupported
+  split: frozen
+  category: metric
+  notes: 当前refund_rate/refund_count不支持category，不能自行平均分摊。
+  answerable: true
+- id: r-020
+  text: 审批已经通过但原支付渠道还在处理，能告诉客户钱已到账吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: payment-progress
+  split: frozen
+  category: policy
+  notes: 审批和渠道到账不同，不承诺未确认日期，不重复发起退款。
+  answerable: true
+- id: r-021
+  text: 客户提供寄回运单但仓库找不到包裹，能认定已验收或客户责任吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: warehouse-missing-return
+  split: frozen
+  category: sop
+  notes: 寄件号不证明实收，核查物流和内部交接，待查不能自动归责。
+  answerable: true
+- id: r-022
+  text: 5 月 5 日家居焕新满减门槛按优惠前还是优惠后金额，含配送费吗？
+  time_scope:
+    kind: point
+    as_of: '2026-05-05'
+  semantic_group_id: home-discount-qualification
+  split: frozen
+  category: promotion
+  notes: 家居活动按优惠前参与商品金额，不计配送费。
+  answerable: true
+- id: r-023
+  text: 4 月美妆组合装拆退应按现在售价还是原订单价和优惠核算？
+  time_scope:
+    kind: point
+    as_of: '2026-04-05'
+  semantic_group_id: beauty-split-price
+  split: frozen
+  category: promotion
+  notes: 组合拆退核原价优惠赠品，不能用当前页面售价倒算。
+  answerable: true
+- id: r-024
+  text: 为什么活动 17 的标记不能证明先用后付导致了全部退款？
+  time_scope:
+    kind: ranges
+    periods:
+    - start: '2026-08-05'
+      end: '2026-08-21'
+      label: 活动原文适用期
+    - start: '2026-08-25'
+      end: '2026-09-02'
+      label: 复盘时段
+  semantic_group_id: summer-causal-evidence
+  split: frozen
+  category: analysis
+  notes: 标记不证明试用行为；因果需要数据对照、品类和统一观察截止。
+  answerable: true
+- id: r-025
+  text: 七月申请八月补件交接，requested_at 是否应重置为八月？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: handover-original-date
+  split: frozen
+  category: sop
+  notes: 补件交接保留原申请时间，不能重新登记成八月申请。
+  answerable: true
+- id: r-026
+  text: 保修检测没复现故障，可以把记录改为客户虚假投诉吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: warranty-unreproduced
+  split: frozen
+  category: policy
+  notes: 未复现应如实记录，不能认定虚假投诉。
+  answerable: true
+- id: r-027
+  text: 同一订单分两次部分退款，每次都能使用整单金额作为上限吗？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: partial-refund-cap
+  split: frozen
+  category: policy
+  notes: 逐商品行关联历史申请并核累计金额，不能重复使用整单上限。
+  answerable: true
+- id: r-028
+  text: 供应商说已发货就算补货完成了吗，仓库怎样交接异常到货？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: replenishment-receipt
+  split: frozen
+  category: sop
+  notes: 补货以实收验收为准，按批次清点并隔离异常。
+  answerable: true
+- id: r-029
+  text: 公司对海外仓清关失败退款规定了多少个自然日的固定时限？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: missing-customs
+  split: frozen
+  category: unanswerable
+  notes: 语料没有海外仓清关失败退款固定时限。
+  answerable: false
+- id: r-030
+  text: 文档记录 2026 年 9 月 1 日 SKU-B2048 的精确库存数量是多少？
+  time_scope:
+    kind: point
+    as_of: '2026-09-01'
+  semantic_group_id: missing-stock-number
+  split: frozen
+  category: unanswerable
+  notes: 知识原文没有该SKU当日库存数值，不能用编号或流程替代查询。
+  answerable: false
