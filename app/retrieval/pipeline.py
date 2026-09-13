@@ -1,4 +1,4 @@
-"""Query encoding and registered candidate pools; reranking belongs to Step 3.7."""
+"""Registered hybrid retrieval, batched reranking and dynamic source filtering."""
 
 import asyncio
 import time
@@ -8,12 +8,14 @@ from sqlalchemy import text
 
 from app.clients.model_runtime import ModelRuntimeClient
 from app.core.deadline import Deadline
-from app.core.errors import RetrievalConfigurationError, RetrievalUnavailableError
+from app.core.errors import IngestionRegistryError, RetrievalConfigurationError, RetrievalUnavailableError
 from app.core.observability import TraceMetadata, observe
 from app.db.session import Database
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.retrieval.config import RetrievalSettings
+from app.retrieval.filtering import diagnostic
+from app.retrieval.reranking import rerank_candidates
 from app.retrieval.search_store import HybridSearchStore
 from app.schemas.ingestion import ChunkIdentity, EncodingProfile, digest
 from app.schemas.model_runtime import EmbedMode
@@ -22,6 +24,7 @@ from app.schemas.retrieval import (
     EncodedQuery,
     RetrievalQuery,
     RetrievalResult,
+    RetrievalStage,
     RetrievalTimings,
 )
 
@@ -59,7 +62,7 @@ class RetrievalPipeline:
         self.store = store
         self.model = model
         self.settings = settings.model_copy(deep=True)
-        if (settings.search.use_dense or settings.search.use_sparse_learned) and model is None:
+        if (settings.search.use_dense or settings.search.use_sparse_learned or settings.search.use_rerank) and model is None:
             raise RetrievalConfigurationError(reason="model_client_required")
 
     async def retrieve(self, query: RetrievalQuery, *, deadline: Deadline) -> RetrievalResult:
@@ -90,12 +93,32 @@ class RetrievalPipeline:
         with observe("retrieval_admission", TraceMetadata(row_count=len(pool))):
             result = await self._admit(pool, encoded, query, timings)
         timings.admission_ms = elapsed(stage)
+        admitted_count = len(result.candidates)
+        result.stages = [
+            diagnostic(RetrievalStage.SEARCH, len(pool), pool, elapsed_ms=timings.search_ms),
+            diagnostic(RetrievalStage.ADMISSION, len(pool), result.candidates,
+                       elapsed_ms=timings.admission_ms),
+        ]
+        ranked = await rerank_candidates(
+            query.standalone, result.candidates, self.model, self.settings.search, deadline=deadline
+        )
+        result.candidates = ranked.candidates
+        result.reranked = ranked.reranked
+        result.degradation = ranked.degradation
+        result.top_rerank_score = ranked.top_rerank_score
+        result.meets_floor = ranked.meets_floor
+        result.rerank_metadata = ranked.response.metadata if ranked.response else None
+        result.stages.extend(ranked.stages)
+        timings.rerank_ms = ranked.stages[0].elapsed_ms
+        timings.filter_ms = sum(item.elapsed_ms for item in ranked.stages[1:])
         timings.total_ms = elapsed(started)
         result.timings = timings
         logger.info(
             "retrieval_completed",
             candidates=len(result.candidates),
-            rejected=len(pool) - len(result.candidates),
+            rejected=len(pool) - admitted_count,
+            reranked=result.reranked,
+            degradation=result.degradation,
             corpus_version=result.corpus_version,
             duration_ms=timings.total_ms,
         )
@@ -122,7 +145,7 @@ class RetrievalPipeline:
         query: RetrievalQuery,
         timings: RetrievalTimings,
     ) -> RetrievalResult:
-        # The read-only snapshot begins AFTER all network/model calls. No ingestion
+        # The read-only snapshot begins after search and closes before reranking. No ingestion
         # lock is held; manifest identity and registry admission see the same commit.
         async with self.database.session() as session, session.begin():
             await session.execute(
@@ -146,12 +169,20 @@ class RetrievalPipeline:
                 if digest(item.content) == item.content_sha256
             ]
             allowed = await ChunkRepository(session).admit(identities)
+            sources = await DocumentRepository(session).candidate_sources(
+                list({item.document_id for item in allowed})
+            )
+        paths = {item.document_id: item.source_path for item in sources}
         keys = {identity_key(item) for item in allowed}
         accepted = []
         for item in pool:
             key = identity_key(item)
             if key in keys and digest(item.content) == item.content_sha256:
-                accepted.append(item)
+                if item.document_id not in paths:
+                    raise IngestionRegistryError()
+                admitted = item.model_copy(deep=True)
+                admitted.source_path = paths[item.document_id]
+                accepted.append(admitted)
                 keys.remove(key)
         return RetrievalResult(
             query=query.model_copy(deep=True),

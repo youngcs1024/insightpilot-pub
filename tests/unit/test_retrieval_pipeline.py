@@ -20,6 +20,7 @@ from tests.ingestion_support import model_metadata
 from tests.retrieval_support import candidate, deadline, encoded, fake_store, query
 
 EXPECTED_POOL = 20
+SOURCE_CAP = 3
 
 
 @pytest.fixture
@@ -42,6 +43,9 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
     )
     monkeypatch.setattr(DocumentRepository, "manifest", AsyncMock(return_value=manifest))
     monkeypatch.setattr(ChunkRepository, "admit", AsyncMock(side_effect=lambda values: values))
+    monkeypatch.setattr(DocumentRepository, "candidate_sources", AsyncMock(
+        side_effect=lambda ids: [SimpleNamespace(document_id=item, source_path="source.md") for item in ids]
+    ))
     output = EmbedResult(
         request_id="test",
         ms=0,
@@ -57,7 +61,7 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
         SimpleNamespace(session=sessions),
         store,
         SimpleNamespace(embed=AsyncMock(return_value=output)),
-        RetrievalSettings(),
+        RetrievalSettings(search=RetrievalConfig(use_rerank=False)),
     )
 
 
@@ -77,7 +81,7 @@ async def test_vector_query_is_encoded_once_and_metadata_preserved(
 
 
 async def test_bm25_only_does_not_require_or_call_models(pipeline: RetrievalPipeline) -> None:
-    pipeline.settings.search = RetrievalConfig(use_dense=False, use_sparse_learned=False)
+    pipeline.settings.search = RetrievalConfig(use_rerank=False, use_dense=False, use_sparse_learned=False)
     pipeline.model = None
     result = await pipeline.retrieve(query(), deadline=deadline())
     assert result.model_metadata is None
@@ -163,3 +167,47 @@ async def test_outer_deadline_includes_admission(
     monkeypatch.setattr(DocumentRepository, "manifest", AsyncMock(side_effect=pending))
     with pytest.raises(RetrievalUnavailableError):
         await pipeline.retrieve(query(), deadline=deadline(0.01))
+
+
+async def test_reranking_begins_after_admission_transaction_closes(
+    pipeline: RetrievalPipeline
+) -> None:
+    from tests.rerank_support import model
+
+    active = False
+
+    @asynccontextmanager
+    async def transaction() -> AsyncIterator[None]:
+        nonlocal active
+        active = True
+        try:
+            yield None
+        finally:
+            active = False
+
+    async with pipeline.database.session() as session:
+        session.begin = transaction
+    client = model([0.8])
+    response = client.rerank.return_value
+
+    async def rerank(*args: object, **kwargs: object) -> object:
+        assert not active
+        return response
+
+    pipeline.model.rerank = AsyncMock(side_effect=rerank)
+    pipeline.settings.search.use_rerank = True
+    result = await pipeline.retrieve(query(), deadline=deadline())
+    assert result.reranked
+    assert result.retrieval_config.filtering.max_per_doc == SOURCE_CAP
+    pipeline.settings.search.filtering.max_per_doc = 2
+    assert result.retrieval_config.filtering.max_per_doc == SOURCE_CAP
+
+
+async def test_missing_registered_source_fails_closed(
+    pipeline: RetrievalPipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.errors import IngestionRegistryError
+
+    monkeypatch.setattr(DocumentRepository, "candidate_sources", AsyncMock(return_value=[]))
+    with pytest.raises(IngestionRegistryError):
+        await pipeline.retrieve(query(), deadline=deadline())

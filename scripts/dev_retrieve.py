@@ -74,15 +74,17 @@ def search_config(args: argparse.Namespace, configured: RetrievalConfig) -> Retr
         values["record_arm_scores"] = args.record_arm_scores
     elif "record_arm_scores" not in configured.model_fields_set:
         values["record_arm_scores"] = True
+    if args.rerank is not None:
+        values["use_rerank"] = args.rerank
     return RetrievalConfig.model_validate(values)
 
 
-async def run(settings: RetrievalProcessSettings, query: RetrievalQuery) -> int:
+async def run(settings: RetrievalProcessSettings, query: RetrievalQuery, *, explain: bool = False) -> int:
     """Close all process-owned resources after success, failure or cancellation."""
     database = Database(settings.database)
     database.start()
     config = settings.retrieval.search
-    needs_model = config.use_dense or config.use_sparse_learned
+    needs_model = config.use_dense or config.use_sparse_learned or config.use_rerank
     model = (
         ModelRuntimeClient(settings.model_runtime)
         if needs_model and settings.model_runtime
@@ -94,7 +96,7 @@ async def run(settings: RetrievalProcessSettings, query: RetrievalQuery) -> int:
                 query,
                 deadline=Deadline(time.monotonic() + settings.timeout_s),
             )
-            print(result.model_dump_json())
+            print(result.model_dump_json(indent=2 if explain else None))
             return 0
     finally:
         await close_resources(database, model)
@@ -116,6 +118,8 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("query")
     result.add_argument("--arms")
+    result.add_argument("--rerank", action=argparse.BooleanOptionalAction, default=None)
+    result.add_argument("--explain", action="store_true")
     dates = result.add_mutually_exclusive_group()
     dates.add_argument("--as-of")
     dates.add_argument("--period", action="append")
@@ -130,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         query = parse_query(args, datetime.now(ZoneInfo("Asia/Shanghai")))
         settings = RetrievalProcessSettings.load()
         settings.retrieval.search = search_config(args, settings.retrieval.search)
-        return asyncio.run(run(settings, query))
+        return asyncio.run(run(settings, query, explain=args.explain))
     except ValidationError:
         print("Invalid retrieval configuration.", file=sys.stderr)
     except InsightPilotError as exc:

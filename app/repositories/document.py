@@ -10,6 +10,7 @@ from app.core.errors import IngestionRegistryError
 from app.db.models.document import CorpusManifestRecord, Document
 from app.schemas.corpus import CorpusMetadata
 from app.schemas.ingestion import ActiveManifest, DocumentStatus, RegisteredDocument
+from app.schemas.retrieval import CandidateSource
 
 
 class DocumentRepository:
@@ -61,6 +62,20 @@ class DocumentRepository:
         if manifest.corpus_version != row.corpus_version:
             raise IngestionRegistryError()
         return manifest
+
+    async def candidate_sources(self, identifiers: list[UUID]) -> list[CandidateSource]:
+        """Read only requested active sources inside the caller's consistent snapshot."""
+        if not identifiers:
+            return []
+        rows = (await self.session.execute(
+            select(Document.id, Document.source_path).where(
+                Document.id.in_(identifiers), Document.status == "active"
+            )
+        )).all()
+        try:
+            return [CandidateSource(document_id=row.id, source_path=row.source_path) for row in rows]
+        except ValidationError as exc:
+            raise IngestionRegistryError() from exc
 
     async def save(self, value: RegisteredDocument) -> None:
         """Stage a source replacement or tombstone inside the service transaction."""

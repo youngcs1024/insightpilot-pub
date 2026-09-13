@@ -99,3 +99,21 @@ async def test_bm25_cleanup_without_model() -> None:
     database = SimpleNamespace(aclose=AsyncMock())
     await dev_retrieve.close_resources(database, None)
     database.aclose.assert_awaited_once()
+
+
+def test_rerank_flag_overrides_typed_default() -> None:
+    args = dev_retrieve.parser().parse_args(["规则", "--arms", "bm25", "--no-rerank"])
+    assert not dev_retrieve.search_config(args, RetrievalConfig()).use_rerank
+    args = dev_retrieve.parser().parse_args(["规则", "--rerank"])
+    assert dev_retrieve.search_config(args, RetrievalConfig(use_rerank=False)).use_rerank
+
+
+def test_explain_reaches_cli_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = dev_retrieve.RetrievalProcessSettings.model_construct(
+        retrieval=dev_retrieve.RetrievalSettings()
+    )
+    monkeypatch.setattr(dev_retrieve.RetrievalProcessSettings, "load", lambda: settings)
+    operation = AsyncMock(return_value=0)
+    monkeypatch.setattr(dev_retrieve, "run", operation)
+    assert dev_retrieve.main(["规则", "--explain"]) == 0
+    assert operation.call_args.kwargs["explain"] is True

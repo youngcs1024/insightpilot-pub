@@ -43,6 +43,24 @@ class MilvusSettings(ConfigModel):
         return self
 
 
+class FilterConfig(ConfigModel):
+    """Normalized relevance thresholds and hard diversity/size ceilings."""
+
+    dynamic_ratio: float = Field(default=0.5, ge=0, le=1)
+    absolute_floor: float = Field(default=0.30, ge=0, le=1)
+    high_ratio: float = Field(default=0.6, ge=0, le=1)
+    min_per_doc: int = Field(default=1, ge=1, le=100)
+    max_per_doc: int = Field(default=3, ge=1, le=100)
+    gap_threshold: float = Field(default=0.15, ge=0, le=1)
+    final_k: int = Field(default=8, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def ordered_caps(self) -> Self:
+        """Minimum allocation cannot bypass the configured hard maximum."""
+        require_configuration(self.min_per_doc <= self.max_per_doc, "Invalid document caps")
+        return self
+
+
 class RetrievalConfig(ConfigModel):
     """Effective search parameters snapshotted with every candidate pool."""
 
@@ -54,6 +72,8 @@ class RetrievalConfig(ConfigModel):
     rrf_k: int = Field(default=60, ge=1, le=16384)
     drop_ratio_search: float = Field(default=0.2, ge=0, lt=1)
     record_arm_scores: bool = False
+    use_rerank: bool = True
+    filtering: FilterConfig = Field(default_factory=FilterConfig)
 
     @model_validator(mode="after")
     def search_invariants(self) -> Self:
