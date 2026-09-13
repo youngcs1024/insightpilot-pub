@@ -74,5 +74,5 @@ async def test_bootstrap_provides_all_roles_and_databases(db_session: AsyncSessi
     assert databases == {"insightpilot_app", "insightpilot_business"}
     assert (
         await db_session.scalar(text("SELECT version_num FROM alembic_version_app"))
-        == "0008_turn_clarification"
+        == "0009_ingestion_registry"
     )
