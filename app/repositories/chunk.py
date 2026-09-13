@@ -40,10 +40,18 @@ class ChunkRepository:
 
     async def list_document(self, identifier: UUID) -> list[RegisteredChunk]:
         """Return detached, position-ordered current provenance."""
+        return await self._list(identifier)
+
+    async def list_all(self) -> list[RegisteredChunk]:
+        """Read the complete shared registry for cross-store maintenance."""
+        return await self._list(None)
+
+    async def _list(self, identifier: UUID | None) -> list[RegisteredChunk]:
+        query = select(Chunk).order_by(Chunk.document_id, Chunk.ordinal)
+        if identifier is not None:
+            query = query.where(Chunk.document_id == identifier)
         rows = (
-            await self.session.scalars(
-                select(Chunk).where(Chunk.document_id == identifier).order_by(Chunk.ordinal)
-            )
+            await self.session.scalars(query)
         ).all()
         return [
             RegisteredChunk(

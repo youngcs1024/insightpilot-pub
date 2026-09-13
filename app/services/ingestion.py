@@ -37,6 +37,15 @@ from app.services.ingestion_plan import IngestionPlan, stage
 logger = structlog.get_logger(__name__)
 
 
+async def insert_vectors(store: IngestionStore, rows: list[VectorRow], size: int) -> None:
+    """Attach ordered physical receipts without publishing partially inserted work."""
+    for start in range(0, len(rows), size):
+        batch = rows[start : start + size]
+        receipt = await store.insert(batch)
+        for row, pk in zip(batch, receipt.ids, strict=True):
+            row.chunk.milvus_pk = pk
+
+
 class IngestionService:
     """Resources are injected; the CLI owns their lifetime and no API route is added."""
 
@@ -87,10 +96,10 @@ class IngestionService:
         result = IngestionResult(
             failed_files=plan.failed, corpus_version=manifest.corpus_version if manifest else None
         )
-        rows, metadata = await self._encode(plan, manifest, deadline)
+        rows, metadata = await self.encode(plan, manifest, deadline)
         if rows:
             await self.store.ensure_collection()
-            await self._insert(rows)
+            await self.insert(rows)
         if plan.changed or plan.deleted or plan.refreshed:
             manifest = await self._publish(plan, previous, manifest, metadata)
             result.corpus_version = manifest.corpus_version
@@ -100,12 +109,13 @@ class IngestionService:
         await self._cleanup(result)
         return result
 
-    async def _encode(
+    async def encode(
         self,
         plan: IngestionPlan,
         manifest: ActiveManifest | None,
         deadline: Deadline,
     ) -> tuple[list[VectorRow], ModelMetadata | None]:
+        """Encode a staged batch completely before any persistent mutation."""
         candidates = [
             (chunk, item.document.metadata) for item in plan.changed for chunk in item.chunks
         ]
@@ -130,13 +140,9 @@ class IngestionService:
             )
         return rows, metadata
 
-    async def _insert(self, rows: list[VectorRow]) -> None:
-        size = self.model_settings.embed_batch
-        for start in range(0, len(rows), size):
-            batch = rows[start : start + size]
-            receipt = await self.store.insert(batch)
-            for row, pk in zip(batch, receipt.ids, strict=True):
-                row.chunk.milvus_pk = pk
+    async def insert(self, rows: list[VectorRow]) -> None:
+        """Populate physical keys on prepared chunks without publishing them."""
+        await insert_vectors(self.store, rows, self.model_settings.embed_batch)
 
     async def _publish(
         self,
