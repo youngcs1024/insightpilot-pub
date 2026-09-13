@@ -12,7 +12,11 @@ from app.retrieval.config import RetrievalConfig
 from app.retrieval.filtering import diagnostic, fallback, filter_ranked
 from app.schemas.model_runtime import ModelFailureKind
 from app.schemas.retrieval import (
-    Candidate, RankingResult, RetrievalStage, RetrievalTrace, StageStatus,
+    Candidate,
+    RankingResult,
+    RetrievalStage,
+    RetrievalTrace,
+    StageStatus,
 )
 from model_runtime.errors import ModelError
 
@@ -27,7 +31,7 @@ DEGRADABLE = frozenset(
 )
 
 
-async def rerank_candidates(
+async def rerank_candidates(  # noqa: PLR0913 -- optional trace preserves production callers.
     query: str,
     candidates: list[Candidate],
     model: ModelRuntimeClient | None,

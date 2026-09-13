@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import yaml  # type: ignore[import-untyped]
 from pydantic import Field
@@ -18,6 +17,9 @@ from evals.harness.retrieval_dataset import load_dataset
 from evals.harness.retrieval_report import exit_code, write_report
 from evals.harness.retrieval_runtime import collect, committed_selection, control
 from scripts.model_evidence import Provenance
+
+if TYPE_CHECKING:
+    import argparse
 
 
 class Options(Contract):
@@ -40,7 +42,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     command = commands.add_parser("ablation")
     command.add_argument("--suite", choices=["retrieval"], default="retrieval")
     command.add_argument("--arms", choices=["all"], default="all")
-    command.add_argument("--phase", choices=["collect", "control", "select", "report"], default="collect")
+    command.add_argument(
+        "--phase", choices=["collect", "control", "select", "report"], default="collect"
+    )
     command.add_argument("--split", choices=list(Split), default=Split.DEVELOPMENT)
     command.add_argument("--dataset", type=Path, default=ROOT)
     command.add_argument("--report", type=Path, default=Options().report)
@@ -58,7 +62,7 @@ def run(options: Options) -> int:
     dataset = load_dataset(options.split, options.dataset)
     path = options.measurements or options.report.with_suffix(".raw.json")
     if options.phase == "collect":
-        raw = asyncio.run(collect(dataset, provenance(options), selection))
+        raw = asyncio.run(collect(dataset, provenance(options), selection, commit))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(raw.model_dump_json(indent=2))
     else:
@@ -67,14 +71,19 @@ def run(options: Options) -> int:
         raw = asyncio.run(control(raw, provenance(options)))
         path.write_text(raw.model_dump_json(indent=2))
     report = evaluate(
-        raw, dataset, selection, selection_commit=commit,
+        raw,
+        dataset,
+        selection,
+        selection_commit=commit,
         require_control=options.phase != "select",
     )
     write_report(report, options.report)
     if options.phase == "select":
         selected = choose(report, dataset)
         options.selection.parent.mkdir(parents=True, exist_ok=True)
-        options.selection.write_text(yaml.safe_dump(selected.model_dump(mode="json"), allow_unicode=True, sort_keys=False))
+        options.selection.write_text(
+            yaml.safe_dump(selected.model_dump(mode="json"), allow_unicode=True, sort_keys=False)
+        )
         print("Development selection written; commit before evaluating frozen labels.")
     print("Report: " + str(options.report))
     return exit_code(report, options.threshold)

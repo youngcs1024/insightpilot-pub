@@ -131,8 +131,12 @@ class RetrievalPipeline:
             ),
         ]
         ranked = await rerank_candidates(
-            query.standalone, result.candidates, self.model, self.settings.search,
-            deadline=deadline, trace=trace,
+            query.standalone,
+            result.candidates,
+            self.model,
+            self.settings.search,
+            deadline=deadline,
+            trace=trace,
         )
         result.candidates = ranked.candidates
         result.reranked = ranked.reranked

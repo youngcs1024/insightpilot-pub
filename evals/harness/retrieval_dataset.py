@@ -7,8 +7,15 @@ from app.schemas.ingestion import ActiveManifest, canonical, digest
 from app.schemas.retrieval import KnowledgeTimeScope, PointTimeScope
 from app.services.corpus_sources import parse_yaml
 from evals.harness.contracts import EvaluationError
+from evals.harness.ir_metrics import RELEVANT
 from evals.harness.retrieval_contracts import (
-    ROOT, ChunkReview, Dataset, DatasetManifest, JudgmentPartition, Queries, Split,
+    ROOT,
+    ChunkReview,
+    Dataset,
+    DatasetManifest,
+    JudgmentPartition,
+    Queries,
+    Split,
 )
 
 
@@ -78,7 +85,11 @@ def validate_labels(dataset: Dataset) -> None:
     """Identity, answerability and time applicability are ground-truth invariants."""
     chunks = {chunk.chunk_id: chunk for chunk in dataset.manifest.chunks}
     ids = dataset.manifest.chunk_ids
-    if len(ids) != len(set(ids)) or set(ids) != set(chunks) or len(chunks) != len(dataset.manifest.chunks):
+    if (
+        len(ids) != len(set(ids))
+        or set(ids) != set(chunks)
+        or len(chunks) != len(dataset.manifest.chunks)
+    ):
         raise EvaluationError("Invalid judged chunk inventory")
     records = {item.query_id: item for item in dataset.labels}
     if len(records) != len(dataset.labels) or set(records) != {case.id for case in dataset.cases}:
@@ -88,9 +99,12 @@ def validate_labels(dataset: Dataset) -> None:
         keys = [item.chunk_id for item in labels]
         if len(keys) != len(set(keys)) or set(keys) - set(chunks):
             raise EvaluationError("Duplicate or unknown judged chunks")
-        if case.answerable != any(item.grade >= 2 for item in labels):
+        if case.answerable != any(item.grade >= RELEVANT for item in labels):
             raise EvaluationError("Judgments contradict answerability")
-        if any(item.grade > 0 and not applicable(chunks[item.chunk_id], case.time_scope) for item in labels):
+        if any(
+            item.grade > 0 and not applicable(chunks[item.chunk_id], case.time_scope)
+            for item in labels
+        ):
             raise EvaluationError("Expired policy has positive grade")
 
 

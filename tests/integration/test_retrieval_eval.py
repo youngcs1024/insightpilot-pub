@@ -13,15 +13,19 @@ from tests.milvus_support import milvus_stack
 from tests.retrieval_support import RetrievalHarness, deadline, harness, query
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["consistency_harness", "milvus_stack", "harness"]
+__all__ = ["consistency_harness", "harness", "milvus_stack"]
 
 
 @pytest.mark.parametrize("arm", [arm for arm in Arm if arm is not Arm.D_FP32])
-async def test_observed_eight_arms_use_registered_production_path(harness: RetrievalHarness, arm: Arm) -> None:
+async def test_observed_eight_arms_use_registered_production_path(
+    harness: RetrievalHarness, arm: Arm
+) -> None:
     pipeline = harness.pipeline(arm_config(arm))
     observed = await pipeline.retrieve_observed(query(), deadline=deadline())
     assert observed.trace.admitted
-    assert set(item.chunk_uuid for item in observed.trace.ranked) == set(item.chunk_uuid for item in observed.trace.admitted)
+    assert {item.chunk_uuid for item in observed.trace.ranked} == {
+        item.chunk_uuid for item in observed.trace.admitted
+    }
     assert observed.result.degradation is None
     assert observed.result.retrieval_config == arm_config(arm)
     assert all(item.source_path for item in observed.trace.admitted)
@@ -37,7 +41,9 @@ async def test_observed_eight_arms_use_registered_production_path(harness: Retri
     assert observed.trace.admitted[0].content == original
 
 
-async def test_formal_frozen_judgments_resolve_after_clean_rebuild(consistency_harness: ConsistencyHarness) -> None:
+async def test_formal_frozen_judgments_resolve_after_clean_rebuild(
+    consistency_harness: ConsistencyHarness,
+) -> None:
     harness = consistency_harness
     root = Path(__file__).resolve().parents[2] / "data/corpus"
     source = load_dataset(Split.FROZEN)
@@ -47,7 +53,9 @@ async def test_formal_frozen_judgments_resolve_after_clean_rebuild(consistency_h
     await harness.store._rpc(
         "test_drop_isolated_collection",
         lambda: harness.store._client.drop_collection(
-            harness.store.settings.collection, timeout=None, retry_times=0,
+            harness.store.settings.collection,
+            timeout=None,
+            retry_times=0,
             retry_on_rate_limit=False,
         ),
     )
@@ -62,4 +70,8 @@ async def test_formal_frozen_judgments_resolve_after_clean_rebuild(consistency_h
         admitted = await ChunkRepository(session).admit(after)
     check_manifest(source, active, {item.chunk_uuid for item in registered})
     assert set(source.manifest.chunk_ids) == {item.chunk_uuid for item in admitted}
-    assert all(label.chunk_id in {item.chunk_uuid for item in after} for row in source.labels for label in row.judgments)
+    assert all(
+        label.chunk_id in {item.chunk_uuid for item in after}
+        for row in source.labels
+        for label in row.judgments
+    )

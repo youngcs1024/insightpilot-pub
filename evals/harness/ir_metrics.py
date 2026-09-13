@@ -36,11 +36,13 @@ def measure(ranking: Sequence[UUID], grades: Mapping[UUID, int]) -> IRMetrics:
         recall_5=sum(value >= RELEVANT for value in values[:5]) / relevant if relevant else 0,
         recall_10=sum(value >= RELEVANT for value in values[:10]) / relevant if relevant else 0,
         ndcg_10=min(1.0, dcg(values[:10]) / ideal) if ideal else 0,
-        mrr_10=next((1 / rank for rank, grade in enumerate(values[:10], 1) if grade >= RELEVANT), 0),
+        mrr_10=next(
+            (1 / rank for rank, grade in enumerate(values[:10], 1) if grade >= RELEVANT), 0
+        ),
         precision_5=sum(value >= RELEVANT for value in values[:5]) / 5,
     )
 
 
 def dcg(grades: Sequence[int]) -> float:
     """Exponential gain with base-two logarithmic rank discount."""
-    return sum((2**grade - 1) / math.log2(index + 2) for index, grade in enumerate(grades))
+    return sum((2.0**grade - 1) / math.log2(index + 2) for index, grade in enumerate(grades))

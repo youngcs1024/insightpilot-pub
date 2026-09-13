@@ -1,7 +1,7 @@
 """Reproducible Suite B inputs, observations and public selection artifacts."""
 
-from enum import StrEnum
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -144,6 +144,8 @@ class Measurements(Contract):
     split: Split
     server: Provenance
     attempts: list[Attempt]
+    selection_commit: str | None = None
+    selection_identity: Digest | None = None
 
 
 class ScoredAttempt(Contract):

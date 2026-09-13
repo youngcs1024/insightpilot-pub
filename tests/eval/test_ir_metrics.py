@@ -1,3 +1,4 @@
+# ruff: noqa: PLR2004 -- explicit metric oracles and acceptance quotas.
 """Hand-computed metric oracles, independent of the production sorting/filtering code."""
 
 import math

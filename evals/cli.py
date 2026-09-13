@@ -10,13 +10,13 @@ from app.core.config_models import Settings
 from app.core.errors import InsightPilotError
 from app.core.logging import setup_logging
 from app.schemas.mcp import QueryResultPayload
+from evals.harness import retrieval_cli
 from evals.harness.contracts import Observation, Options, Report
 from evals.harness.dataset import load_cases
 from evals.harness.nl2sql import observe
 from evals.harness.report import exit_code, write_report
 from evals.harness.runner import run_suite
 from evals.harness.runtime import execute, fresh, live_context, snapshot
-from evals.harness import retrieval_cli
 
 
 async def run(options: Options) -> Report:

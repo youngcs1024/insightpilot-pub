@@ -59,7 +59,9 @@ def issues(bundle: AcceptanceBundle, expected_sha: str) -> list[str]:
     for raw in (bundle.development, bundle.frozen):
         dataset = load_dataset(raw.split)
         report = evaluate(
-            raw, dataset, bundle.selection if raw.split is Split.FROZEN else None,
+            raw,
+            dataset,
+            bundle.selection if raw.split is Split.FROZEN else None,
             selection_commit=bundle.selection_commit if raw.split is Split.FROZEN else None,
         )
         result.extend(report.issues)
@@ -68,7 +70,10 @@ def issues(bundle: AcceptanceBundle, expected_sha: str) -> list[str]:
         result.append("fp16_not_restored")
     if {sample.precision for sample in environment.samples} != {"fp16", "fp32"}:
         result.append("missing_shared_load_measurements")
-    if any(sample.used_mib > sample.total_mib or sample.free_mib > sample.total_mib for sample in environment.samples):
+    if any(
+        sample.used_mib > sample.total_mib or sample.free_mib > sample.total_mib
+        for sample in environment.samples
+    ):
         result.append("invalid_hardware_sample")
     return result
 
@@ -88,7 +93,8 @@ def main() -> int:
         client_sha=args.client_sha,
         development=Measurements.model_validate_json(args.development.read_text()),
         frozen=Measurements.model_validate_json(args.frozen.read_text()),
-        selection=selection, selection_commit=commit,
+        selection=selection,
+        selection_commit=commit,
         environment=EnvironmentEvidence.model_validate_json(args.environment.read_text()),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

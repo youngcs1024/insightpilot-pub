@@ -1,6 +1,7 @@
 """Explicit live lifecycle; no GPU/SSH operations occur on module import."""
 
 import asyncio
+from itertools import product
 from pathlib import Path
 
 from app.clients.model_runtime import ModelRuntimeClient
@@ -9,6 +10,7 @@ from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
+from app.schemas.ingestion import canonical, digest
 from app.services.corpus_sources import parse_yaml
 from evals.harness.ablation import BASE_ARMS
 from evals.harness.contracts import EvaluationError
@@ -38,7 +40,9 @@ def committed_selection(path: Path) -> tuple[Selection, str]:
     if git_bytes(["show", f"HEAD:{relative}"]).decode() != content:
         raise EvaluationError("Selection has uncommitted changes")
     selection = parse_yaml(content, Selection)
-    if selection.arm is Arm.D_FP32 or selection.config != arm_config(selection.arm, selection.config.filtering):
+    if selection.arm is Arm.D_FP32 or selection.config != arm_config(
+        selection.arm, selection.config.filtering
+    ):
         raise EvaluationError("Invalid selected configuration")
     commit = git_bytes(["log", "-1", "--format=%H", "--", relative]).decode().strip()
     git_bytes(["merge-base", "--is-ancestor", selection.development_sha, commit])
@@ -46,7 +50,10 @@ def committed_selection(path: Path) -> tuple[Selection, str]:
 
 
 async def collect(
-    dataset: Dataset, server: Provenance, selection: Selection | None = None
+    dataset: Dataset,
+    server: Provenance,
+    selection: Selection | None = None,
+    selection_commit: str | None = None,
 ) -> Measurements:
     """Execute all eight arms in one process with a common active corpus manifest."""
     settings = RetrievalProcessSettings.load()
@@ -57,22 +64,30 @@ async def collect(
     model = ModelRuntimeClient(settings.model_runtime)
     sha, dirty = await asyncio.to_thread(source_identity)
     result = Measurements(
-        client_sha=sha, source_dirty=dirty, dataset_identity=dataset.identity,
-        corpus_version=dataset.manifest.corpus_version, split=dataset.cases[0].split,
-        server=server, attempts=[],
+        client_sha=sha,
+        source_dirty=dirty,
+        dataset_identity=dataset.identity,
+        corpus_version=dataset.manifest.corpus_version,
+        split=dataset.cases[0].split,
+        server=server,
+        attempts=[],
+        selection_commit=selection_commit,
+        selection_identity=digest(canonical(selection.model_dump(mode="json")))
+        if selection
+        else None,
     )
     try:
         async with HybridSearchStore(settings.retrieval.milvus) as store:
             await validate_active(dataset, database)
-            for case in dataset.cases:
-                for arm in BASE_ARMS:
-                    effective = settings.retrieval.model_copy(deep=True)
-                    effective.search = (
-                        selection.config.model_copy(deep=True)
-                        if selection is not None and arm is selection.arm else arm_config(arm)
-                    )
-                    pipeline = RetrievalPipeline(database, store, model, effective)
-                    result.attempts.append(await observe(case, pipeline, arm))
+            for case, arm in product(dataset.cases, BASE_ARMS):
+                effective = settings.retrieval.model_copy(deep=True)
+                effective.search = (
+                    selection.config.model_copy(deep=True)
+                    if selection is not None and arm is selection.arm
+                    else arm_config(arm)
+                )
+                pipeline = RetrievalPipeline(database, store, model, effective)
+                result.attempts.append(await observe(case, pipeline, arm))
             await validate_active(dataset, database)
     finally:
         await close_resources(database, model)
@@ -89,7 +104,7 @@ async def validate_active(dataset: Dataset, database: Database) -> None:
 
 async def control(raw: Measurements, server: Provenance) -> Measurements:
     """Operator switches only the authorized service, then invokes this replay phase."""
-    sha, dirty = source_identity()
+    sha, dirty = await asyncio.to_thread(source_identity)
     if raw.server != server or raw.client_sha != sha or raw.source_dirty or dirty:
         raise EvaluationError("Precision replay must use identical clean source and deployment")
     if any(item.arm is Arm.D_FP32 for item in raw.attempts):

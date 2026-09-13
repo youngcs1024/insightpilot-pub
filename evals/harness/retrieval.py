@@ -58,7 +58,8 @@ async def replay_fp32(original: Attempt, model: ModelRuntimeClient) -> Attempt:
     result.timings.search_ms = 0
     result.timings.admission_ms = 0
     return Attempt(
-        query_id=original.query_id, arm=Arm.D_FP32,
+        query_id=original.query_id,
+        arm=Arm.D_FP32,
         observed=ObservedRetrieval(result=result, trace=trace),
     )
 
@@ -78,8 +79,11 @@ def verify_precision(left: Attempt, right: Attempt) -> None:
         or a.trace.encoded != b.trace.encoded
         or a.result.query != b.result.query
         or a.result.retrieval_config != b.result.retrieval_config
-        or first is None or second is None
-        or first.metadata.precision != "fp16" or second.metadata.precision != "fp32"
-        or first.metadata.model_dump(exclude={"precision"}) != second.metadata.model_dump(exclude={"precision"})
+        or first is None
+        or second is None
+        or first.metadata.precision != "fp16"
+        or second.metadata.precision != "fp32"
+        or first.metadata.model_dump(exclude={"precision"})
+        != second.metadata.model_dump(exclude={"precision"})
     ):
         raise EvaluationError("Precision control identity mismatch")

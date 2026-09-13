@@ -1,3 +1,4 @@
+# ruff: noqa: PLR2004 -- explicit metric oracles and acceptance quotas.
 """Failure-aware grid scoring, development-only selection and precision provenance."""
 
 from pathlib import Path
@@ -22,11 +23,13 @@ def test_complete_grid_and_precision_report(tmp_path: Path) -> None:
     assert all(row.valid == row.attempted == 1 for row in report.summaries)
     assert report.summaries[0].ranking.ndcg_10 < report.summaries[1].ranking.ndcg_10
     text = markdown(report)
-    assert "replay" in text and "not human-reviewed" in text
+    assert "replay" in text
+    assert "not human-reviewed" in text
     assert "ΔnDCG" in text
     path = tmp_path / "report.md"
     write_report(report, path)
-    assert path.exists() and path.with_suffix(".json").exists()
+    assert path.exists()
+    assert path.with_suffix(".json").exists()
     assert exit_code(report, 0.1) == 0
 
 
@@ -134,7 +137,12 @@ async def test_adapter_keeps_failure_without_oracle_input() -> None:
     result = await observe(dataset().cases[0], pipeline, Arm.A)
     assert result.failure_code
     request = pipeline.retrieve_observed.call_args.args[0]
-    assert set(type(request).model_fields) == {"schema_version", "standalone", "time_scope", "assumptions"}
+    assert set(type(request).model_fields) == {
+        "schema_version",
+        "standalone",
+        "time_scope",
+        "assumptions",
+    }
 
 
 async def test_fp32_replay_calls_only_reranker_with_identical_candidates() -> None:
@@ -145,6 +153,18 @@ async def test_fp32_replay_calls_only_reranker_with_identical_candidates() -> No
     result = await replay_fp32(original, model)
     verify_precision(original, result)
     model.embed.assert_not_called()
-    assert model.rerank.call_args.args[1] == [item.content for item in original.observed.trace.admitted]
+    assert model.rerank.call_args.args[1] == [
+        item.content for item in original.observed.trace.admitted
+    ]
     assert result.observed.result.timings.encode_ms == 0
     assert original.observed.trace.rerank_response.metadata.precision == "fp16"
+
+
+def test_frozen_measurement_rejects_selection_replaced_after_collection() -> None:
+    raw = measurements(split=Split.FROZEN)
+    selected = choose(evaluate(measurements(), dataset()), dataset())
+    replaced = selected.model_copy(update={"rationale": "changed after frozen collection"})
+    report = evaluate(raw, dataset(Split.FROZEN), replaced, selection_commit="b" * 40)
+    assert "uncommitted_development_selection" in report.issues
+    report = evaluate(raw, dataset(Split.FROZEN), selected, selection_commit="c" * 40)
+    assert "uncommitted_development_selection" in report.issues

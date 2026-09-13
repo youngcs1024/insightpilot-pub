@@ -8,25 +8,42 @@ from app.schemas.model_runtime import ReadyResult
 from evals.harness import retrieval_acceptance
 from evals.harness.ablation import choose, evaluate
 from evals.harness.retrieval_acceptance import AcceptanceBundle, EnvironmentEvidence, HardwareSample
+from evals.harness.retrieval_contracts import Split
 from tests.ingestion_support import model_metadata
 from tests.retrieval_eval_support import SHA, dataset, measurements
-from evals.harness.retrieval_contracts import Split
 
 
 def bundle() -> AcceptanceBundle:
-    selected = choose(evaluate(measurements(control=False), dataset(), require_control=False), dataset())
+    selected = choose(
+        evaluate(measurements(control=False), dataset(), require_control=False), dataset()
+    )
     return AcceptanceBundle(
-        client_sha=SHA, development=measurements(), frozen=measurements(split=Split.FROZEN),
-        selection=selected, selection_commit="b" * 40,
+        client_sha=SHA,
+        development=measurements(),
+        frozen=measurements(split=Split.FROZEN),
+        selection=selected,
+        selection_commit="b" * 40,
         environment=EnvironmentEvidence(
             server=measurements().server,
             restored=ReadyResult(request_id="scripted", metadata=model_metadata()),
-            samples=[HardwareSample(at=datetime.now(UTC), total_mib=24000, used_mib=5000, free_mib=19000, other_process_mib=0, precision=precision) for precision in ("fp16", "fp32", "fp16")],
+            samples=[
+                HardwareSample(
+                    at=datetime.now(UTC),
+                    total_mib=24000,
+                    used_mib=5000,
+                    free_mib=19000,
+                    other_process_mib=0,
+                    precision=precision,
+                )
+                for precision in ("fp16", "fp32", "fp16")
+            ],
         ),
     )
 
 
-def test_gpu_bundle_recomputes_current_source_and_restoration(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gpu_bundle_recomputes_current_source_and_restoration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(retrieval_acceptance, "load_dataset", dataset)
     artifact = bundle()
     assert not retrieval_acceptance.issues(artifact, SHA)
@@ -35,7 +52,9 @@ def test_gpu_bundle_recomputes_current_source_and_restoration(monkeypatch: pytes
     assert "client_revision" in retrieval_acceptance.issues(bundle(), "c" * 40)
 
 
-def test_gpu_bundle_rejects_missing_control_and_load_samples(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gpu_bundle_rejects_missing_control_and_load_samples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(retrieval_acceptance, "load_dataset", dataset)
     artifact = bundle()
     artifact.development.attempts.pop()

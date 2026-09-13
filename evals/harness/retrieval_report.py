@@ -10,15 +10,19 @@ def markdown(report: AblationReport) -> str:
     run = report.measurements
     lines = [
         "# Retrieval ablation — " + run.split.value,
-        "", "Evidence valid: " + str(report.evidence_valid),
-        "Client SHA: " + run.client_sha, "Dataset: " + run.dataset_identity,
+        "",
+        "Evidence valid: " + str(report.evidence_valid),
+        "Client SHA: " + run.client_sha,
+        "Dataset: " + run.dataset_identity,
         "Corpus: " + run.corpus_version,
         "Judgments: agent-reviewed under explicit user authorization; not human-reviewed.",
-        "", "IR averages use answerable queries only; negative controls are reported separately.",
+        "",
+        "IR averages use answerable queries only; negative controls are reported separately.",
         "Arm scores are recorded: search timings include diagnostic single-arm requests.",
         "FP32 total is candidate-replay wall time, NOT a new end-to-end retrieval time.",
         "No missing/failed/degraded attempt counts as successful evidence.",
-        "", "| Arm | Valid/attempted | R@5 | R@10 | nDCG@10 | MRR@10 | P@5 | Filtered nDCG | Correct abstain/negative | False evidence | Client p50/p95 ms |",
+        "",
+        "| Arm | Valid/attempted | R@5 | R@10 | nDCG@10 | MRR@10 | P@5 | Filtered nDCG | Correct abstain/negative | False evidence | Client p50/p95 ms |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in report.summaries:
@@ -30,13 +34,32 @@ def markdown(report: AblationReport) -> str:
     lines.extend(["", "## Stage latency (client milliseconds)", ""])
     for row in report.summaries:
         for stage, value in row.latency_ms.items():
-            lines.append(f"- {row.arm.value} {stage}: n={value.count}, p50={value.p50}, p95={value.p95}")
+            lines.append(
+                f"- {row.arm.value} {stage}: n={value.count}, p50={value.p50}, p95={value.p95}"
+            )
     lines.extend(contributions(report))
     if report.selection:
-        lines.extend(["", "## Development-selected configuration", "", "```json", report.selection.model_dump_json(indent=2), "```"])
+        lines.extend(
+            [
+                "",
+                "## Development-selected configuration",
+                "",
+                "```json",
+                report.selection.model_dump_json(indent=2),
+                "```",
+            ]
+        )
     if report.issues:
-        lines.extend(["", "## Missing or invalid evidence", "", *["- " + item for item in report.issues]])
-    lines.extend(["", "The +15% nDCG improvement and 3.5s p50 targets are later-stage goals; negative results remain reportable.", ""])
+        lines.extend(
+            ["", "## Missing or invalid evidence", "", *["- " + item for item in report.issues]]
+        )
+    lines.extend(
+        [
+            "",
+            "The +15% nDCG improvement and 3.5s p50 targets are later-stage goals; negative results remain reportable.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -47,17 +70,28 @@ def contributions(report: AblationReport) -> list[str]:
     rows = {item.arm: item for item in report.summaries}
     lines = ["", "## Paired stage contributions", ""]
     pairs = [(Arm.A, Arm.B), (Arm.A, Arm.C), (Arm.B, Arm.D)]
-    pairs.extend([(Arm.A, Arm.A_RERANK), (Arm.B, Arm.B_RERANK), (Arm.C, Arm.C_RERANK), (Arm.D, Arm.D_RERANK), (Arm.D_RERANK, Arm.D_FP32)])
+    pairs.extend(
+        [
+            (Arm.A, Arm.A_RERANK),
+            (Arm.B, Arm.B_RERANK),
+            (Arm.C, Arm.C_RERANK),
+            (Arm.D, Arm.D_RERANK),
+            (Arm.D_RERANK, Arm.D_FP32),
+        ]
+    )
     for left, right in pairs:
         if left not in rows or right not in rows:
             continue
         delta = rows[right].ranking.ndcg_10 - rows[left].ranking.ndcg_10
         recall = rows[right].ranking.recall_10 - rows[left].ranking.recall_10
-        lines.append(f"- {left.value} → {right.value}: ΔnDCG@10={delta:+.4f}, ΔRecall@10={recall:+.4f}; negative/zero is retained.")
+        lines.append(
+            f"- {left.value} → {right.value}: ΔnDCG@10={delta:+.4f}, ΔRecall@10={recall:+.4f}; negative/zero is retained."
+        )
     indexed = {(item.query_id, item.arm): item for item in report.results}
     changes = sum(
         row.abstained != indexed[(row.query_id, Arm.D_FP32)].abstained
-        for row in report.results if row.arm is Arm.D_RERANK and (row.query_id, Arm.D_FP32) in indexed
+        for row in report.results
+        if row.arm is Arm.D_RERANK and (row.query_id, Arm.D_FP32) in indexed
     )
     lines.append(f"- FP16/FP32 abstention decisions changed: {changes} queries.")
     attempts = {(item.query_id, item.arm): item for item in report.measurements.attempts}
@@ -68,7 +102,8 @@ def contributions(report: AblationReport) -> list[str]:
     ]
     floor_changes = sum(
         left.result.meets_floor != right.result.meets_floor
-        for left, right in pairs_observed if left is not None and right is not None
+        for left, right in pairs_observed
+        if left is not None and right is not None
     )
     lines.append(f"- FP16/FP32 absolute-floor decisions changed: {floor_changes} queries.")
     return lines
@@ -86,10 +121,14 @@ def exit_code(report: AblationReport, threshold: float | None) -> int:
     if not report.evidence_valid:
         return 2
     if threshold is not None:
-        arm = report.selection.arm if report.selection else max(
-            (item for item in report.summaries if item.arm is not Arm.D_FP32),
-            key=lambda item: item.ranking.ndcg_10,
-        ).arm
+        arm = (
+            report.selection.arm
+            if report.selection
+            else max(
+                (item for item in report.summaries if item.arm is not Arm.D_FP32),
+                key=lambda item: item.ranking.ndcg_10,
+            ).arm
+        )
         quality = next(item.ranking.ndcg_10 for item in report.summaries if item.arm is arm)
         if quality < threshold:
             return 1
