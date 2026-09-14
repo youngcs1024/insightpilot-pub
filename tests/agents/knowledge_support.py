@@ -1,5 +1,6 @@
 """Detached scripted retrieval outcomes for the isolated knowledge specialist."""
 
+import asyncio
 from collections import deque
 
 from app.agents.knowledge.graph import build
@@ -30,6 +31,24 @@ class FakeRetrieval:
         detached = value.model_copy(deep=True)
         detached.query = query.model_copy(deep=True)
         return detached
+
+
+class BlockingRetrieval:
+    """Expose actual task cancellation while the injected service is awaiting I/O."""
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def retrieve(self, query: RetrievalQuery, *, deadline: Deadline) -> RetrievalResult:
+        deadline.check("blocked_retrieval")
+        self.started.set()
+        try:
+            await self.release.wait()
+        finally:
+            self.stopped.set()
+        return ranked()
 
 
 def ranked(score: float = 0.8) -> RetrievalResult:

@@ -35,7 +35,7 @@ from model_runtime.errors import (
     ModelOOMError,
     ModelQueueError,
 )
-from tests.agents.knowledge_support import FakeRetrieval, inputs, invoke, ranked
+from tests.agents.knowledge_support import BlockingRetrieval, FakeRetrieval, inputs, invoke, ranked
 from tests.agents.support import context
 from tests.knowledge_support import retrieval
 from tests.observability_support import tracing
@@ -229,8 +229,16 @@ async def test_model_deadline_is_terminal() -> None:
 
 
 async def test_cancellation_propagates() -> None:
-    with pytest.raises(asyncio.CancelledError):
-        await invoke(replace(context(), retrieval=FakeRetrieval(asyncio.CancelledError())))
+    service = BlockingRetrieval()
+    ctx = replace(context(responses=[]), retrieval=service)
+    async with asyncio.timeout(3), asyncio.TaskGroup() as group:
+        task = group.create_task(invoke(ctx))
+        await service.started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert service.stopped.is_set()
+    assert ctx.llm.calls == []
 
 
 async def test_packaging_failure_is_not_no_evidence() -> None:
