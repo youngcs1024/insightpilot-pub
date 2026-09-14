@@ -51,7 +51,9 @@ def inputs(**updates: object) -> KnowledgeAgentInput:
     )
 
 
-async def invoke(ctx: RuntimeContext, value: KnowledgeAgentInput | None = None) -> KnowledgeAgentOutput:
+async def invoke(
+    ctx: RuntimeContext, value: KnowledgeAgentInput | None = None
+) -> KnowledgeAgentOutput:
     return KnowledgeAgentOutput.model_validate(
         await build().ainvoke(value or inputs(), context=ctx)
     )

@@ -100,7 +100,9 @@ async def test_rerank_unavailable_degrades_with_flag() -> None:
     assert not output.abstained
 
 
-@pytest.mark.parametrize("field", ["sql", "prior_sql", "data_evidence", "metric_override", "messages"])
+@pytest.mark.parametrize(
+    "field", ["sql", "prior_sql", "data_evidence", "metric_override", "messages"]
+)
 def test_input_schema_excludes_sql_and_data_evidence(field: str) -> None:
     with pytest.raises(ValidationError):
         inputs(**{field: []})
@@ -127,13 +129,18 @@ def test_terminology_is_bounded_and_rejects_extra_fields(memories: list[dict[str
 
 
 async def test_query_preparation_preserves_explicit_scope_without_llm() -> None:
-    scope = RangeTimeScope(periods=[
-        PolicyPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1), label="July"),
-        PolicyPeriod(start=date(2026, 8, 1), end=date(2026, 9, 1), label="August"),
-    ])
+    scope = RangeTimeScope(
+        periods=[
+            PolicyPeriod(start=date(2026, 7, 1), end=date(2026, 8, 1), label="July"),
+            PolicyPeriod(start=date(2026, 8, 1), end=date(2026, 9, 1), label="August"),
+        ]
+    )
     value = inputs(
-        question="原问题", knowledge_intent="独立知识问题", time_scope=scope,
-        region_scope={"region_ids": [1]}, conversation_summary="private-summary",
+        question="原问题",
+        knowledge_intent="独立知识问题",
+        time_scope=scope,
+        region_scope={"region_ids": [1]},
+        conversation_summary="private-summary",
         relevant_memories=[{"type": "terminology", "term": "大促", "means": "618"}],
     )
     service = FakeRetrieval(ranked())
@@ -192,7 +199,8 @@ async def test_encoding_failure_never_degrades(error: ModelError) -> None:
 
 
 @pytest.mark.parametrize(
-    "error", [ModelAuthError(), ModelContractError(), ModelInputError(), RetrievalConfigurationError()]
+    "error",
+    [ModelAuthError(), ModelContractError(), ModelInputError(), RetrievalConfigurationError()],
 )
 async def test_contract_auth_and_configuration_failures_do_not_degrade(error: Exception) -> None:
     output = await invoke(replace(context(), retrieval=FakeRetrieval(error)))
@@ -300,8 +308,11 @@ async def test_checkpoint_roundtrip_preserves_nested_knowledge_contracts() -> No
     output = await invoke(replace(context(), retrieval=FakeRetrieval(result)))
     state = KnowledgeAgentState(
         **inputs(relevant_memories=[{"term": "大促", "means": "618"}]).model_dump(),
-        query=result.query, retrieval_result=result, packaged=output.evidence,
-        evidence=output.evidence, rejection=KnowledgeAbstention.NO_EVIDENCE,
+        query=result.query,
+        retrieval_result=result,
+        packaged=output.evidence,
+        evidence=output.evidence,
+        rejection=KnowledgeAbstention.NO_EVIDENCE,
     )
     serde = serializer()
     restored = serde.loads_typed(serde.dumps_typed(state))
@@ -345,7 +356,7 @@ def test_production_defaults_match_development_selection() -> None:
     assert not actual.record_arm_scores
 
 
-@pytest.mark.parametrize("score, expected", [(0.1, "abstained"), (0.8, "succeeded")])
+@pytest.mark.parametrize(("score", "expected"), [(0.1, "abstained"), (0.8, "succeeded")])
 async def test_terminal_trace_status_and_masking(score: float, expected: str) -> None:
     ctx = replace(context(), retrieval=FakeRetrieval(ranked(score)))
     service, exporter = tracing(ctx.settings)
@@ -353,7 +364,8 @@ async def test_terminal_trace_status_and_masking(score: float, expected: str) ->
         with service.turn(uuid4().hex, TraceMetadata()):
             await build().ainvoke(
                 inputs(question="private-question"),
-                {"callbacks": [GraphTraceCallback()]}, context=ctx,
+                {"callbacks": [GraphTraceCallback()]},
+                context=ctx,
             )
         service.client.flush()
         spans = exporter.get_finished_spans()

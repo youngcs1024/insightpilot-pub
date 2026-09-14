@@ -13,7 +13,11 @@ from app.agents.knowledge.nodes.no_evidence import no_evidence
 from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.knowledge.nodes.retrieve import retrieve
 from app.agents.knowledge.nodes.rewrite_query import rewrite_query
-from app.agents.knowledge.state import KnowledgeAgentInput, KnowledgeAgentOutput, KnowledgeAgentState
+from app.agents.knowledge.state import (
+    KnowledgeAgentInput,
+    KnowledgeAgentOutput,
+    KnowledgeAgentState,
+)
 from app.agents.nodes.common import node_failure
 from app.agents.runtime import RuntimeContext
 from app.core.errors import DeadlineExceededError, InsightPilotError, KnowledgeEvidenceError
@@ -38,7 +42,9 @@ class RuntimeNode(Protocol):
 def guarded(name: str, node: AsyncNode, destination: str) -> RuntimeNode:
     """Translate operational errors without retrying or swallowing cancellation."""
 
-    async def invoke(state: KnowledgeAgentState, *, runtime: Runtime[RuntimeContext]) -> Command[str]:
+    async def invoke(
+        state: KnowledgeAgentState, *, runtime: Runtime[RuntimeContext]
+    ) -> Command[str]:
         try:
             result = await node(state, runtime)
         except InsightPilotError as exc:
@@ -46,9 +52,7 @@ def guarded(name: str, node: AsyncNode, destination: str) -> RuntimeNode:
             failure = node_failure(
                 name, DeadlineExceededError() if runtime.context.deadline.remaining() <= 0 else exc
             )
-            return Command(
-                update={"operation_failure": failure}, goto="finish_knowledge"
-            )
+            return Command(update={"operation_failure": failure}, goto="finish_knowledge")
         return Command(update=result.update, goto=result.goto or destination)
 
     return invoke

@@ -16,7 +16,9 @@ async def rewrite_query(
     return Command(
         update={
             "query": RetrievalQuery(
-                standalone=state.knowledge_intent if state.knowledge_intent.strip() else state.question,
+                standalone=state.knowledge_intent
+                if state.knowledge_intent.strip()
+                else state.question,
                 time_scope=state.time_scope.model_copy(deep=True),
             )
         }

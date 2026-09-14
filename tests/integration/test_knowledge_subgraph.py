@@ -45,7 +45,9 @@ async def test_real_below_floor_abstains(harness: RetrievalHarness) -> None:
     assert ctx.llm.calls == []
 
 
-async def test_real_rerank_outage_returns_bounded_fusion_evidence(harness: RetrievalHarness) -> None:
+async def test_real_rerank_outage_returns_bounded_fusion_evidence(
+    harness: RetrievalHarness,
+) -> None:
     harness.embeddings.rerank_error = ModelError()
     config = RetrievalConfig()
     ctx = replace(context(responses=[]), retrieval=harness.pipeline(config), deadline=deadline())
