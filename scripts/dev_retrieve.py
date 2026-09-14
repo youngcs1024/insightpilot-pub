@@ -44,7 +44,7 @@ def parse_query(args: argparse.Namespace, now: datetime) -> RetrievalQuery:
                         start=date.fromisoformat(start), end=date.fromisoformat(end), label=value
                     )
                 )
-            return RetrievalQuery(standalone=args.query, time_scope=RangeTimeScope(periods=periods))
+            return RetrievalQuery(standalone=args.query, original_question=args.query, time_scope=RangeTimeScope(periods=periods))
         day = (
             date.fromisoformat(args.as_of)
             if args.as_of
@@ -54,7 +54,8 @@ def parse_query(args: argparse.Namespace, now: datetime) -> RetrievalQuery:
             [] if args.as_of else [f"未指定日期，按 Asia/Shanghai 的 {day.isoformat()} 查询。"]
         )
         return RetrievalQuery(
-            standalone=args.query, time_scope=PointTimeScope(as_of=day), assumptions=assumptions
+            standalone=args.query, time_scope=PointTimeScope(as_of=day), assumptions=assumptions,
+            original_question=args.query,
         )
     except (ValueError, ValidationError) as exc:
         raise PeriodUnresolved() from exc

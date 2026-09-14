@@ -12,6 +12,7 @@ from langgraph.types import Command
 from app.agents.knowledge.nodes.no_evidence import no_evidence
 from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.knowledge.nodes.retrieve import retrieve
+from app.agents.knowledge.nodes.resolve_time_scope import resolve_time_scope
 from app.agents.knowledge.nodes.rewrite_query import rewrite_query
 from app.agents.knowledge.state import (
     KnowledgeAgentInput,
@@ -91,16 +92,20 @@ def finish(state: KnowledgeAgentState) -> Command[str]:
         if state.retrieval_result is not None and state.retrieval_result.degradation is not None
         else []
     )
+    assumptions = state.query.assumptions if state.query is not None else []
     if state.operation_failure is not None:
-        output = KnowledgeAgentOutput(failure=state.operation_failure, degraded_components=degraded)
+        output = KnowledgeAgentOutput(failure=state.operation_failure, degraded_components=degraded, assumptions=assumptions)
         status = "failed"
+    elif state.query_clarification is not None:
+        output = KnowledgeAgentOutput(clarification=state.query_clarification)
+        status = "clarified"
     elif state.rejection is not None:
         output = KnowledgeAgentOutput(
-            abstained=True, abstention_reason=refusal_reason(state), degraded_components=degraded
+            abstained=True, abstention_reason=refusal_reason(state), degraded_components=degraded, assumptions=assumptions
         )
         status = "abstained"
     else:
-        output = KnowledgeAgentOutput(evidence=state.packaged, degraded_components=degraded)
+        output = KnowledgeAgentOutput(evidence=state.packaged, degraded_components=degraded, assumptions=assumptions)
         status = "succeeded"
     logger.info("knowledge_completed", status=status, degraded_components=degraded)
     return Command(
@@ -119,6 +124,11 @@ def topology() -> StateGraph[
         output_schema=KnowledgeAgentOutput,
     )
     graph.add_node(
+        "resolve_time_scope",
+        guarded("resolve_time_scope", resolve_time_scope, "rewrite_query"),
+        destinations=("rewrite_query", "finish_knowledge"),
+    )
+    graph.add_node(
         "rewrite_query",
         guarded("rewrite_query", rewrite_query, "retrieve"),
         destinations=("retrieve", "finish_knowledge"),
@@ -135,7 +145,7 @@ def topology() -> StateGraph[
     )
     graph.add_node("no_evidence", no_evidence, destinations=("finish_knowledge",))
     graph.add_node("finish_knowledge", finish, destinations=(END,))
-    graph.add_edge(START, "rewrite_query")
+    graph.add_edge(START, "resolve_time_scope")
     return graph
 
 

@@ -53,6 +53,7 @@ def _messages(evidence: KnowledgeEvidence, *, repair: bool) -> list[BaseMessage]
             content=json.dumps(
                 {
                     "question": evidence.query_used,
+                    "original_question": evidence.original_question,
                     "time_scope": evidence.time_scope.model_dump(mode="json"),
                     "assumptions": evidence.assumptions,
                     "reranked": evidence.reranked,

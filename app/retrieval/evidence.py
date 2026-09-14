@@ -170,6 +170,7 @@ def package_evidence(
             {
                 **fields,
                 "query_used": result.query.standalone,
+                "original_question": result.query.original_question,
                 "time_scope": result.query.time_scope.model_dump(),
                 "assumptions": tuple(result.query.assumptions),
                 "chunks": chunks,

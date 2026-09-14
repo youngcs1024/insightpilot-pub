@@ -63,10 +63,13 @@ class RangeTimeScope(RetrievalContract):
 KnowledgeTimeScope = Annotated[PointTimeScope | RangeTimeScope, Field(discriminator="kind")]
 
 
-class RetrievalQuery(RetrievalContract):
-    """Time is explicit at this boundary; natural-language resolution is Step 3.11."""
+class RetrievalQuery(Contract):
+    """Resolved search text and optional original provenance; V1 remains readable."""
 
+    schema_version: Literal[1, 2] = 2
     standalone: Text
+    original_question: Text | None = None
+    expanded_terms: list[Text] = Field(default_factory=list, max_length=0)
     time_scope: KnowledgeTimeScope
     assumptions: list[str] = Field(default_factory=list, max_length=24)
 

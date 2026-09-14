@@ -147,10 +147,13 @@ class EvidenceChunk(FrozenContract):
         return self
 
 
-class KnowledgeEvidence(FrozenContract):
+class KnowledgeEvidence(Contract):
     """A bounded immutable payload; durable knowledge storage is introduced in Step 4.9."""
 
+    model_config = ConfigDict(frozen=True, hide_input_in_errors=True)
+    schema_version: Literal[1, 2] = 2
     query_used: Text
+    original_question: Text | None = None
     time_scope: FrozenTimeScope
     assumptions: tuple[Text, ...] = Field(default=(), max_length=24)
     corpus_version: Digest | None

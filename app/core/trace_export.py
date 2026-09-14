@@ -27,6 +27,7 @@ _NAMES = frozenset(
         "package_evidence",
         "package_failure",
         "rewrite_query",
+        "resolve_time_scope",
         "retrieve",
         "no_evidence",
         "finish_knowledge",
