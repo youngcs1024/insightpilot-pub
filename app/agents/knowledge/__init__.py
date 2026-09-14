@@ -1,1 +1,1 @@
-"""Knowledge evidence components; subgraph assembly belongs to Step 3.10."""
+"""Isolated knowledge specialist with explicit evidence, refusal and failure outcomes."""

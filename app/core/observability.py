@@ -52,6 +52,10 @@ _NODES = frozenset(
         "execute_sql",
         "package_evidence",
         "package_failure",
+        "rewrite_query",
+        "retrieve",
+        "no_evidence",
+        "finish_knowledge",
     }
 )
 
@@ -342,9 +346,15 @@ class GraphTraceCallback(BaseCallbackHandler):
                 or outputs.update.get("correction_status") is CorrectionStatus.TERMINAL
                 or bool(outputs.update.get("failures"))
                 or outputs.update.get("failure") is not None
+                or outputs.update.get("operation_failure") is not None
             )
         )
-        self._finish(run_id, failed=failed)
+        abstained = (
+            isinstance(outputs, Command)
+            and isinstance(outputs.update, dict)
+            and outputs.update.get("abstained") is True
+        )
+        self._finish(run_id, failed=failed, abstained=abstained)
 
     def close(self) -> None:
         """Close any unfinished node spans after graph cancellation or callback failure."""
@@ -357,11 +367,12 @@ class GraphTraceCallback(BaseCallbackHandler):
         """Exception prose and traceback never reach the tracing SDK."""
         self._finish(run_id, failed=True)
 
-    def _finish(self, run_id: UUID, *, failed: bool = False) -> None:
+    def _finish(self, run_id: UUID, *, failed: bool = False, abstained: bool = False) -> None:
         entry = self._runs.pop(run_id, None)
         if entry is None:
             return
-        entry.update(TraceMetadata(status="failed" if failed else "succeeded"))
+        status = "failed" if failed else "abstained" if abstained else "succeeded"
+        entry.update(TraceMetadata(status=status))
         entry.end()
 
 

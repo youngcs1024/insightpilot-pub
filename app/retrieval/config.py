@@ -93,7 +93,7 @@ class EvidenceConfig(ConfigModel):
 
 
 class RetrievalSettings(ConfigModel):
-    """Storage availability does not enable the not-yet-implemented knowledge pipeline."""
+    """Storage readiness settings; knowledge graph dispatch is owned by its caller."""
 
     enabled: bool = False
     search: RetrievalConfig = Field(default_factory=RetrievalConfig)

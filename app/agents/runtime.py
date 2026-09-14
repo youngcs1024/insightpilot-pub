@@ -16,6 +16,7 @@ from app.core.llm_config import ModelRole
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.metric_resolution import RegionReference, RegionScope
 from app.schemas.metrics import MetricDefinition
+from app.schemas.retrieval import RetrievalQuery, RetrievalResult
 from app.schemas.schema_catalog import SchemaCatalog
 
 
@@ -25,6 +26,12 @@ class LlmPort(Protocol):
     async def generate_structured[T: BaseModel](
         self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
     ) -> T: ...
+
+
+class RetrievalPort(Protocol):
+    """One bounded retrieval service owns all storage and remote model operations."""
+
+    async def retrieve(self, query: RetrievalQuery, *, deadline: Deadline) -> RetrievalResult: ...
 
 
 class McpPort(Protocol):
@@ -105,6 +112,7 @@ class RuntimeContext:
     regions: RegionPort
     metrics: MetricPort
     now: datetime
+    retrieval: RetrievalPort | None = None
 
     def __post_init__(self) -> None:
         """Reject a host-local or otherwise ambiguous reference instant."""

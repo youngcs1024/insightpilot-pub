@@ -13,10 +13,18 @@ from app.core.errors import (
     LlmStructuredOutputError,
     McpPolicyRejected,
     McpUnavailableError,
+    RetrievalUnavailableError,
     SqlCorrectionExhaustedError,
     SqlExecutionError,
     SqlGenerationError,
     SqlTimeoutError,
+)
+from model_runtime.errors import (
+    ModelAuthError,
+    ModelContractError,
+    ModelDeadlineError,
+    ModelError,
+    ModelInputError,
 )
 
 logger = structlog.get_logger(__name__)
@@ -34,8 +42,15 @@ def node_failure(node: str, exc: InsightPilotError) -> NodeFailure:
         SqlCorrectionExhaustedError: FailureKind.SQL_CORRECTION_EXHAUSTED,
         DeadlineExceededError: FailureKind.DEADLINE_EXCEEDED,
         ContextBudgetExceeded: FailureKind.CONTEXT_BUDGET_EXCEEDED,
+        RetrievalUnavailableError: FailureKind.RETRIEVAL_UNAVAILABLE,
     }
     kind = kinds.get(type(exc), FailureKind.NODE_OPERATION_FAILED)
+    if isinstance(exc, ModelDeadlineError):
+        kind = FailureKind.DEADLINE_EXCEEDED
+    elif isinstance(exc, ModelError) and not isinstance(
+        exc, (ModelAuthError, ModelContractError, ModelInputError)
+    ):
+        kind = FailureKind.MODEL_RUNTIME_UNAVAILABLE
     return NodeFailure(node=node, kind=kind, detail=exc.user_message, retryable=exc.retryable)
 
 

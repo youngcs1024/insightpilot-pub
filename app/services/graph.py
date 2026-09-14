@@ -28,9 +28,23 @@ from psycopg_pool import AsyncConnectionPool
 from app.agents import contracts, failures, state
 from app.agents.data import state as data_state
 from app.agents.graph import RECURSION_LIMIT, PhaseOneGraph, build
+from app.agents.knowledge import state as knowledge_state
 from app.agents.state import GRAPH_VERSION, AgentState, GraphInput, GraphOutput
 from app.core.errors import CheckpointError, ConflictError, DeadlineExceededError
-from app.schemas import mcp, metric_resolution, metrics, sanity, schema_catalog, sql_correction
+from app.retrieval import config as retrieval_config
+from app.schemas import (
+    corpus,
+    ingestion,
+    knowledge,
+    mcp,
+    metric_resolution,
+    metrics,
+    model_runtime,
+    retrieval,
+    sanity,
+    schema_catalog,
+    sql_correction,
+)
 from app.services import periods
 
 logger = structlog.get_logger(__name__)
@@ -56,6 +70,13 @@ def serializer() -> JsonPlusSerializer:
             failures,
             state,
             data_state,
+            knowledge_state,
+            retrieval_config,
+            corpus,
+            ingestion,
+            knowledge,
+            model_runtime,
+            retrieval,
             mcp,
             metric_resolution,
             metrics,
