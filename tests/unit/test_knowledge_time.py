@@ -161,6 +161,19 @@ def test_too_many_periods_clarifies() -> None:
     assert parse_time("和".join(["2026年8月"] * 25), now=NOW).clarification
 
 
+@pytest.mark.parametrize("numeral", ["1", "一", "零"])
+def test_long_numeral_cannot_be_partially_accepted(numeral: str) -> None:
+    result = parse_time(numeral * 20_000 + "一月的政策", now=NOW)
+    assert result.clarification is not None
+    assert result.scope is None
+
+
+def test_long_numeric_context_does_not_hide_an_explicit_calendar_date() -> None:
+    result = parse_time("1" * 20_000 + "问2026年8月政策", now=NOW)
+    assert result.clarification is None
+    assert result.scope.periods[0].start == date(2026, 8, 1)
+
+
 def test_scope_comparison_preserves_comparison_structure() -> None:
     two = parse_time("2026年7月和8月", now=NOW).scope
     joined = parse_time("2026年7月至8月", now=NOW).scope

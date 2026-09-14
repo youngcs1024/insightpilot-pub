@@ -27,12 +27,12 @@ from app.services.knowledge_calendar import (
 from app.services.periods import BUSINESS_TZ
 
 _TOKEN = re.compile(
-    rf"(?<![A-Za-z0-9_-])(?:(?P<day>{DAY})|(?P<quarter>{QUARTER})|"
+    rf"(?<![A-Za-z0-9_零\u3007一二三四五六七八九十两-])(?:(?P<day>{DAY})|(?P<quarter>{QUARTER})|"
     rf"(?P<month>{MONTH})|(?P<year>{YEAR}年)|(?P<relative>{RELATIVE}))"
 )
 _UNRESOLVED = re.compile(
-    r"[0-9]{2,4}[-/][0-9]+(?:[-/][0-9]+)?|[+-]?[0-9]+(?:\.[0-9]+)?[年月日号]|"
-    r"[零〇一二三四五六七八九十两]+[年月日号]|Q[0-9]+|季度|"
+    r"[0-9]{2,4}[-/][0-9]{1,8}(?:[-/][0-9]{1,8})?|[+-]?[0-9]{1,8}(?:\.[0-9]{1,8})?[年月日号]|"
+    r"[零〇一二三四五六七八九十两]{1,8}[年月日号]|Q[0-9]+|季度|"
     r"上旬|中旬|下旬|月底|月初|年中|年底|年末|年初|最近|近期|过去|"
     r"(?:之前|之后|以前|以后)(?:的)?(?:政策|规则)|"
     r"上周|本周|下周|这周|春节|双十一|双11|去年|前年|明年"
@@ -89,7 +89,7 @@ def _check_remainder(text: str, matches: list[re.Match[str]]) -> None:
             r"初|底|末|上旬|中旬|下旬|之前|之后|以前|以后|以来|起|前|后|[0-9]+(?:时|点|:)", suffix
         ):
             raise PeriodUnresolved()
-        if re.search(r"[0-9]+[、和与/]+$", text[: match.start()]):
+        if re.search(r"[0-9]{1,8}[、和与/]+$", text[: match.start()]):
             raise PeriodUnresolved()
         remaining[match.start() : match.end()] = " " * (match.end() - match.start())
     if _UNRESOLVED.search("".join(remaining)):
@@ -162,11 +162,11 @@ def parse_time(
     text = _clean(question)
     try:
         matches = list(_TOKEN.finditer(text))
+        if len(matches) > _MAX_PERIODS:
+            raise PeriodUnresolved()
         _check_remainder(text, matches)
         if not matches:
             return KnowledgeTimeResolution()
-        if len(matches) > _MAX_PERIODS:
-            raise PeriodUnresolved()
         years = {value for match in matches if (value := explicit_year(match[0])) is not None}
         yearless = any(
             match.lastgroup in {"day", "month", "quarter"} and explicit_year(match[0]) is None

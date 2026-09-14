@@ -7,7 +7,7 @@ from app.core.errors import PeriodUnresolved
 from app.schemas.retrieval import KnowledgeTimeScope, PointTimeScope, PolicyPeriod, RangeTimeScope
 from app.services.periods import BUSINESS_TZ, Period, resolve_period
 
-NUMBER = r"[0-9零〇一二三四五六七八九十两]+"  # noqa: RUF001 -- Chinese calendar zero.
+NUMBER = r"[0-9零〇一二三四五六七八九十两]{1,4}"  # noqa: RUF001 -- Chinese calendar zero.
 YEAR = r"(?:[0-9]{4}|[零〇一二三四五六七八九]{4})"
 DAY = rf"(?:(?:{YEAR})年)?{NUMBER}月{NUMBER}[日号]|[0-9]{{4}}-[0-9]{{1,2}}-[0-9]{{1,2}}"
 MONTH = rf"(?:(?:{YEAR})年)?{NUMBER}月"
