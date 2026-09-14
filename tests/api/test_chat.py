@@ -365,12 +365,19 @@ async def test_graph_typed_failure_is_persisted(chat: Harness) -> None:
 
 
 async def test_sync_deadline_finalizes(chat: Harness) -> None:
-    for middleware in chat.app.user_middleware:
-        if middleware.cls.__name__ == "DeadlineMiddleware":
-            middleware.kwargs["timeout_s"] = 0.15
+    middleware = next(
+        item for item in chat.app.user_middleware if item.cls.__name__ == "DeadlineMiddleware"
+    )
+    original_timeout = middleware.kwargs["timeout_s"]
+    middleware.kwargs["timeout_s"] = 0.15
     chat.app.middleware_stack = None
     chat.graph.release.clear()
-    response = await chat.client.post(chat.url, json={"content": "count"})
+    try:
+        response = await chat.client.post(chat.url, json={"content": "count"})
+    finally:
+        # The evidence read is a separate request, not part of the induced timeout.
+        middleware.kwargs["timeout_s"] = original_timeout
+        chat.app.middleware_stack = None
     assert response.status_code == 504  # noqa: PLR2004 -- deadline contract.
     assert (await chat.stored())[1]["failure_reason"] == "deadline_exceeded"
 
