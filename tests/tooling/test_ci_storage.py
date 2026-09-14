@@ -8,8 +8,13 @@ from scripts.ci_diagnostics import DiagnosticRecord, evidence_categories, render
 from scripts.ci_storage import CleanupState, StorageAssessment, assess_storage
 from tests.storage_evidence_support import complete_stack
 
+UPLOAD_MARGIN_MINUTES = 5
 
-@pytest.mark.parametrize("damage", ["missing", "malformed", "stale", "duplicate", "pending", "oom", "no_final", "stopped"])
+
+@pytest.mark.parametrize(
+    "damage",
+    ["missing", "malformed", "stale", "duplicate", "pending", "oom", "no_final", "stopped"],
+)
 def test_resource_evidence_rejects_incomplete_runs(tmp_path: Path, damage: str) -> None:
     stack = complete_stack()
     expected = stack.identity.model_copy()
@@ -24,7 +29,9 @@ def test_resource_evidence_rejects_incomplete_runs(tmp_path: Path, damage: str) 
     elif damage == "stopped":
         stack.samples[-1].containers[0].running = False
     if damage != "missing":
-        (tmp_path / "lifecycle.json").write_text("{" if damage == "malformed" else stack.model_dump_json())
+        (tmp_path / "lifecycle.json").write_text(
+            "{" if damage == "malformed" else stack.model_dump_json()
+        )
     if damage == "duplicate":
         (tmp_path / "duplicate").mkdir()
         (tmp_path / "duplicate/lifecycle.json").write_text(stack.model_dump_json())
@@ -39,9 +46,11 @@ def test_independent_stacks_and_green_storage_require_complete_evidence(tmp_path
     assessed = assess_storage(tmp_path, complete_stack().identity)
     assert assessed.accepted
     value = DiagnosticRecord(
-        **complete_stack().identity.model_dump(), stage="storage",
+        **complete_stack().identity.model_dump(),
+        stage="storage",
         steps={name: {"outcome": "success"} for name in ("setup", "tests", "test_report")},
-        report_valid=True, counts={"passed": 1},
+        report_valid=True,
+        counts={"passed": 1},
     )
     assert not successful_record(value)
     value.storage = assessed
@@ -61,12 +70,17 @@ def test_storage_workflow_keeps_budget_and_identity() -> None:
     jobs = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())["jobs"]
     storage = jobs["storage"]
     tests = next(step for step in storage["steps"] if step.get("id") == "tests")
-    assert storage["timeout-minutes"] - tests["timeout-minutes"] >= 5
+    assert storage["timeout-minutes"] - tests["timeout-minutes"] >= UPLOAD_MARGIN_MINUTES
     for name in ("TESTED_SHA", "RUN_ID", "RUN_ATTEMPT"):
         assert "CI_STORAGE_" + name in tests["env"]
-    assert any("--storage-resources milvus-evidence" in step.get("run", "") for step in storage["steps"])
-    assert "tests.storage_tracking" in (root / "tests/conftest.py").read_text()
-    assert not any("from tests.milvus_support import milvus_stack" in path.read_text() for path in (root / "tests/integration").glob("*.py"))
+    assert any(
+        "--storage-resources milvus-evidence" in step.get("run", "") for step in storage["steps"]
+    )
+    assert "storage_tracking.pytest_runtest_makereport" in (root / "tests/conftest.py").read_text()
+    assert not any(
+        "from tests.milvus_support import milvus_stack" in path.read_text()
+        for path in (root / "tests/integration").glob("*.py")
+    )
 
 
 @pytest.mark.parametrize("foreign", [False, True])
@@ -82,15 +96,29 @@ def test_resource_snapshot_uses_exact_compose_owner(
     evidence = complete_stack()
     evidence.samples.clear()
     recorder = CommandRecorder(directory=tmp_path / "commands", cwd=tmp_path, environment={})
-    stack = MilvusStack(uri="http://localhost:19530", command=["docker", "compose", "-p", evidence.project], recorder=recorder, evidence=evidence, directory=tmp_path)
+    stack = MilvusStack(
+        uri="http://localhost:19530",
+        command=["docker", "compose", "-p", evidence.project],
+        recorder=recorder,
+        evidence=evidence,
+        directory=tmp_path,
+    )
 
     def run(_self: CommandRecorder, stage: str, command: list[str]) -> CommandEvidence:
         if stage == "resource-id":
-            assert command[:len(stack.command)] == stack.command
+            assert command[: len(stack.command)] == stack.command
             output = "owned-container"
         elif stage == "resource-state":
             assert command[-1] == "owned-container"
-            output = json.dumps({"project": "foreign" if foreign else evidence.project, "running": True, "oom_killed": False, "restarts": 1, "limit_bytes": 3 * 1024**3})
+            output = json.dumps(
+                {
+                    "project": "foreign" if foreign else evidence.project,
+                    "running": True,
+                    "oom_killed": False,
+                    "restarts": 1,
+                    "limit_bytes": 3 * 1024**3,
+                }
+            )
         else:
             assert command[-1] == "owned-container"
             output = "100MiB / 3GiB"
@@ -103,5 +131,9 @@ def test_resource_snapshot_uses_exact_compose_owner(
         assert not evidence.samples
     else:
         stack.sample("startup")
-        assert {row.service for row in evidence.samples[0].containers} == {"milvus", "etcd", "minio"}
+        assert {row.service for row in evidence.samples[0].containers} == {
+            "milvus",
+            "etcd",
+            "minio",
+        }
         assert (tmp_path / "lifecycle.json").is_file()

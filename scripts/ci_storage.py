@@ -7,7 +7,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 SERVICES = frozenset({"milvus", "etcd", "minio"})
 
 
@@ -72,7 +71,10 @@ class StackEvidence(BaseModel):
             self.completed
             and bool(self.collections)
             and len({row.name for row in self.collections}) == len(self.collections)
-            and all(row.state is CleanupState.ABSENT and row.cleanup_error is None for row in self.collections)
+            and all(
+                row.state is CleanupState.ABSENT and row.cleanup_error is None
+                for row in self.collections
+            )
             and {row.phase for row in self.samples} >= {"startup", "final"}
             and all(
                 len(sample.containers) == len(SERVICES)

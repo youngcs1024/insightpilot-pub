@@ -1,5 +1,6 @@
 """Real production Compose storage services; no model, GPU or private credentials."""
 
+import asyncio
 import json
 import re
 import secrets
@@ -7,26 +8,25 @@ import socket
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-import asyncio
 from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel, Field
 
+from app.retrieval.config import MilvusSettings
 from scripts.ci_process import CommandRecorder, retain_primary_failure
 from scripts.ci_storage import ContainerSample, StackEvidence, StorageIdentity, StorageSample
-from app.retrieval.config import MilvusSettings
-from scripts.deployment import DeploymentError
-from tests.storage_lifecycle import CollectionOwner
-from tests.storage_tracking import FAILED
 from scripts.deployment import (
     ROOT,
     BootstrapSecrets,
+    DeploymentError,
     DeploymentSettings,
     MinioSettings,
     process_environment,
 )
 from tests.shared_database import require_docker
+from tests.storage_lifecycle import CollectionOwner
+from tests.storage_tracking import FAILED
 
 EVIDENCE = ROOT / "milvus-evidence"
 
@@ -69,13 +69,18 @@ class MilvusStack(BaseModel):
                 primary = exc
                 raise
             finally:
-                if primary is not None or request.node.stash.get(FAILED, False):
-                    try:
-                        await asyncio.to_thread(self.sample, "failure")
-                    except Exception:
-                        if primary is None:
-                            raise
-                        primary.add_note("Failure-time resource sample unavailable; see command evidence.")
+                await self.failure_sample(primary, request.node.stash.get(FAILED, False))
+
+    async def failure_sample(self, primary: BaseException | None, failed: bool) -> None:
+        """Keep setup/body exceptions if gathering extra diagnostics also fails."""
+        if primary is None and not failed:
+            return
+        try:
+            await asyncio.to_thread(self.sample, "failure")
+        except Exception:
+            if primary is None:
+                raise
+            primary.add_note("Failure-time resource sample unavailable; see command evidence.")
 
     def sample(self, phase: str) -> None:
         """Read only container IDs resolved by this exact Compose project."""
@@ -91,16 +96,31 @@ class MilvusStack(BaseModel):
                 '"running":{{.State.Running}},"oom_killed":{{.State.OOMKilled}},'
                 '"restarts":{{.RestartCount}},"limit_bytes":{{.HostConfig.Memory}}}'
             )
-            info = json.loads(self.recorder.run(
-                "resource-state", [self.command[0], "inspect", "--format", template, identifier]
-            ).stdout)
+            info = json.loads(
+                self.recorder.run(
+                    "resource-state", [self.command[0], "inspect", "--format", template, identifier]
+                ).stdout
+            )
             if info.pop("project") != self.evidence.project:
                 raise DeploymentError("Container belongs to another project")
-            usage = self.recorder.run(
-                "resource-memory",
-                [self.command[0], "stats", "--no-stream", "--format", "{{.MemUsage}}", identifier],
-            ).stdout.split("/", 1)[0].strip()
-            containers.append(ContainerSample(service=service, memory_bytes=memory_bytes(usage), **info))
+            usage = (
+                self.recorder.run(
+                    "resource-memory",
+                    [
+                        self.command[0],
+                        "stats",
+                        "--no-stream",
+                        "--format",
+                        "{{.MemUsage}}",
+                        identifier,
+                    ],
+                )
+                .stdout.split("/", 1)[0]
+                .strip()
+            )
+            containers.append(
+                ContainerSample(service=service, memory_bytes=memory_bytes(usage), **info)
+            )
         self.evidence.samples.append(StorageSample(phase=phase, containers=containers))
         self.owner.save()
 
@@ -193,7 +213,12 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
     ]
     environment = process_environment(settings)
     identity = StorageIdentity()
-    directory = EVIDENCE / identity.tested_sha / (identity.run_id + "-" + identity.run_attempt) / settings.compose_project_name
+    directory = (
+        EVIDENCE
+        / identity.tested_sha
+        / (identity.run_id + "-" + identity.run_attempt)
+        / settings.compose_project_name
+    )
     directory.mkdir(parents=True, exist_ok=True)
     recorder = CommandRecorder(
         directory=directory / "commands",
@@ -209,7 +234,10 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
         ],
     )
     stack = MilvusStack(
-        uri=f"http://127.0.0.1:{port}", command=command, recorder=recorder, directory=directory,
+        uri=f"http://127.0.0.1:{port}",
+        command=command,
+        recorder=recorder,
+        directory=directory,
         evidence=StackEvidence(identity=identity, project=settings.compose_project_name),
     )
     stack.owner.save()

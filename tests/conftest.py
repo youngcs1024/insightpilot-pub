@@ -2,14 +2,22 @@
 
 import pytest
 
-from tests import auth_support, database_support, milvus_support, settings_support, shared_api, shared_database
+from tests import (
+    auth_support,
+    database_support,
+    milvus_support,
+    settings_support,
+    shared_api,
+    shared_database,
+    storage_tracking,
+)
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
 
 # Dedicated hardware/live modules are excluded before import, including collect-only.
 collect_ignore = ["gpu", "live"]
-pytest_plugins = ("tests.collection_support", "tests.storage_tracking")
-
+pytest_plugins = ("tests.collection_support",)
+pytest_runtest_makereport = storage_tracking.pytest_runtest_makereport
 
 
 milvus_stack = milvus_support.milvus_stack

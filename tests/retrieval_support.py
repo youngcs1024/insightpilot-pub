@@ -194,7 +194,10 @@ class RetrievalHarness:
 
 @pytest.fixture
 async def harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
+    migrated_db: TestPostgres,
+    milvus_stack: MilvusStack,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
 ) -> AsyncIterator[RetrievalHarness]:
     database = Database(migrated_db.app)
     database.start()

@@ -170,14 +170,35 @@ def evidence_categories(value: DiagnosticRecord) -> list[DiagnosticKind]:
         and tests.outcome in (Result.SUCCESS, Result.FAILURE)
     ):
         categories.append(DiagnosticKind.ARTIFACT_ERROR)
+    categories.extend(storage_categories(value))
+    return categories
+
+
+def storage_categories(value: DiagnosticRecord) -> list[DiagnosticKind]:
+    """Explain resource and cleanup failures separately from test assertions."""
+    categories: list[DiagnosticKind] = []
+    tests = value.steps.get("tests")
     if value.stage == "storage":
         storage = value.storage
-        if (storage is None or not storage.evidence_valid) and tests is not None and tests.outcome in (Result.SUCCESS, Result.FAILURE):
+        if (
+            (storage is None or not storage.evidence_valid)
+            and tests is not None
+            and tests.outcome in (Result.SUCCESS, Result.FAILURE)
+        ):
             categories.append(DiagnosticKind.ARTIFACT_ERROR)
         if storage is not None:
-            if any(row.state is not CleanupState.ABSENT for stack in storage.stacks for row in stack.collections):
+            if any(
+                row.state is not CleanupState.ABSENT
+                for stack in storage.stacks
+                for row in stack.collections
+            ):
                 categories.append(DiagnosticKind.CLEANUP_FAILURE)
-            if any(not row.running or row.oom_killed for stack in storage.stacks for sample in stack.samples for row in sample.containers):
+            if any(
+                not row.running or row.oom_killed
+                for stack in storage.stacks
+                for sample in stack.samples
+                for row in sample.containers
+            ):
                 categories.append(DiagnosticKind.RESOURCE_ANOMALY)
     return categories
 
@@ -225,18 +246,28 @@ def render(record: DiagnosticRecord) -> str:
             f"failed collectors={collection_detail.failed_count}."
         )
         rows.extend(f"- Collector: {case_label(node)}" for node in collection_detail.failed_nodes)
-    if record.storage is not None:
-        storage = record.storage
-        rows.append(f"Storage lifecycle: accepted={storage.accepted}; stacks={len(storage.stacks)}.")
-        for stack in storage.stacks:
-            pending = sum(row.state is not CleanupState.ABSENT for row in stack.collections)
-            rows.append(f"- {stack.project}: collections={len(stack.collections)}, unresolved={pending}, completed={stack.completed}.")
-            for sample in stack.samples:
-                for container in sample.containers:
-                    rows.append(f"  {sample.phase}/{container.service}: memory={container.memory_bytes}/{container.limit_bytes}, OOM={container.oom_killed}, restarts={container.restarts}.")
+    rows.extend(render_storage(record.storage))
     if record.types is not None:
         rows.append(describe_types(record.types))
     return "\n".join(rows)
+
+
+def render_storage(storage: StorageAssessment | None) -> list[str]:
+    """Render bounded resource counters without raw container inspect data."""
+    if storage is None:
+        return []
+    rows = [f"Storage lifecycle: accepted={storage.accepted}; stacks={len(storage.stacks)}."]
+    for stack in storage.stacks:
+        pending = sum(row.state is not CleanupState.ABSENT for row in stack.collections)
+        rows.append(
+            f"- {stack.project}: collections={len(stack.collections)}, unresolved={pending}, completed={stack.completed}."
+        )
+        rows.extend(
+            f"  {sample.phase}/{container.service}: memory={container.memory_bytes}/{container.limit_bytes}, OOM={container.oom_killed}, restarts={container.restarts}."
+            for sample in stack.samples
+            for container in sample.containers
+        )
+    return rows
 
 
 class DiagnosticAssessment(BaseModel):
@@ -303,6 +334,20 @@ def successful_payload(value: DiagnosticRecord) -> bool:
             and value.assessment.upstream == {"integration": Result.SUCCESS}
             and value.report_valid is True
         )
+    if value.stage in PARTITIONS:
+        return (
+            successful_storage(value)
+            and value.report_valid is True
+            and value.counts.get(CaseOutcome.PASSED, 0) > 0
+            and all(
+                count == 0 for kind, count in value.counts.items() if kind != CaseOutcome.PASSED
+            )
+        )
+    return True
+
+
+def successful_storage(value: DiagnosticRecord) -> bool:
+    """Check nested run identities as well as their measured lifecycle outcomes."""
     if value.stage == "storage":
         if value.storage is None or not value.storage.accepted:
             return False
@@ -312,14 +357,6 @@ def successful_payload(value: DiagnosticRecord) -> bool:
             for stack in value.storage.stacks
         ):
             return False
-    if value.stage in PARTITIONS:
-        return (
-            value.report_valid is True
-            and value.counts.get(CaseOutcome.PASSED, 0) > 0
-            and all(
-                count == 0 for kind, count in value.counts.items() if kind != CaseOutcome.PASSED
-            )
-        )
     return True
 
 
@@ -428,8 +465,18 @@ def read_dependencies(path: Path) -> Assessment:
         return Assessment(status="invalid_evidence", raw_exit=None)
 
 
-def main() -> None:
-    """Produce a bounded artifact using explicit workflow arguments only."""
+def storage_payload(path: Path | None, run: RunIdentity) -> StorageAssessment | None:
+    """The CLI supplies the authoritative identity for every nested stack receipt."""
+    if path is None:
+        return None
+    return assess_storage(
+        path,
+        StorageIdentity(tested_sha=run.tested_sha, run_id=run.run_id, run_attempt=run.run_attempt),
+    )
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    """Define the explicit workflow inputs for recording and aggregation."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=get_args(Stage))
     parser.add_argument("--tested-sha", required=True)
@@ -447,6 +494,12 @@ def main() -> None:
     parser.add_argument("--storage-resources", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--summary", type=Path, required=True)
+    return parser
+
+
+def main() -> None:
+    """Produce a bounded artifact using explicit workflow arguments only."""
+    parser = argument_parser()
     args = parser.parse_args()
     if args.directory is not None:
         plan = Plan.model_validate_json(args.plan) if args.plan is not None else None
@@ -500,10 +553,7 @@ def main() -> None:
             value.collection = CollectionReport.model_validate_json(args.collection.read_text())
         except (OSError, ValueError, ValidationError):
             value.collection = None
-    if args.storage_resources is not None:
-        value.storage = assess_storage(args.storage_resources, StorageIdentity(
-            tested_sha=args.tested_sha, run_id=args.run_id, run_attempt=args.run_attempt
-        ))
+    value.storage = storage_payload(args.storage_resources, value)
     value = record(value, args.report)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(value.model_dump_json(indent=2) + "\n")

@@ -35,10 +35,12 @@ from tests.shared_database import TestPostgres, pg_container
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
 
 
-
 @pytest.fixture
 async def harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
+    migrated_db: TestPostgres,
+    milvus_stack: MilvusStack,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
 ) -> AsyncIterator[Harness]:
     database = Database(migrated_db.app)
     database.start()

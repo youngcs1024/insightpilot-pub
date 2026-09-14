@@ -56,7 +56,10 @@ class ConsistencyHarness(Harness):
 
 @pytest.fixture
 async def consistency_harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
+    migrated_db: TestPostgres,
+    milvus_stack: MilvusStack,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
 ) -> AsyncIterator[ConsistencyHarness]:
     database = Database(migrated_db.app)
     database.start()

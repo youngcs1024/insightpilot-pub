@@ -20,15 +20,21 @@ from tests.milvus_support import MilvusStack
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
 
 
-
 @pytest.fixture
-async def repository(milvus_stack: MilvusStack, request: pytest.FixtureRequest) -> AsyncIterator[MilvusRepository]:
-    async with milvus_stack.collection("step31", request) as config, MilvusRepository(config) as repo:
+async def repository(
+    milvus_stack: MilvusStack, request: pytest.FixtureRequest
+) -> AsyncIterator[MilvusRepository]:
+    async with (
+        milvus_stack.collection("step31", request) as config,
+        MilvusRepository(config) as repo,
+    ):
         await repo.ensure_collection()
         yield repo
 
 
-async def test_collection_created_with_all_fields(repository: MilvusRepository, milvus_stack: MilvusStack) -> None:
+async def test_collection_created_with_all_fields(
+    repository: MilvusRepository, milvus_stack: MilvusStack
+) -> None:
     report = await repository.describe()
     fields = {field.name: field for field in report.description.fields}
     assert set(fields) == {
@@ -62,7 +68,9 @@ async def test_bm25_function_registered(repository: MilvusRepository) -> None:
     }
 
 
-async def test_jieba_analyzer_tokenizes_chinese(repository: MilvusRepository, milvus_stack: MilvusStack) -> None:
+async def test_jieba_analyzer_tokenizes_chinese(
+    repository: MilvusRepository, milvus_stack: MilvusStack
+) -> None:
     report = await repository.analyze(AnalyzerRequest(texts=list(SAMPLES)))
     assert {"七天", "退货", "政策"} <= set(report.samples[0].tokens)
     assert {"618", "大促", "规则"} <= set(report.samples[2].tokens)
@@ -210,7 +218,9 @@ async def measure_scalar(client: AsyncMilvusClient, name: str, *, indexed: bool)
     return elapsed
 
 
-async def test_scalar_filter_uses_index(milvus_stack: MilvusStack, request: pytest.FixtureRequest) -> None:
+async def test_scalar_filter_uses_index(
+    milvus_stack: MilvusStack, request: pytest.FixtureRequest
+) -> None:
     """Paired sealed-segment timings; both collections are released after measurement."""
     async with (
         milvus_stack.collection("step31_scalar", request) as scan,
@@ -232,9 +242,11 @@ async def test_sequential_owned_collections_leave_no_residuals(
     async with AsyncMilvusClient(uri=milvus_stack.uri, timeout=10) as client:
         before = set(await client.list_collections(timeout=10))
         for _ in range(3):
-            async with milvus_stack.collection("step31", request) as config:
-                async with MilvusRepository(config) as repository:
-                    await repository.ensure_collection()
-                    await seed_three(repository)
+            async with (
+                milvus_stack.collection("step31", request) as config,
+                MilvusRepository(config) as repository,
+            ):
+                await repository.ensure_collection()
+                await seed_three(repository)
             assert not await client.has_collection(config.collection, timeout=10)
         assert set(await client.list_collections(timeout=10)) == before

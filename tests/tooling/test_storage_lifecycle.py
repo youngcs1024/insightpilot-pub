@@ -62,7 +62,7 @@ async def test_partial_setup_without_collection_is_noop(
     manager = owner(tmp_path)
     client = client_patch(monkeypatch)
     client.has_collection.side_effect = [False, False]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="initialization failed"):
         async with manager.collection("step31", "setup"):
             raise ValueError("initialization failed before create")
     client.drop_collection.assert_not_awaited()
@@ -78,10 +78,14 @@ async def test_cleanup_failure_is_blocking_without_hiding_original(
     client = client_patch(monkeypatch)
     client.drop_collection.side_effect = cleanup
     original = ValueError("original")
-    with pytest.raises(ValueError if primary else DeploymentError) as raised:
+
+    async def body() -> None:
         async with manager.collection("step31", "case"):
             if primary:
                 raise original
+
+    with pytest.raises(ValueError if primary else DeploymentError) as raised:
+        await body()
     if primary:
         assert raised.value is original
         assert original.__notes__
@@ -139,7 +143,9 @@ async def test_pytest_failure_flag_and_per_stack_files_are_preserved(
         pass
     assert first.evidence.collections[0].primary_failed
     assert not second.evidence.collections[0].primary_failed
-    assert (tmp_path / "one/lifecycle.json").read_text() != (tmp_path / "two/lifecycle.json").read_text()
+    assert (tmp_path / "one/lifecycle.json").read_text() != (
+        tmp_path / "two/lifecycle.json"
+    ).read_text()
 
 
 async def test_hanging_cleanup_obeys_deadline(

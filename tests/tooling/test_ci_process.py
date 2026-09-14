@@ -116,8 +116,13 @@ def test_runtime_user_probe_requests_pid_and_checks_uid(
     from scripts.ci_storage import StackEvidence, StorageIdentity  # noqa: PLC0415 -- fixture boundary.
 
     stack = MilvusStack(
-        uri="http://127.0.0.1:19530", command=["docker"], recorder=recorder, directory=tmp_path,
-        evidence=StackEvidence(identity=StorageIdentity(), project="insightpilot-test-milvus-" + "a" * 12),
+        uri="http://127.0.0.1:19530",
+        command=["docker"],
+        recorder=recorder,
+        directory=tmp_path,
+        evidence=StackEvidence(
+            identity=StorageIdentity(), project="insightpilot-test-milvus-" + "a" * 12
+        ),
     )
     if uid == "0":
         with pytest.raises(AssertionError):

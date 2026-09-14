@@ -13,7 +13,6 @@ from app.retrieval.config import MilvusSettings
 from scripts.ci_storage import CleanupState, CollectionReceipt, StackEvidence
 from scripts.deployment import DeploymentError
 
-
 CLEANUP_TIMEOUT_S = 30.0
 
 
@@ -68,13 +67,18 @@ class CollectionOwner:
         finally:
             receipt.primary_failed = primary is not None or failed()
             try:
-                async with asyncio.timeout(35), AsyncMilvusClient(uri=self.uri, timeout=10) as client:
+                async with (
+                    asyncio.timeout(35),
+                    AsyncMilvusClient(uri=self.uri, timeout=10) as client,
+                ):
                     await remove_owned(client, receipt, self.evidence)
             except BaseException as exc:
                 receipt.state = CleanupState.FAILED
                 receipt.cleanup_error = type(exc).__name__
                 if primary is not None:
-                    primary.add_note("Additional owned-collection cleanup failure; see lifecycle evidence.")
+                    primary.add_note(
+                        "Additional owned-collection cleanup failure; see lifecycle evidence."
+                    )
                 else:
                     raise DeploymentError("Owned test collection cleanup failed") from exc
             finally:
