@@ -2,15 +2,17 @@
 
 import pytest
 
-from tests import auth_support, database_support, settings_support, shared_api, shared_database
+from tests import auth_support, database_support, milvus_support, settings_support, shared_api, shared_database
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
 
 # Dedicated hardware/live modules are excluded before import, including collect-only.
 collect_ignore = ["gpu", "live"]
-pytest_plugins = ("tests.collection_support",)
+pytest_plugins = ("tests.collection_support", "tests.storage_tracking")
 
 
+
+milvus_stack = milvus_support.milvus_stack
 database_stack = database_support.database_stack
 # API idempotency and migration checks share one schema-owning stack, separate
 # from Step 1.2 metadata-only tests. Do not register it once per test module.

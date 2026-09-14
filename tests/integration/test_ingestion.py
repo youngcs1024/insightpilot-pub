@@ -5,7 +5,6 @@
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
-from uuid import uuid4
 
 import httpx
 import pytest
@@ -23,7 +22,6 @@ from app.core.errors import (
 from app.db.session import Database
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
-from app.retrieval.config import MilvusSettings
 from app.retrieval.ingestion_store import IngestionStore
 from app.schemas.ingestion import ActiveManifest, DocumentStatus, document_id
 from model_runtime.errors import ModelError
@@ -31,16 +29,16 @@ from scripts.migrate_all import migration_config
 from scripts.migration_settings import MigrationSettings, MigrationTarget
 from tests.corpus_support import entry, markdown_source, write_inventory
 from tests.ingestion_support import Embeddings, Harness, clear_registry, write_sources
-from tests.milvus_support import MilvusStack, milvus_stack
+from tests.milvus_support import MilvusStack
 from tests.shared_database import TestPostgres, pg_container
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["milvus_stack"]
+
 
 
 @pytest.fixture
 async def harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path
+    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
 ) -> AsyncIterator[Harness]:
     database = Database(migrated_db.app)
     database.start()
@@ -51,11 +49,8 @@ async def harness(
         await clear_registry(database)
         async with (
             httpx.AsyncClient(transport=httpx.MockTransport(embeddings.handle)) as http,
-            IngestionStore(
-                MilvusSettings(
-                    uri=milvus_stack.uri, collection="step34_" + uuid4().hex, timeout_s=30
-                )
-            ) as store,
+            milvus_stack.collection("step34", request) as storage,
+            IngestionStore(storage) as store,
         ):
             yield Harness(database, store, http, embeddings, tmp_path, settings)
     finally:
@@ -341,6 +336,8 @@ async def test_complete_authored_corpus_is_idempotent(harness: Harness) -> None:
 
 async def test_fresh_databases_produce_identical_chunk_ids(
     harness: Harness,
+    milvus_stack: MilvusStack,
+    request: pytest.FixtureRequest,
     tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,9 +360,10 @@ async def test_fresh_databases_produce_identical_chunk_ids(
             patch.setattr(MigrationSettings, "load", classmethod(lambda cls: settings))
             await asyncio.to_thread(command.upgrade, migration_config(MigrationTarget.APP), "head")
         database.start()
-        async with IngestionStore(
-            harness.store.settings.model_copy(update={"collection": "step34_fresh_" + uuid4().hex})
-        ) as store:
+        async with (
+            milvus_stack.collection("step34_fresh", request) as config,
+            IngestionStore(config) as store,
+        ):
             other = Harness(
                 database,
                 store,

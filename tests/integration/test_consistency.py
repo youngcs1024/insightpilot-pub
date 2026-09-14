@@ -26,10 +26,9 @@ from tests.agents.support import context, invoke
 from tests.consistency_support import ConsistencyHarness, consistency_harness
 from tests.corpus_support import entry, markdown_source, write_inventory
 from tests.integration.checkpoint_support import admitted
-from tests.milvus_support import milvus_stack
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["consistency_harness", "milvus_stack"]
+__all__ = ["consistency_harness"]
 
 
 async def test_no_drift_after_clean_ingest(consistency_harness: ConsistencyHarness) -> None:

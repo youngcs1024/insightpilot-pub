@@ -15,21 +15,20 @@ from app.retrieval.config import MilvusSettings
 from app.retrieval.milvus_repo import AnalyzerRequest, DenseSearch, MilvusRepository
 from app.retrieval.schema import SCALAR_FIELDS, TEXT_FIELDS
 from scripts.analyzer_smoke import SAMPLES, require_sku_tokens
-from tests.milvus_support import EVIDENCE, MilvusStack, milvus_stack
+from tests.milvus_support import MilvusStack
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["milvus_stack"]
+
 
 
 @pytest.fixture
-async def repository(milvus_stack: MilvusStack) -> AsyncIterator[MilvusRepository]:
-    config = MilvusSettings(uri=milvus_stack.uri, collection="step31_" + uuid4().hex, timeout_s=30)
-    async with MilvusRepository(config) as repo:
+async def repository(milvus_stack: MilvusStack, request: pytest.FixtureRequest) -> AsyncIterator[MilvusRepository]:
+    async with milvus_stack.collection("step31", request) as config, MilvusRepository(config) as repo:
         await repo.ensure_collection()
         yield repo
 
 
-async def test_collection_created_with_all_fields(repository: MilvusRepository) -> None:
+async def test_collection_created_with_all_fields(repository: MilvusRepository, milvus_stack: MilvusStack) -> None:
     report = await repository.describe()
     fields = {field.name: field for field in report.description.fields}
     assert set(fields) == {
@@ -46,7 +45,7 @@ async def test_collection_created_with_all_fields(repository: MilvusRepository) 
     assert report.description.properties["schema_version"] == "1"
     assert not report.description.enable_dynamic_field
     assert report.description.auto_id
-    (EVIDENCE / "collection.json").write_text(report.model_dump_json(indent=2))
+    (milvus_stack.directory / "collection.json").write_text(report.model_dump_json(indent=2))
 
 
 async def test_bm25_function_registered(repository: MilvusRepository) -> None:
@@ -63,11 +62,11 @@ async def test_bm25_function_registered(repository: MilvusRepository) -> None:
     }
 
 
-async def test_jieba_analyzer_tokenizes_chinese(repository: MilvusRepository) -> None:
+async def test_jieba_analyzer_tokenizes_chinese(repository: MilvusRepository, milvus_stack: MilvusStack) -> None:
     report = await repository.analyze(AnalyzerRequest(texts=list(SAMPLES)))
     assert {"七天", "退货", "政策"} <= set(report.samples[0].tokens)
     assert {"618", "大促", "规则"} <= set(report.samples[2].tokens)
-    (EVIDENCE / "analyzer-smoke.json").write_text(report.model_dump_json(indent=2))
+    (milvus_stack.directory / "analyzer-smoke.json").write_text(report.model_dump_json(indent=2))
 
 
 async def test_analyzer_preserves_sku_codes(repository: MilvusRepository) -> None:
@@ -172,10 +171,9 @@ async def test_idempotency_and_restart_persist_schema(
         assert "SKU-A1023" in hits[0].entity.content
 
 
-async def measure_scalar(client: AsyncMilvusClient, *, indexed: bool) -> list[float]:
+async def measure_scalar(client: AsyncMilvusClient, name: str, *, indexed: bool) -> list[float]:
     """Create one sealed 50k-row cohort and retain its post-warmup RPC timings."""
     count, batch_size, warmup = 50000, 5000, 5
-    name = "step31_scalar_" + uuid4().hex
     schema = client.create_schema(auto_id=False, enable_dynamic_field=False)
     schema.add_field("pk", DataType.INT64, is_primary=True)
     schema.add_field("document_id", DataType.VARCHAR, max_length=36)
@@ -212,13 +210,31 @@ async def measure_scalar(client: AsyncMilvusClient, *, indexed: bool) -> list[fl
     return elapsed
 
 
-async def test_scalar_filter_uses_index(milvus_stack: MilvusStack) -> None:
-    """Paired repeated timings on sealed segments; neither collection is destroyed."""
-    async with AsyncMilvusClient(uri=milvus_stack.uri, timeout=30) as client:
+async def test_scalar_filter_uses_index(milvus_stack: MilvusStack, request: pytest.FixtureRequest) -> None:
+    """Paired sealed-segment timings; both collections are released after measurement."""
+    async with (
+        milvus_stack.collection("step31_scalar", request) as scan,
+        milvus_stack.collection("step31_scalar", request) as indexed,
+        AsyncMilvusClient(uri=milvus_stack.uri, timeout=30) as client,
+    ):
         timings = {
-            "scan": await measure_scalar(client, indexed=False),
-            "indexed": await measure_scalar(client, indexed=True),
+            "scan": await measure_scalar(client, scan.collection, indexed=False),
+            "indexed": await measure_scalar(client, indexed.collection, indexed=True),
         }
-    (EVIDENCE / "scalar-timing.json").write_text(json.dumps(timings, indent=2))
+    (milvus_stack.directory / "scalar-timing.json").write_text(json.dumps(timings, indent=2))
     # End-to-end RPC timing includes noise. A 25% regression is not acceptable.
     assert statistics.median(timings["indexed"]) <= statistics.median(timings["scan"]) * 1.25
+
+
+async def test_sequential_owned_collections_leave_no_residuals(
+    milvus_stack: MilvusStack, request: pytest.FixtureRequest
+) -> None:
+    async with AsyncMilvusClient(uri=milvus_stack.uri, timeout=10) as client:
+        before = set(await client.list_collections(timeout=10))
+        for _ in range(3):
+            async with milvus_stack.collection("step31", request) as config:
+                async with MilvusRepository(config) as repository:
+                    await repository.ensure_collection()
+                    await seed_three(repository)
+            assert not await client.has_collection(config.collection, timeout=10)
+        assert set(await client.list_collections(timeout=10)) == before

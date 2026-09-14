@@ -10,11 +10,10 @@ from app.retrieval.config import RetrievalConfig
 from app.schemas.ingestion import ActiveManifest
 from app.schemas.retrieval import RetrievalStage, StageStatus
 from model_runtime.errors import ModelContractError, ModelError
-from tests.milvus_support import milvus_stack
 from tests.retrieval_support import RetrievalHarness, deadline, harness, query
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["harness", "milvus_stack"]
+__all__ = ["harness"]
 
 
 async def test_rerank_is_single_batched_call(harness: RetrievalHarness) -> None:

@@ -15,11 +15,10 @@ from app.services.knowledge_generation import KnowledgeGenerationService
 from app.services.schema_tokens import SchemaTokenCounter
 from tests.fakes.chat_model import FakeChatModel
 from tests.knowledge_support import draft
-from tests.milvus_support import milvus_stack
 from tests.retrieval_support import RetrievalHarness, deadline, harness, query
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["harness", "milvus_stack"]
+__all__ = ["harness"]
 RETRIEVAL_SCHEMA_VERSION = 2
 ORIGINAL_PAGE = 2
 

@@ -12,7 +12,6 @@ from app.repositories.document import DocumentRepository
 from app.retrieval.config import RetrievalConfig
 from app.schemas.ingestion import ActiveManifest, canonical, digest, document_id
 from app.schemas.retrieval import PointTimeScope, PolicyPeriod, RangeTimeScope, RetrievalQuery
-from tests.milvus_support import milvus_stack
 from tests.retrieval_support import (
     RetrievalHarness,
     deadline,
@@ -22,7 +21,7 @@ from tests.retrieval_support import (
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["harness", "milvus_stack"]
+__all__ = ["harness"]
 
 
 @pytest.mark.parametrize(

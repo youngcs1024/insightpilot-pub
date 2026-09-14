@@ -390,7 +390,7 @@ jobs:
     outputs:
       coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 17
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -403,10 +403,13 @@ jobs:
         run: echo 'Setup did not succeed; dependent checks were not executed.' >> "$GITHUB_STEP_SUMMARY"
       - name: Real isolated storage containers and non-root runtime
         id: tests
-        timeout-minutes: 12
+        timeout-minutes: 15
         env:
           INSIGHTPILOT_TEST_REQUIRE_DOCKER: "true"
           COVERAGE_FILE: .coverage.storage
+          CI_STORAGE_TESTED_SHA: ${{ github.sha }}
+          CI_STORAGE_RUN_ID: ${{ github.run_id }}
+          CI_STORAGE_RUN_ATTEMPT: ${{ github.run_attempt }}
         shell: bash
         run: |
           set -o pipefail
@@ -447,7 +450,7 @@ jobs:
           CI_TESTED_SHA: ${{ github.sha }}
           CI_RUN_ID: ${{ github.run_id }}
           CI_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: .venv/bin/python -m scripts.ci_diagnostics --stage storage --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/storage.json --summary "$GITHUB_STEP_SUMMARY" --report storage-results.xml
+        run: .venv/bin/python -m scripts.ci_diagnostics --stage storage --tested-sha "$CI_TESTED_SHA" --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT" --steps "$CI_STEPS" --output ci-diagnostics/storage.json --summary "$GITHUB_STEP_SUMMARY" --report storage-results.xml --storage-resources milvus-evidence
       - name: Save storage diagnostics
         if: ${{ always() && hashFiles('ci-diagnostics/storage.json') != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

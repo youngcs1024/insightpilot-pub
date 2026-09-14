@@ -3,7 +3,7 @@
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 import pytest
@@ -14,7 +14,6 @@ from app.core.config_models import ModelRuntimeClientSettings
 from app.core.deadline import Deadline
 from app.db.models.chunk import Chunk
 from app.db.session import Database
-from app.retrieval.config import MilvusSettings
 from app.retrieval.consistency_store import ConsistencyStore
 from app.schemas.ingestion import ActiveManifest, PreparedDocument, VectorRow
 from app.services.consistency import ConsistencyService
@@ -57,7 +56,7 @@ class ConsistencyHarness(Harness):
 
 @pytest.fixture
 async def consistency_harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path
+    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
 ) -> AsyncIterator[ConsistencyHarness]:
     database = Database(migrated_db.app)
     database.start()
@@ -68,11 +67,8 @@ async def consistency_harness(
         await clear_registry(database)
         async with (
             httpx.AsyncClient(transport=httpx.MockTransport(embeddings.handle)) as http,
-            ConsistencyStore(
-                MilvusSettings(
-                    uri=milvus_stack.uri, collection="step35_" + uuid4().hex, timeout_s=30
-                )
-            ) as store,
+            milvus_stack.collection("step35", request) as storage,
+            ConsistencyStore(storage) as store,
         ):
             yield ConsistencyHarness(database, store, http, embeddings, tmp_path, settings)
     finally:

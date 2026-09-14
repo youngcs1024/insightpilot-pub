@@ -9,11 +9,10 @@ from app.repositories.document import DocumentRepository
 from evals.harness.retrieval_contracts import Arm, Split, arm_config
 from evals.harness.retrieval_dataset import check_manifest, load_dataset
 from tests.consistency_support import ConsistencyHarness, consistency_harness
-from tests.milvus_support import milvus_stack
 from tests.retrieval_support import RetrievalHarness, deadline, harness, query
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
-__all__ = ["consistency_harness", "harness", "milvus_stack"]
+__all__ = ["consistency_harness", "harness"]
 
 
 @pytest.mark.parametrize("arm", [arm for arm in Arm if arm is not Arm.D_FP32])

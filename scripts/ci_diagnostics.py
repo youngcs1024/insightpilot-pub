@@ -21,6 +21,7 @@ from scripts.ci_result import (
     job_description,
     migration_assessment,
 )
+from scripts.ci_storage import CleanupState, StorageAssessment, StorageIdentity, assess_storage
 from scripts.ci_types import TypeReport
 from scripts.ci_types import describe as describe_types
 
@@ -60,6 +61,8 @@ class DiagnosticKind(StrEnum):
     NOT_RUN = "not_run"
     UPSTREAM_BLOCKED = "upstream_blocked"
     ARTIFACT_ERROR = "artifact_error"
+    CLEANUP_FAILURE = "cleanup_failure"
+    RESOURCE_ANOMALY = "resource_anomaly"
 
 
 class RunIdentity(BaseModel):
@@ -84,6 +87,7 @@ class DiagnosticRecord(RunIdentity):
     dependencies: Assessment | None = None
     types: TypeReport | None = None
     collection: CollectionReport | None = None
+    storage: StorageAssessment | None = None
 
 
 def record(request: DiagnosticRecord, report: Path | None) -> DiagnosticRecord:
@@ -166,6 +170,15 @@ def evidence_categories(value: DiagnosticRecord) -> list[DiagnosticKind]:
         and tests.outcome in (Result.SUCCESS, Result.FAILURE)
     ):
         categories.append(DiagnosticKind.ARTIFACT_ERROR)
+    if value.stage == "storage":
+        storage = value.storage
+        if (storage is None or not storage.evidence_valid) and tests is not None and tests.outcome in (Result.SUCCESS, Result.FAILURE):
+            categories.append(DiagnosticKind.ARTIFACT_ERROR)
+        if storage is not None:
+            if any(row.state is not CleanupState.ABSENT for stack in storage.stacks for row in stack.collections):
+                categories.append(DiagnosticKind.CLEANUP_FAILURE)
+            if any(not row.running or row.oom_killed for stack in storage.stacks for sample in stack.samples for row in sample.containers):
+                categories.append(DiagnosticKind.RESOURCE_ANOMALY)
     return categories
 
 
@@ -212,6 +225,15 @@ def render(record: DiagnosticRecord) -> str:
             f"failed collectors={collection_detail.failed_count}."
         )
         rows.extend(f"- Collector: {case_label(node)}" for node in collection_detail.failed_nodes)
+    if record.storage is not None:
+        storage = record.storage
+        rows.append(f"Storage lifecycle: accepted={storage.accepted}; stacks={len(storage.stacks)}.")
+        for stack in storage.stacks:
+            pending = sum(row.state is not CleanupState.ABSENT for row in stack.collections)
+            rows.append(f"- {stack.project}: collections={len(stack.collections)}, unresolved={pending}, completed={stack.completed}.")
+            for sample in stack.samples:
+                for container in sample.containers:
+                    rows.append(f"  {sample.phase}/{container.service}: memory={container.memory_bytes}/{container.limit_bytes}, OOM={container.oom_killed}, restarts={container.restarts}.")
     if record.types is not None:
         rows.append(describe_types(record.types))
     return "\n".join(rows)
@@ -281,6 +303,15 @@ def successful_payload(value: DiagnosticRecord) -> bool:
             and value.assessment.upstream == {"integration": Result.SUCCESS}
             and value.report_valid is True
         )
+    if value.stage == "storage":
+        if value.storage is None or not value.storage.accepted:
+            return False
+        if any(
+            (stack.identity.tested_sha, stack.identity.run_id, stack.identity.run_attempt)
+            != (value.tested_sha, value.run_id, value.run_attempt)
+            for stack in value.storage.stacks
+        ):
+            return False
     if value.stage in PARTITIONS:
         return (
             value.report_valid is True
@@ -413,6 +444,7 @@ def main() -> None:
     parser.add_argument("--dependencies", type=Path)
     parser.add_argument("--types", type=Path)
     parser.add_argument("--collection", type=Path)
+    parser.add_argument("--storage-resources", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args()
@@ -468,6 +500,10 @@ def main() -> None:
             value.collection = CollectionReport.model_validate_json(args.collection.read_text())
         except (OSError, ValueError, ValidationError):
             value.collection = None
+    if args.storage_resources is not None:
+        value.storage = assess_storage(args.storage_resources, StorageIdentity(
+            tested_sha=args.tested_sha, run_id=args.run_id, run_attempt=args.run_attempt
+        ))
     value = record(value, args.report)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(value.model_dump_json(indent=2) + "\n")

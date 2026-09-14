@@ -1,15 +1,24 @@
 """Real production Compose storage services; no model, GPU or private credentials."""
 
 import json
+import re
 import secrets
 import socket
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+import asyncio
 from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel, Field
 
 from scripts.ci_process import CommandRecorder, retain_primary_failure
+from scripts.ci_storage import ContainerSample, StackEvidence, StorageIdentity, StorageSample
+from app.retrieval.config import MilvusSettings
+from scripts.deployment import DeploymentError
+from tests.storage_lifecycle import CollectionOwner
+from tests.storage_tracking import FAILED
 from scripts.deployment import (
     ROOT,
     BootstrapSecrets,
@@ -22,12 +31,86 @@ from tests.shared_database import require_docker
 EVIDENCE = ROOT / "milvus-evidence"
 
 
+def memory_bytes(value: str) -> int:
+    """Parse Docker's documented unit-bearing memory counter without prose matching."""
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(B|KiB|MiB|GiB|TiB)", value)
+    if match is None:
+        raise DeploymentError("Invalid Docker memory counter")
+    units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
+    return int(float(match[1]) * units[match[2]])
+
+
 class MilvusStack(BaseModel):
     """Only the test fixture publishes a loopback port and controls service restarts."""
 
     uri: str
     command: list[str]
     recorder: CommandRecorder = Field(repr=False)
+    evidence: StackEvidence
+    directory: Path
+
+    @property
+    def owner(self) -> CollectionOwner:
+        """Keep ownership records in this stack only."""
+        return CollectionOwner(self.uri, self.evidence, self.directory)
+
+    @asynccontextmanager
+    async def collection(
+        self, prefix: str, request: pytest.FixtureRequest
+    ) -> AsyncIterator[MilvusSettings]:
+        """Collect failure-time resource observations before releasing the test collection."""
+        async with self.owner.collection(
+            prefix, request.node.nodeid, lambda: request.node.stash.get(FAILED, False)
+        ) as settings:
+            primary: BaseException | None = None
+            try:
+                yield settings
+            except BaseException as exc:
+                primary = exc
+                raise
+            finally:
+                if primary is not None or request.node.stash.get(FAILED, False):
+                    try:
+                        await asyncio.to_thread(self.sample, "failure")
+                    except Exception:
+                        if primary is None:
+                            raise
+                        primary.add_note("Failure-time resource sample unavailable; see command evidence.")
+
+    def sample(self, phase: str) -> None:
+        """Read only container IDs resolved by this exact Compose project."""
+        containers = []
+        for service in ("milvus", "etcd", "minio"):
+            identifier = self.recorder.run(
+                "resource-id", [*self.command, "ps", "--all", "--quiet", service]
+            ).stdout.strip()
+            if not identifier or len(identifier.splitlines()) != 1:
+                raise DeploymentError("Missing fixture-owned container")
+            template = (
+                '{"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
+                '"running":{{.State.Running}},"oom_killed":{{.State.OOMKilled}},'
+                '"restarts":{{.RestartCount}},"limit_bytes":{{.HostConfig.Memory}}}'
+            )
+            info = json.loads(self.recorder.run(
+                "resource-state", [self.command[0], "inspect", "--format", template, identifier]
+            ).stdout)
+            if info.pop("project") != self.evidence.project:
+                raise DeploymentError("Container belongs to another project")
+            usage = self.recorder.run(
+                "resource-memory",
+                [self.command[0], "stats", "--no-stream", "--format", "{{.MemUsage}}", identifier],
+            ).stdout.split("/", 1)[0].strip()
+            containers.append(ContainerSample(service=service, memory_bytes=memory_bytes(usage), **info))
+        self.evidence.samples.append(StorageSample(phase=phase, containers=containers))
+        self.owner.save()
+
+    def finish(self) -> None:
+        """Persist and enforce cleanup completion before stopping the isolated stack."""
+        self.sample("final")
+        self.evidence.completed = True
+        self.owner.save()
+        if not self.evidence.accepted:
+            raise DeploymentError("Incomplete storage lifecycle evidence")
 
     def restart(self) -> None:
         """Restart only this fixture's Milvus, retaining its etcd and object-store state."""
@@ -65,7 +148,7 @@ def record_storage_users(stack: MilvusStack) -> None:
         assert all(row[0].isdigit() and row[1].isdigit() for row in rows)
         assert all(int(row[1]) != 0 for row in rows)
         users[identifier] = [row[1] for row in rows]
-    (EVIDENCE / "runtime-users.json").write_text(json.dumps(users, indent=2))
+    (stack.directory / "runtime-users.json").write_text(json.dumps(users, indent=2))
 
 
 @pytest.fixture(scope="session")
@@ -109,9 +192,11 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
         "retrieval",
     ]
     environment = process_environment(settings)
-    EVIDENCE.mkdir(exist_ok=True)
+    identity = StorageIdentity()
+    directory = EVIDENCE / identity.tested_sha / (identity.run_id + "-" + identity.run_attempt) / settings.compose_project_name
+    directory.mkdir(parents=True, exist_ok=True)
     recorder = CommandRecorder(
-        directory=EVIDENCE / "commands",
+        directory=directory / "commands",
         cwd=ROOT,
         environment=environment,
         secrets=[
@@ -123,10 +208,15 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
             *([settings.minio.password] if settings.minio.password else []),
         ],
     )
-    stack = MilvusStack(uri=f"http://127.0.0.1:{port}", command=command, recorder=recorder)
-    (EVIDENCE / "stack.json").write_text(json.dumps({"project": settings.compose_project_name}))
+    stack = MilvusStack(
+        uri=f"http://127.0.0.1:{port}", command=command, recorder=recorder, directory=directory,
+        evidence=StackEvidence(identity=identity, project=settings.compose_project_name),
+    )
+    stack.owner.save()
+    (directory / "stack.json").write_text(json.dumps({"project": settings.compose_project_name}))
     with retain_primary_failure(
         [
+            stack.finish,
             lambda: recorder.run("final-state", [*command, "ps", "--all", "--format", "json"]),
             lambda: recorder.run(
                 "service-logs", [*command, "logs", "--no-color", "etcd", "minio", "milvus"]
@@ -141,4 +231,5 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
             timeout=240,
         )
         record_storage_users(stack)
+        stack.sample("startup")
         yield stack

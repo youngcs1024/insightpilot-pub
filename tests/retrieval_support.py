@@ -194,18 +194,18 @@ class RetrievalHarness:
 
 @pytest.fixture
 async def harness(
-    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path
+    migrated_db: TestPostgres, milvus_stack: MilvusStack, tmp_path: Path, request: pytest.FixtureRequest
 ) -> AsyncIterator[RetrievalHarness]:
     database = Database(migrated_db.app)
     database.start()
     settings = ModelRuntimeClientSettings(auth_token=SecretStr("synthetic-retrieval-token"))
-    storage = MilvusSettings(uri=milvus_stack.uri, collection="step36_" + uuid4().hex, timeout_s=30)
     embeddings = QueryEmbeddings(calls=[])
     corpus(tmp_path)
     try:
         await clear_registry(database)
         async with (
             httpx.AsyncClient(transport=httpx.MockTransport(embeddings.handle)) as http,
+            milvus_stack.collection("step36", request) as storage,
             IngestionStore(storage) as ingestion,
             HybridSearchStore(storage) as search,
         ):
