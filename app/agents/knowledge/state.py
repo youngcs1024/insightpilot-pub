@@ -64,8 +64,17 @@ class KnowledgeAgentOutput(Contract):
     @model_validator(mode="after")
     def terminal_outcome(self) -> Self:
         """Reject ambiguous outcomes and empty successful evidence."""
-        if sum((self.evidence is not None, self.failure is not None, self.abstained,
-                self.clarification is not None)) != 1:
+        if (
+            sum(
+                (
+                    self.evidence is not None,
+                    self.failure is not None,
+                    self.abstained,
+                    self.clarification is not None,
+                )
+            )
+            != 1
+        ):
             raise PydanticCustomError("knowledge_outcome", "Expected exactly one terminal outcome")
         if self.abstained != (self.abstention_reason is not None):
             raise PydanticCustomError("knowledge_abstention", "Refusal requires a reason")

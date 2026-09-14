@@ -11,14 +11,18 @@ from app.services.knowledge_time import needs_history, parse_time, time_clarific
 from app.services.periods import BUSINESS_TZ
 
 
-async def resolve_time_scope(state: KnowledgeAgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
+async def resolve_time_scope(
+    state: KnowledgeAgentState, runtime: Runtime[RuntimeContext]
+) -> Command[str]:
     """Preserve supplied scope unless explicit current text contradicts it."""
     ctx = runtime.context
     ctx.deadline.check("knowledge_time")
     followup = needs_history(state.question) or needs_history(state.knowledge_intent)
     history = state.knowledge_history
     reference = history[-1].time_scope if history and followup else None
-    if reference is not None and any(not same_scope(reference, turn.time_scope) for turn in history):
+    if reference is not None and any(
+        not same_scope(reference, turn.time_scope) for turn in history
+    ):
         reference = None
     years = {year_of(turn.time_scope) for turn in history} if followup else set()
     year = next(iter(years)) if len(years) == 1 else None

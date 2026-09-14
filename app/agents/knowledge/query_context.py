@@ -9,7 +9,9 @@ from app.schemas.retrieval import KnowledgeTimeScope
 from app.services.knowledge_calendar import same_scope
 
 
-def bounded_history(history: list[KnowledgeHistoryTurn], counter: SchemaTokenPort) -> list[KnowledgeHistoryTurn]:
+def bounded_history(
+    history: list[KnowledgeHistoryTurn], counter: SchemaTokenPort
+) -> list[KnowledgeHistoryTurn]:
     """Keep a recent complete suffix; truncated-away topics cannot become antecedents."""
     selected: list[KnowledgeHistoryTurn] = []
     for turn in reversed(history):
@@ -21,7 +23,9 @@ def bounded_history(history: list[KnowledgeHistoryTurn], counter: SchemaTokenPor
     return [turn.model_copy(deep=True) for turn in selected]
 
 
-def antecedents(rewritten: KnowledgeRewrite, history: list[KnowledgeHistoryTurn]) -> list[KnowledgeHistoryTurn]:
+def antecedents(
+    rewritten: KnowledgeRewrite, history: list[KnowledgeHistoryTurn]
+) -> list[KnowledgeHistoryTurn]:
     """Unknown, missing or unresolved references are never a usable interpretation."""
     ids = set(rewritten.referenced_turn_ids)
     if rewritten.unresolved_references or not ids or not ids <= {turn.turn_id for turn in history}:

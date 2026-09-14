@@ -16,7 +16,9 @@ async def observe(case: RetrievalCase, pipeline: RetrievalPipeline, arm: Arm) ->
     """Only query and time reach the pipeline; all failures remain explicit attempts."""
     try:
         result = await pipeline.retrieve_observed(
-            RetrievalQuery(standalone=case.text, original_question=case.text, time_scope=case.time_scope),
+            RetrievalQuery(
+                standalone=case.text, original_question=case.text, time_scope=case.time_scope
+            ),
             deadline=Deadline(time.monotonic() + 90),
         )
         return Attempt(query_id=case.id, arm=arm, observed=result)

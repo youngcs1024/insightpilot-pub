@@ -65,21 +65,34 @@ async def test_real_rerank_outage_returns_bounded_fusion_evidence(
     assert ctx.llm.calls == []
 
 
-async def test_natural_language_comparison_reaches_real_validity_filters(harness: RetrievalHarness) -> None:
-    ctx = replace(context(responses=[]), retrieval=harness.pipeline(RetrievalConfig()), deadline=deadline())
+async def test_natural_language_comparison_reaches_real_validity_filters(
+    harness: RetrievalHarness,
+) -> None:
+    ctx = replace(
+        context(responses=[]), retrieval=harness.pipeline(RetrievalConfig()), deadline=deadline()
+    )
     output = await invoke(ctx, inputs(question="比较2026年7月和8月的七天退款规则", time_scope=None))
     assert output.failure is None
     assert output.clarification is None
     assert {chunk.source_path for chunk in output.evidence.chunks} >= {"july.md", "august.md"}
-    assert [period.label for period in output.evidence.time_scope.periods] == ["2026年7月", "2026年8月"]
+    assert [period.label for period in output.evidence.time_scope.periods] == [
+        "2026年7月",
+        "2026年8月",
+    ]
     assert output.evidence.original_question == "比较2026年7月和8月的七天退款规则"
     assert ctx.llm.calls == []
 
 
 async def test_followup_inherits_real_august_policy_boundary(harness: RetrievalHarness) -> None:
     prior = topic()
-    ctx = replace(context(responses=[rewrite(prior, "七天退款规则中的运费")]), retrieval=harness.pipeline(RetrievalConfig()), deadline=deadline())
-    output = await invoke(ctx, inputs(question="那运费呢？", time_scope=None, knowledge_history=[prior]))
+    ctx = replace(
+        context(responses=[rewrite(prior, "七天退款规则中的运费")]),
+        retrieval=harness.pipeline(RetrievalConfig()),
+        deadline=deadline(),
+    )
+    output = await invoke(
+        ctx, inputs(question="那运费呢\uff1f", time_scope=None, knowledge_history=[prior])
+    )
     paths = {chunk.source_path for chunk in output.evidence.chunks}
     assert "august.md" in paths
     assert "july.md" not in paths

@@ -53,8 +53,10 @@ def needs_history(question: str) -> bool:
     text = question.strip()
     if _REFERENCE.search(text) is not None:
         return True
-    return (re.search(r"(?:呢|怎么样)[?？。！!]*$", text) is not None
-            and re.search(r"什么|如何|哪|是否|多少|怎么(?!样)", text) is None)
+    return (
+        re.search(r"(?:呢|怎么样)[?\uff1f。\uff01!]*$", text) is not None
+        and re.search(r"什么|如何|哪|是否|多少|怎么(?!样)", text) is None
+    )
 
 
 def time_clarification() -> KnowledgeClarification:
@@ -82,14 +84,35 @@ def _clean(question: str) -> str:
 def _check_remainder(text: str, matches: list[re.Match[str]]) -> None:
     remaining = list(text)
     for match in matches:
-        remaining[match.start():match.end()] = " " * (match.end() - match.start())
+        suffix = text[match.end() :]
+        if re.match(
+            r"初|底|末|上旬|中旬|下旬|之前|之后|以前|以后|以来|起|前|后|[0-9]+(?:时|点|:)", suffix
+        ):
+            raise PeriodUnresolved()
+        if re.search(r"[0-9]+[、和与/]+$", text[: match.start()]):
+            raise PeriodUnresolved()
+        remaining[match.start() : match.end()] = " " * (match.end() - match.start())
     if _UNRESOLVED.search("".join(remaining)):
         raise PeriodUnresolved()
 
 
+def _duplicate_atom(previous: list[PolicyPeriod], current: list[PolicyPeriod], gap: str) -> bool:
+    if not previous or re.fullmatch(r"[(),:即]*", gap) is None:
+        return False
+    if len(current) != 1:
+        raise PeriodUnresolved()
+    left, right = previous[-1], current[0]
+    if (left.start, left.end) != (right.start, right.end):
+        raise PeriodUnresolved()
+    return True
+
+
 def _periods(
-    text: str, matches: list[re.Match[str]], now: datetime,
-    reference: KnowledgeTimeScope | None, year: int,
+    text: str,
+    matches: list[re.Match[str]],
+    now: datetime,
+    reference: KnowledgeTimeScope | None,
+    year: int,
 ) -> list[PolicyPeriod]:
     result: list[PolicyPeriod] = []
     previous_end = 0
@@ -100,12 +123,21 @@ def _periods(
             if match.lastgroup == "relative"
             else [calendar_atom(atom, now=now, year=year)]
         )
-        if result and _JOIN.fullmatch(text[previous_end:match.start()]):
+        gap = text[previous_end : match.start()]
+        if _duplicate_atom(result, current, gap):
+            previous_end = match.end()
+            continue
+        if result and _JOIN.fullmatch(gap):
             if len(current) != 1 or result[-1].start >= current[0].end:
                 raise PeriodUnresolved()
             previous = result.pop()
-            result.append(PolicyPeriod(start=previous.start, end=current[0].end,
-                                       label=f"{previous.label}至{current[0].label}"))
+            result.append(
+                PolicyPeriod(
+                    start=previous.start,
+                    end=current[0].end,
+                    label=f"{previous.label}至{current[0].label}",
+                )
+            )
         else:
             result.extend(current)
         previous_end = match.end()
@@ -113,7 +145,10 @@ def _periods(
 
 
 def parse_time(
-    question: str, *, now: datetime, reference: KnowledgeTimeScope | None = None,
+    question: str,
+    *,
+    now: datetime,
+    reference: KnowledgeTimeScope | None = None,
     reference_year: int | None = None,
 ) -> KnowledgeTimeResolution:
     """Extract all calendar atoms, retaining explicit ambiguity and comparison labels.
@@ -133,17 +168,25 @@ def parse_time(
         if len(matches) > _MAX_PERIODS:
             raise PeriodUnresolved()
         years = {value for match in matches if (value := explicit_year(match[0])) is not None}
-        yearless = any(match.lastgroup in {"day", "month", "quarter"} and explicit_year(match[0]) is None for match in matches)
+        yearless = any(
+            match.lastgroup in {"day", "month", "quarter"} and explicit_year(match[0]) is None
+            for match in matches
+        )
         if yearless and len(years) > 1:
             raise PeriodUnresolved()
         year = next(iter(years)) if len(years) == 1 else reference_year or local_now.year
         periods = _periods(text, matches, local_now, reference, year)
-        point = len(matches) == 1 and (matches[0].lastgroup == "day" or matches[0][0] in _POINT_WORDS)
+        point = len(matches) == 1 and (
+            matches[0].lastgroup == "day" or matches[0][0] in _POINT_WORDS
+        )
         assumptions = []
         if yearless and not years:
             source = "上文" if reference_year is not None else "Asia/Shanghai 当前业务年"
             assumptions.append(f"未指定年份，按{source} {year} 年解释。")
-        return KnowledgeTimeResolution(scope=as_scope(periods, point=point), assumptions=assumptions,
-                                       year_inferred=yearless and not years)
+        return KnowledgeTimeResolution(
+            scope=as_scope(periods, point=point),
+            assumptions=assumptions,
+            year_inferred=yearless and not years,
+        )
     except (ValueError, KeyError, OverflowError, ValidationError, PeriodUnresolved):
         return KnowledgeTimeResolution(clarification=time_clarification())

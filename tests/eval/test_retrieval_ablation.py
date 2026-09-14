@@ -141,9 +141,13 @@ async def test_adapter_keeps_failure_without_oracle_input() -> None:
     assert set(type(request).model_fields) == {
         "schema_version",
         "standalone",
+        "original_question",
+        "expanded_terms",
         "time_scope",
         "assumptions",
     }
+    assert request.original_question == request.standalone == dataset().cases[0].text
+    assert request.expanded_terms == []
 
 
 async def test_fp32_replay_calls_only_reranker_with_identical_candidates() -> None:
