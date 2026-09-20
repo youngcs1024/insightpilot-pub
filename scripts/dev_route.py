@@ -60,10 +60,14 @@ async def run(inputs: RouterInput, settings: RouteProcessSettings) -> RouteDecis
     """Use the exact production classifier with minimal process-owned dependencies."""
     llm = LazyRoutingLlm(settings.llm)
     try:
-        return await route_question(inputs, RoutingRuntime(
-            llm=llm, settings=settings.router,
-            deadline=Deadline(time.monotonic() + settings.timeout_s),
-        ))
+        return await route_question(
+            inputs,
+            RoutingRuntime(
+                llm=llm,
+                settings=settings.router,
+                deadline=Deadline(time.monotonic() + settings.timeout_s),
+            ),
+        )
     finally:
         await llm.aclose()
 

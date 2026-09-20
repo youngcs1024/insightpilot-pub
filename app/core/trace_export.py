@@ -17,6 +17,7 @@ _NAMES = frozenset(
         "turn",
         "prepare",
         "rewrite_question",
+        "router",
         "select_schema",
         "sanity_check",
         "correct_sql",

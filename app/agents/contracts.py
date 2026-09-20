@@ -235,7 +235,9 @@ class RouteDecision(Contract):
     confidence: float = Field(ge=0, le=1)
     data_intent: str = Field(default="", max_length=32_000)
     knowledge_intent: str = Field(default="", max_length=32_000)
-    metric_hints: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=6)
+    metric_hints: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
+        default_factory=list, max_length=6
+    )
     reasoning: str = Field(default="", max_length=2000)
     decided_by: Literal["prefilter", "llm"] = "llm"
     clarification_question: str = Field(default="", max_length=1000)

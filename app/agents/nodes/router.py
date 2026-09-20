@@ -19,6 +19,7 @@ from app.core.observability import TraceMetadata, observe, update_current_observ
 from app.services.llm.usage import collect_usage
 
 logger = structlog.get_logger(__name__)
+_SPECIALIST_COUNT = 2
 
 
 def _clarify(decision: RouteDecision) -> RouteDecision:
@@ -37,7 +38,7 @@ def _normalize(text: str) -> str:
 def _scoped(decision: RouteDecision, question: str) -> RouteDecision:
     if decision.route is Route.BOTH:
         intents = {_normalize(decision.data_intent), _normalize(decision.knowledge_intent)}
-        if _normalize(question) in intents or len(intents) != 2:
+        if _normalize(question) in intents or len(intents) != _SPECIALIST_COUNT:
             return _clarify(decision)
     values = decision.model_dump()
     if decision.route not in {Route.DATA_ONLY, Route.BOTH}:
@@ -46,7 +47,8 @@ def _scoped(decision: RouteDecision, question: str) -> RouteDecision:
         values["knowledge_intent"] = ""
     values["clarification_question"] = (
         decision.clarification_question.strip() or CLARIFICATION_QUESTION
-        if decision.route is Route.CLARIFY else ""
+        if decision.route is Route.CLARIFY
+        else ""
     )
     return RouteDecision.model_validate(values)
 
@@ -73,7 +75,9 @@ async def _classify(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
             ctx.deadline.check("router_structured_failure")
             logger.exception("router_structured_output_failed", exc_info=False)
             return RouteDecision(
-                route=Route.CLARIFY, confidence=0, decided_by="llm",
+                route=Route.CLARIFY,
+                confidence=0,
+                decided_by="llm",
                 clarification_question=CLARIFICATION_QUESTION,
             )
         finally:
@@ -99,13 +103,19 @@ async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecis
                 if original.confidence < ctx.settings.min_confidence
                 else _scoped(original, inputs.question)
             )
-            update_current_observation(TraceMetadata(
-                route=decision.route.value, original_route=original.route.value,
-                confidence=original.confidence, decided_by=decision.decided_by,
-            ))
+            update_current_observation(
+                TraceMetadata(
+                    route=decision.route.value,
+                    original_route=original.route.value,
+                    confidence=original.confidence,
+                    decided_by=decision.decided_by,
+                )
+            )
             logger.info(
-                "route_decided", route=decision.route.value,
-                original_route=original.route.value, confidence=original.confidence,
+                "route_decided",
+                route=decision.route.value,
+                original_route=original.route.value,
+                confidence=original.confidence,
                 decided_by=decision.decided_by,
             )
             return decision

@@ -6,6 +6,7 @@ import json
 import math
 import re
 from collections.abc import Mapping
+from contextlib import suppress
 
 from langfuse.types import MaskOtelSpansParams, MaskOtelSpansResult, OtelSpanPatch
 from pydantic import BaseModel, SecretStr
@@ -17,7 +18,9 @@ MAX_DEPTH = 12
 MAX_UNRESOLVED_REFERENCES = 20
 _ROW_MARKER = re.compile(r"\[<redacted: [0-9]+ rows × [0-9]+ cols>\]")  # noqa: RUF001 -- contract notation.
 REDACTED = "<redacted>"
-_ROUTING = frozenset({"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"})
+_ROUTING = frozenset(
+    {"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"}
+)
 _SAFE = frozenset(
     {
         "referenced_prior_turn",
@@ -163,19 +166,25 @@ def _routing_diagnostic(key: str, value: object) -> object:
         return value if isinstance(value, str) and value in {"prefilter", "llm"} else REDACTED
     if key == "prefilter_hit":
         return value if isinstance(value, bool) else REDACTED
+    return _routing_number(key, value)
+
+
+def _routing_number(key: str, value: object) -> object:
     if isinstance(value, bool):
         return REDACTED
     if key == "router_tokens":
         return value if isinstance(value, int) and value >= 0 else REDACTED
-    return value if isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 1 else REDACTED
+    return (
+        value
+        if isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 1
+        else REDACTED
+    )
 
 
 def _routing_attribute(key: str, value: object) -> str:
     if isinstance(value, str):
-        try:
+        with suppress(ValueError, RecursionError):
             value = json.loads(value)
-        except (ValueError, RecursionError):
-            pass
     safe = _routing_diagnostic(key, value)
     return safe if isinstance(safe, str) else json.dumps(safe)
 

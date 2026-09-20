@@ -26,21 +26,30 @@ def isolated_route_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
 
 
 def configured() -> dev_route.RouteProcessSettings:
-    return dev_route.RouteProcessSettings(_env_file=None, llm=LLMSettings(
-        base_url="https://provider.invalid/v1", model="test-model", api_key="test-only",
-    ))
+    return dev_route.RouteProcessSettings(
+        _env_file=None,
+        llm=LLMSettings(
+            base_url="https://provider.invalid/v1",
+            model="test-model",
+            api_key="test-only",
+        ),
+    )
 
 
 async def test_simple_demo_constructs_no_llm_client(monkeypatch: pytest.MonkeyPatch) -> None:
     factory = Mock(side_effect=AssertionError("must remain lazy"))
     monkeypatch.setattr(dev_route, "LlmService", factory)
-    result = await dev_route.run(RouterInput(question="8月的GMV是多少?"), dev_route.RouteProcessSettings(_env_file=None))
+    result = await dev_route.run(
+        RouterInput(question="8月的GMV是多少?"), dev_route.RouteProcessSettings(_env_file=None)
+    )
     assert result.route is Route.DATA_ONLY
     assert result.decided_by == "prefilter"
     factory.assert_not_called()
 
 
-async def test_both_demo_uses_shared_classifier_and_closes_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_both_demo_uses_shared_classifier_and_closes_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     llm = AsyncMock()
     llm.generate_structured.return_value = decision()
     monkeypatch.setattr(dev_route, "LlmService", Mock(return_value=llm))
@@ -54,7 +63,9 @@ async def test_both_demo_uses_shared_classifier_and_closes_client(monkeypatch: p
 
 
 @pytest.mark.parametrize("when", ["start", "generate_structured"])
-async def test_failed_cli_initialization_or_call_closes_client(monkeypatch: pytest.MonkeyPatch, when: str) -> None:
+async def test_failed_cli_initialization_or_call_closes_client(
+    monkeypatch: pytest.MonkeyPatch, when: str
+) -> None:
     llm = AsyncMock()
     getattr(llm, when).side_effect = LlmRequestError("private-provider-error")
     monkeypatch.setattr(dev_route, "LlmService", Mock(return_value=llm))
@@ -74,7 +85,9 @@ async def test_cancellation_closes_client(monkeypatch: pytest.MonkeyPatch) -> No
 
 async def test_missing_model_config_fails_only_when_model_needed() -> None:
     with pytest.raises(LlmConfigurationError):
-        await dev_route.run(RouterInput(question=BOTH_QUESTION), dev_route.RouteProcessSettings(_env_file=None))
+        await dev_route.run(
+            RouterInput(question=BOTH_QUESTION), dev_route.RouteProcessSettings(_env_file=None)
+        )
 
 
 def test_cli_prints_prefilter_result(capsys: pytest.CaptureFixture[str]) -> None:
@@ -101,7 +114,9 @@ def test_cli_invalid_input_has_safe_nonzero_exit(capsys: pytest.CaptureFixture[s
     assert capsys.readouterr().err == "Invalid routing input or configuration.\n"
 
 
-def test_cli_cleanup_timeout_has_safe_nonzero_exit(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_cleanup_timeout_has_safe_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(dev_route, "run", AsyncMock(side_effect=TimeoutError("private-cleanup")))
     assert dev_route.main([BOTH_QUESTION]) == 1
     assert capsys.readouterr().err == "Routing cleanup timed out.\n"
@@ -119,7 +134,9 @@ def test_process_override_and_default(monkeypatch: pytest.MonkeyPatch) -> None:
     assert dev_route.RouteProcessSettings.load().router.min_confidence == 0.8  # noqa: PLR2004 -- explicit environment override.
 
 
-def test_api_settings_support_router_override(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_settings_support_router_override(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("IP_ROUTER__MIN_CONFIDENCE", "0.75")
     values = settings.model_dump(exclude={"router"})
     assert Settings(_env_file=None, **values).router.min_confidence == 0.75  # noqa: PLR2004 -- explicit environment override.
