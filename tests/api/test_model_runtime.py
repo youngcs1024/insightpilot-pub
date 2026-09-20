@@ -43,7 +43,7 @@ async def test_authenticated_embed_rerank_ready_contracts() -> None:
         assert len(result.dense) == 2
         assert len(result.dense[0]) == 1024
         assert result.sparse == [{42: 0.5}, {42: 0.5}]
-        assert result.ms >= result.inference_ms
+        assert result.batches[0].ms >= result.batches[0].inference_ms
         scores = await client.rerank(
             "退款", ["政策", "天气"], deadline=Deadline(time.monotonic() + 2)
         )

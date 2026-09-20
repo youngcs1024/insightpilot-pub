@@ -47,7 +47,7 @@ class Embeddings:
     async def handle(self, request: httpx.Request) -> httpx.Response:
         texts = json.loads(request.content)["texts"]
         self.calls.append(texts)
-        if self.fail_at == len(self.calls):
+        if self.fail_at is not None and len(self.calls) >= self.fail_at:
             raise httpx.ConnectError("synthetic outage", request=request)
         response = EmbedResult(
             request_id="test-ingestion",

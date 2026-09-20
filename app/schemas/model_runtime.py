@@ -1,9 +1,10 @@
 """Version-one model HTTP contracts, importable without any ML dependency."""
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, NonNegativeInt, model_validator
+from pydantic_core import PydanticCustomError
 
 EMBED_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 RERANK_REVISION = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
@@ -28,7 +29,7 @@ class EmbedMode(StrEnum):
 
 
 class EmbedRequest(Contract):
-    """One bounded model-server request, before future client-side splitting."""
+    """One bounded model-server request after client-side splitting."""
 
     texts: Annotated[list[Text], Field(min_length=1, max_length=16)]
     mode: EmbedMode
@@ -73,6 +74,37 @@ class EmbedResult(ModelResponse):
 
     dense: list[Dense]
     sparse: list[Sparse]
+
+
+class EmbedBatchReceipt(ModelResponse):
+    """Successful batch diagnostics without duplicating vectors or source text."""
+
+    start_index: NonNegativeInt
+    text_count: int = Field(ge=1, le=16)
+    attempts: int = Field(ge=1, le=2)
+
+
+class EmbedOutput(Contract):
+    """Client-only complete ordered output; each batch retains its actual settings."""
+
+    dense: list[Dense] = Field(min_length=1)
+    sparse: list[Sparse] = Field(min_length=1)
+    batches: list[EmbedBatchReceipt] = Field(min_length=1)
+    client_ms: NonNegativeInt
+
+    @model_validator(mode="after")
+    def complete_batches(self) -> Self:
+        """Reject missing ranges and mixed semantics, allowing recovered microbatch sizes."""
+        offset = 0
+        metadata = self.batches[0].metadata
+        for batch in self.batches:
+            normalized = batch.metadata.model_copy(update={"embed_batch": metadata.embed_batch})
+            if batch.start_index != offset or normalized != metadata:
+                raise PydanticCustomError("embedding_batches", "Incompatible embedding batches")
+            offset += batch.text_count
+        if offset != len(self.dense) or offset != len(self.sparse):
+            raise PydanticCustomError("embedding_count", "Incomplete embedding output")
+        return self
 
 
 class RerankResult(ModelResponse):

@@ -22,6 +22,7 @@ from app.schemas.model_runtime import EmbedMode, EmbedResult
 from model_runtime.errors import ModelContractError, ModelError
 from tests.ingestion_support import model_metadata
 from tests.knowledge_support import provenance
+from tests.model_client_support import embed_output
 from tests.rerank_support import model
 from tests.retrieval_support import candidate, deadline, encoded, fake_store, query
 
@@ -68,7 +69,7 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> RetrievalPipeline:
     return RetrievalPipeline(
         SimpleNamespace(session=sessions),
         store,
-        SimpleNamespace(embed=AsyncMock(return_value=output)),
+        SimpleNamespace(embed=AsyncMock(return_value=embed_output(output))),
         RetrievalSettings(search=RetrievalConfig(use_rerank=False)),
     )
 

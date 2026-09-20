@@ -94,6 +94,7 @@ class QueryEmbeddings:
     rerank_calls: list[dict[str, object]] = field(default_factory=list)
     rerank_error: ModelError | None = None
     rerank_scores: list[float] | None = None
+    encode_error: ModelError | None = None
 
     async def handle(self, request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
@@ -120,6 +121,15 @@ class QueryEmbeddings:
             )
             return httpx.Response(200, json=reranked.model_dump(mode="json"))
         self.calls.append(payload)
+        if self.encode_error is not None:
+            error = self.encode_error
+            failure = ModelFailure(
+                code=error.kind,
+                message=error.user_message,
+                request_id="synthetic-encode",
+                retryable=error.retryable,
+            )
+            return httpx.Response(error.http_status, json=failure.model_dump(mode="json"))
         texts = payload["texts"]
         is_query = payload["mode"] == "query"
         vectors = []

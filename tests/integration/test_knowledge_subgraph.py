@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from app.agents.failures import FailureKind
 from app.retrieval.config import RetrievalConfig
 from app.schemas.model_runtime import ModelFailureKind
 from model_runtime.errors import ModelError
@@ -62,6 +63,7 @@ async def test_real_rerank_outage_returns_bounded_fusion_evidence(
     assert output.evidence.top_rerank_score is None
     assert output.evidence.meets_floor is None
     assert all(chunk.scores.rerank is None for chunk in output.evidence.chunks)
+    assert len(harness.embeddings.rerank_calls) == 2
     assert ctx.llm.calls == []
 
 
@@ -80,6 +82,22 @@ async def test_natural_language_comparison_reaches_real_validity_filters(
         "2026年8月",
     ]
     assert output.evidence.original_question == "比较2026年7月和8月的七天退款规则"
+    assert ctx.llm.calls == []
+
+
+async def test_real_encoding_outage_is_typed_failure_without_rerank(
+    harness: RetrievalHarness,
+) -> None:
+    before = len(harness.embeddings.calls)
+    harness.embeddings.encode_error = ModelError()
+    ctx = replace(context(), retrieval=harness.pipeline(RetrievalConfig()), deadline=deadline())
+    output = await invoke(ctx)
+    assert output.failure.kind is FailureKind.MODEL_RUNTIME_UNAVAILABLE
+    assert output.evidence is None
+    assert not output.abstained
+    assert output.degraded_components == []
+    assert len(harness.embeddings.calls) == before + 2
+    assert harness.embeddings.rerank_calls == []
     assert ctx.llm.calls == []
 
 

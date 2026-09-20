@@ -48,6 +48,7 @@ async def run_operation[T](
     timeout_s: float,
     name: str,
     attempts: int = 3,
+    retry_policy: Callable[[BaseException], bool] = is_retryable,
 ) -> T:
     """Run one safely repeatable operation, with a bounded number of total attempts.
 
@@ -82,7 +83,7 @@ async def run_operation[T](
     retrying = AsyncRetrying(
         stop=stop_after_attempt(attempts),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception(is_retryable),
+        retry=retry_if_exception(retry_policy),
         reraise=True,
         before_sleep=before_sleep,
     )

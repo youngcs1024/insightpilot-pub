@@ -1,6 +1,7 @@
 """Application factory, separate from the fail-fast process configuration import."""
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -20,9 +21,11 @@ from app.api.exception_handlers import (
 from app.api.v1.health import router as health_router
 from app.api.v1.router import router as api_router
 from app.clients.mcp_client import McpClient
-from app.clients.model_runtime import ModelRuntimeProbe
+from app.clients.model_resilience import STARTUP_BUDGET_S
+from app.clients.model_runtime import ModelRuntimeClient, ModelRuntimeProbe
 from app.core.background import shutdown as shutdown_background
 from app.core.config_models import Settings
+from app.core.deadline import Deadline
 from app.core.errors import InsightPilotError
 from app.core.limiter import AuthLimiter
 from app.core.logging import setup_logging
@@ -39,6 +42,7 @@ from app.services.llm.service import LlmService
 from app.services.metrics import MetricService
 from app.services.schema_catalog import SchemaCatalogService
 from app.services.schema_tokens import SchemaTokenCounter
+from model_runtime.errors import ModelError
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +75,15 @@ async def _close_graph(graph: GraphService) -> None:
         logger.exception("graph_cleanup_failed")
 
 
+async def _close_model(client: ModelRuntimeClient | None) -> None:
+    if client is None:
+        return
+    try:
+        await client.aclose()
+    except Exception:
+        logger.exception("model_cleanup_failed")
+
+
 async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle owner per resource.
     service: HealthService,
     database: Database,
@@ -78,6 +91,7 @@ async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle 
     llm: LlmService,
     graph: GraphService,
     timeout_s: float,
+    model: ModelRuntimeClient | None,
 ) -> None:
     try:
         async with asyncio.timeout(timeout_s), asyncio.TaskGroup() as group:
@@ -87,6 +101,7 @@ async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle 
             group.create_task(_close_mcp(client))
             group.create_task(_close_llm(llm))
             group.create_task(_close_graph(graph))
+            group.create_task(_close_model(model))
     except TimeoutError:
         logger.exception("application_shutdown_timeout")
 
@@ -100,6 +115,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     llm_service: LlmService | None = None,
     graph_service: GraphService | None = None,
     observability: Observability | None = None,
+    model_runtime_client: ModelRuntimeClient | None = None,
 ) -> FastAPI:
     """Create an isolated application with typed, replaceable readiness dependencies."""
     observability = observability or Observability(settings)
@@ -107,17 +123,20 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     database = database or Database(settings.database)
     mcp_client = mcp_client or McpClient(settings.mcp)
     graph_service = graph_service or GraphService(settings.database)
+    if settings.retrieval.enabled and settings.model_runtime is not None:
+        model_runtime_client = model_runtime_client or ModelRuntimeClient(settings.model_runtime)
     service = health_service or HealthService(
         PostgreSQLProbe(database),
         MCPProbe(settings.mcp, settings.health.mcp_timeout_s),
         settings.health,
-        model=ModelRuntimeProbe(settings.model_runtime)
-        if settings.retrieval.enabled and settings.model_runtime is not None
+        model=ModelRuntimeProbe(model_runtime_client)
+        if settings.retrieval.enabled and model_runtime_client is not None
         else None,
     )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        startup_deadline = Deadline(time.monotonic() + STARTUP_BUDGET_S)
         setup_logging(settings)
         app.state.ready = False
         try:
@@ -131,6 +150,11 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
                 await mcp_client.connect()
             except Exception:
                 logger.exception("mcp_startup_unavailable")
+            if settings.retrieval.enabled and model_runtime_client is not None:
+                try:
+                    await model_runtime_client.warmup(deadline=startup_deadline)
+                except ModelError as exc:
+                    logger.exception("model_startup_unavailable", code=exc.code)
             checks = await service.start()
             app.state.ready = checks.ready
             logger.info("application_started", ready=checks.ready, version=__version__)
@@ -146,6 +170,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
                 llm_service,
                 graph_service,
                 settings.http.shutdown_timeout_s,
+                model_runtime_client,
             )
             await observability.aclose()
             logger.info("application_stopped")
@@ -159,6 +184,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     app.state.conversations = ConversationService(database)
     app.state.llm = llm_service
     app.state.mcp = mcp_client
+    app.state.model_runtime = model_runtime_client
     app.state.metrics = MetricService(database, settings.database)
     app.state.schema_token_counter = SchemaTokenCounter()
     app.state.schema_catalog = SchemaCatalogService(database, mcp_client, settings.schema_catalog)

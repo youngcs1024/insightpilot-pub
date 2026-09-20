@@ -1,6 +1,7 @@
 """Real isolated double-hop SSH; no company keys, host access or live GPU."""
 
 import json
+import asyncio
 import os
 import shutil
 import subprocess
@@ -12,8 +13,15 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from app.clients.model_runtime import ModelRuntimeClient
+from app.core.config_models import ModelRuntimeClientSettings
+from app.core.deadline import Deadline
+from app.schemas.model_runtime import EmbedMode, ModelFailureKind
+from model_runtime.errors import ModelError
 from model_tunnel.config import TunnelSettings
 from model_tunnel.render import render
+from tests.fakes.model_endpoint import TOKEN
+from tests.fakes.model_runtime import FakeModels
 
 pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,7 +44,8 @@ def ssh_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Path, 
     for name in ("client", "wrong", "jump", "target"):
         command(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(root / name)])
     (root / "authorized_keys").write_text((root / "client.pub").read_text())
-    (root / "health").write_text('{"status":"ok"}')
+    (root / "model_endpoint.py").write_text((ROOT / "tests/fakes/model_endpoint.py").read_text())
+    (root / "model_metadata.json").write_text(FakeModels().metadata().model_dump_json())
     (root / "sshd_config").write_text("""Port 2222
 ListenAddress 0.0.0.0
 PidFile /tmp/ip-sshd.pid
@@ -81,7 +90,7 @@ USER appuser
                     prefix + "-server",
                     "sh",
                     "-c",
-                    "python -m http.server 8100 --bind 127.0.0.1 >/dev/null 2>&1 & exec /usr/sbin/sshd -D -e -f /fixture/sshd_config -h /fixture/"
+                    "python /fixture/model_endpoint.py >/dev/null 2>&1 & exec /usr/sbin/sshd -D -e -f /fixture/sshd_config -h /fixture/"
                     + role,
                 ]
             )
@@ -252,3 +261,26 @@ def test_invalid_trust_or_key_fails_closed(ssh_stack: tuple[Path, str, str], fai
     )
     assert result.returncode != 0
     assert (root / "known_hosts").read_text().startswith("[jump]:2222 ")
+
+
+async def test_model_client_outage_and_reconnect_over_isolated_tunnel(
+    ssh_stack: tuple[Path, str, str],
+) -> None:
+    _, prefix, url = ssh_stack
+    client = ModelRuntimeClient(ModelRuntimeClientSettings(base_url=url, auth_token=TOKEN))
+    try:
+        assert (await client.ready(deadline=Deadline(time.monotonic() + 2))).ready
+        await asyncio.to_thread(command, ["docker", "stop", "--time", "2", prefix + "-target"])
+        try:
+            with pytest.raises(ModelError) as error:
+                await client.embed(["isolated query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5))
+            assert error.value.kind in {ModelFailureKind.UNAVAILABLE, ModelFailureKind.DEADLINE}
+        finally:
+            await asyncio.to_thread(command, ["docker", "start", prefix + "-target"])
+            await asyncio.to_thread(wait_healthy, url)
+        result = await client.embed(["recovered query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5))
+        assert len(result.dense) == len(result.sparse) == 1
+        assert result.batches[0].metadata == FakeModels().metadata()
+        assert client.breaker.failures == 0
+    finally:
+        await client.aclose()

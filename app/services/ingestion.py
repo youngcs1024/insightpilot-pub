@@ -128,10 +128,10 @@ class IngestionService:
             response = await self.model.embed(
                 [chunk.content for chunk, _ in batch], EmbedMode.DOCUMENT, deadline=deadline
             )
-            actual = EncodingProfile.from_metadata(response.metadata)
+            actual = EncodingProfile.from_metadata(response.batches[0].metadata)
             if profile is not None and actual != profile:
                 raise IngestionConfigurationError()
-            profile, metadata = actual, response.metadata
+            profile, metadata = actual, response.batches[0].metadata
             rows.extend(
                 VectorRow(chunk=chunk, metadata=business, dense=dense, sparse_learned=sparse)
                 for (chunk, business), dense, sparse in zip(

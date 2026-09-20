@@ -171,7 +171,7 @@ class RetrievalPipeline:
             text=query.standalone,
             dense=result.dense[0],
             sparse=result.sparse[0],
-            metadata=result.metadata,
+            metadata=result.batches[0].metadata,
         )
 
     async def _admit(

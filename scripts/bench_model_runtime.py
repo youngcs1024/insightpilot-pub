@@ -8,6 +8,7 @@ from pathlib import Path
 from app.clients.model_runtime import ModelRuntimeClient
 from app.core.deadline import Deadline
 from app.schemas.model_runtime import EmbedMode
+from model_runtime.errors import ModelContractError
 from scripts.model_diagnostics_settings import ModelDiagnosticsSettings
 from scripts.model_evidence import Benchmark, CallMeasurement, Provenance, RerankMeasurement
 from scripts.model_workload import input_hash, pairs
@@ -25,7 +26,9 @@ async def benchmark(provenance: Provenance) -> Benchmark:
             EmbedMode.DOCUMENT,
             deadline=Deadline(time.monotonic() + 20),
         )
-        embedding = CallMeasurement.from_response(embedded, time.monotonic() - start)
+        if len(embedded.batches) != 1 or embedded.batches[0].attempts != 1:
+            raise ModelContractError()
+        embedding = CallMeasurement.from_response(embedded.batches[0], time.monotonic() - start)
         start = time.monotonic()
         relevant = await client.rerank(
             "七天无理由退货的条件是什么?",
