@@ -20,11 +20,14 @@ from app.services.health import HealthService
 from model_runtime.errors import ModelError
 from tests.fakes.health_probe import FakeProbe
 from tests.fakes.model_runtime import FakeModels
-from tests.model_client_support import BASE_URL, TOKEN, failure, settings as model_settings
+from tests.model_client_support import BASE_URL, TOKEN, failure
+from tests.model_client_support import settings as model_settings
 
 
 async def test_model_warmup_readiness_and_lifespan_ownership(
-    settings: Settings, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    respx_mock: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings.retrieval.enabled = True
     settings.model_runtime = model_settings()
@@ -34,10 +37,13 @@ async def test_model_warmup_readiness_and_lifespan_ownership(
     service = HealthService(FakeProbe(), FakeProbe(), settings.health, model=probe)
     monkeypatch.setattr("app.clients.model_runtime.WARMUP_POLL_S", 0.001)
     ready = ReadyResult(request_id="ready", metadata=FakeModels().metadata())
-    route = respx_mock.get(BASE_URL + "/ready").mock(side_effect=[
-        failure(ModelError()), httpx.Response(200, json=ready.model_dump(mode="json")),
-        httpx.Response(200, json=ready.model_dump(mode="json")),
-    ])
+    route = respx_mock.get(BASE_URL + "/ready").mock(
+        side_effect=[
+            failure(ModelError()),
+            httpx.Response(200, json=ready.model_dump(mode="json")),
+            httpx.Response(200, json=ready.model_dump(mode="json")),
+        ]
+    )
     app = create_app(settings, health_service=service, model_runtime_client=client)
     with capture_logs() as logs:
         async with app.router.lifespan_context(app):
@@ -51,19 +57,26 @@ async def test_model_warmup_readiness_and_lifespan_ownership(
 
 
 async def test_model_outage_keeps_api_live_and_recovers(
-    settings: Settings, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    respx_mock: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings.retrieval.enabled = True
     settings.model_runtime = model_settings()
     monkeypatch.setattr("app.application.setup_logging", lambda settings: None)
     client = ModelRuntimeClient(settings.model_runtime)
-    service = HealthService(FakeProbe(), FakeProbe(), settings.health, model=ModelRuntimeProbe(client))
+    service = HealthService(
+        FakeProbe(), FakeProbe(), settings.health, model=ModelRuntimeProbe(client)
+    )
     monkeypatch.setattr("app.application.STARTUP_BUDGET_S", 0.05)
     monkeypatch.setattr("app.clients.model_runtime.WARMUP_POLL_S", 0.001)
     route = respx_mock.get(BASE_URL + "/ready").mock(return_value=failure(ModelError()))
     app = create_app(settings, health_service=service, model_runtime_client=client)
     with capture_logs() as logs:
-        async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://api") as http:
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://api") as http,
+        ):
             assert not app.state.ready
             assert (await http.get("/health")).status_code == 200
             response = await http.get("/ready")
@@ -78,11 +91,15 @@ async def test_model_outage_keeps_api_live_and_recovers(
     assert client._http.is_closed
 
 
-async def test_disabled_retrieval_never_constructs_or_warms_model(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_disabled_retrieval_never_constructs_or_warms_model(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings.model_runtime = model_settings()
     factory = AsyncMock()
     monkeypatch.setattr("app.application.ModelRuntimeClient", factory)
-    app = create_app(settings, health_service=HealthService(FakeProbe(), FakeProbe(), settings.health))
+    app = create_app(
+        settings, health_service=HealthService(FakeProbe(), FakeProbe(), settings.health)
+    )
     async with app.router.lifespan_context(app):
         assert app.state.model_runtime is None
         assert app.state.ready
@@ -101,7 +118,9 @@ async def test_prior_startup_work_consumes_model_budget(settings: Settings) -> N
     graph.start.side_effect = start
     client = AsyncMock(spec=ModelRuntimeClient)
     app = create_app(
-        settings, model_runtime_client=client, graph_service=graph,
+        settings,
+        model_runtime_client=client,
+        graph_service=graph,
         health_service=HealthService(FakeProbe(), FakeProbe(), settings.health),
     )
     async with app.router.lifespan_context(app):

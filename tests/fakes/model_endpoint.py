@@ -3,6 +3,7 @@
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import ClassVar
 
 TOKEN = "isolated-model-token"  # noqa: S105 -- public synthetic fixture credential.
 
@@ -10,7 +11,7 @@ TOKEN = "isolated-model-token"  # noqa: S105 -- public synthetic fixture credent
 class Handler(BaseHTTPRequestHandler):
     """Minimal authenticated wire responses; no production inference or imports."""
 
-    metadata: dict[str, object] = {}
+    metadata: ClassVar[dict[str, object]] = {}
 
     def send_json(self, status: int, body: dict[str, object]) -> None:
         content = json.dumps(body).encode()
@@ -23,32 +24,47 @@ class Handler(BaseHTTPRequestHandler):
     def authenticated(self) -> bool:
         if self.headers.get("Authorization") == "Bearer " + TOKEN:
             return True
-        self.send_json(401, {
-            "code": "MODEL_RUNTIME_AUTH", "message": "Authentication required",
-            "request_id": "fixture", "retryable": False,
-        })
+        self.send_json(
+            401,
+            {
+                "code": "MODEL_RUNTIME_AUTH",
+                "message": "Authentication required",
+                "request_id": "fixture",
+                "retryable": False,
+            },
+        )
         return False
 
-    def do_GET(self) -> None:  # noqa: N802 -- standard-library HTTP handler hook.
+    def do_GET(self) -> None:
         if self.path == "/health":
             self.send_json(200, {"status": "ok"})
         elif self.authenticated():
-            self.send_json(200, {
-                "ready": True, "request_id": "fixture", "metadata": self.metadata,
-            })
+            self.send_json(
+                200,
+                {
+                    "ready": True,
+                    "request_id": "fixture",
+                    "metadata": self.metadata,
+                },
+            )
 
-    def do_POST(self) -> None:  # noqa: N802 -- standard-library HTTP handler hook.
+    def do_POST(self) -> None:
         if not self.authenticated():
             return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         texts = body["texts"]
-        self.send_json(200, {
-            "request_id": self.headers["X-Request-ID"],
-            "ms": 1, "queue_ms": 0, "inference_ms": 1,
-            "metadata": self.metadata,
-            "dense": [[1.0, *([0.0] * 1023)] for _ in texts],
-            "sparse": [{"42": 0.5} for _ in texts],
-        })
+        self.send_json(
+            200,
+            {
+                "request_id": self.headers["X-Request-ID"],
+                "ms": 1,
+                "queue_ms": 0,
+                "inference_ms": 1,
+                "metadata": self.metadata,
+                "dense": [[1.0, *([0.0] * 1023)] for _ in texts],
+                "sparse": [{"42": 0.5} for _ in texts],
+            },
+        )
 
     def log_message(self, format: str, *args: object) -> None:
         """The fixture never logs request content or credentials."""

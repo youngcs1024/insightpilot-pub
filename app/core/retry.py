@@ -41,7 +41,7 @@ def is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, TimeoutError)
 
 
-async def run_operation[T](
+async def run_operation[T](  # noqa: PLR0913 -- one owner with an optional typed failure policy.
     operation: Callable[[], Awaitable[T]],
     *,
     deadline: Deadline,

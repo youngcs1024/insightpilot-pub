@@ -17,6 +17,8 @@ from tests.model_client_support import (
     embed_output,
     embedding_response,
     failure,
+)
+from tests.model_client_support import (
     settings as model_settings,
 )
 
@@ -94,15 +96,20 @@ def test_shared_artifact_factory_returns_independent_objects() -> None:
 
 @pytest.mark.parametrize("case", ["split", "retried"])
 async def test_single_request_benchmark_rejects_multiple_embedding_requests(
-    monkeypatch: pytest.MonkeyPatch, respx_mock: respx.MockRouter, case: str,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    case: str,
 ) -> None:
     config = bench_model_runtime.ModelDiagnosticsSettings(
-        model_runtime=model_settings(embed_batch=8 if case == "split" else 16), _env_file=None,
+        model_runtime=model_settings(embed_batch=8 if case == "split" else 16),
+        _env_file=None,
     )
     monkeypatch.setattr(bench_model_runtime.ModelDiagnosticsSettings, "load", lambda: config)
     monkeypatch.setattr("app.core.retry.wait_exponential", lambda **kwargs: wait_none())
     ready = ReadyResult(request_id="ready", metadata=artifact("fp16").metadata)
-    respx_mock.get(BASE_URL + "/ready").mock(return_value=httpx.Response(200, json=ready.model_dump(mode="json")))
+    respx_mock.get(BASE_URL + "/ready").mock(
+        return_value=httpx.Response(200, json=ready.model_dump(mode="json"))
+    )
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:

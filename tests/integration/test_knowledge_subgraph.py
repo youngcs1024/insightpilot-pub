@@ -15,6 +15,7 @@ from tests.retrieval_support import RetrievalHarness, deadline, harness
 
 pytestmark = [pytest.mark.integration, pytest.mark.storage]
 __all__ = ["harness"]
+MODEL_ATTEMPTS = 2
 
 
 async def test_real_pipeline_returns_immutable_evidence(harness: RetrievalHarness) -> None:
@@ -63,7 +64,7 @@ async def test_real_rerank_outage_returns_bounded_fusion_evidence(
     assert output.evidence.top_rerank_score is None
     assert output.evidence.meets_floor is None
     assert all(chunk.scores.rerank is None for chunk in output.evidence.chunks)
-    assert len(harness.embeddings.rerank_calls) == 2
+    assert len(harness.embeddings.rerank_calls) == MODEL_ATTEMPTS
     assert ctx.llm.calls == []
 
 
@@ -96,7 +97,7 @@ async def test_real_encoding_outage_is_typed_failure_without_rerank(
     assert output.evidence is None
     assert not output.abstained
     assert output.degraded_components == []
-    assert len(harness.embeddings.calls) == before + 2
+    assert len(harness.embeddings.calls) == before + MODEL_ATTEMPTS
     assert harness.embeddings.rerank_calls == []
     assert ctx.llm.calls == []
 

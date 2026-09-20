@@ -203,22 +203,26 @@ class ModelRuntimeClient:
             raise ModelError()
         started = time.monotonic()
         budget = Deadline(min(deadline.at, started + STARTUP_BUDGET_S))
-        polls = 0
         try:
             async with asyncio.timeout(budget.remaining()):
-                while budget.remaining() > 0:
-                    polls += 1
-                    result = await self._ready_poll(budget)
-                    if result is not None:
-                        logger.info(
-                            "model_warmup_ready",
-                            polls=polls,
-                            duration_ms=int((time.monotonic() - started) * 1000),
-                        )
-                        return result
-                    await asyncio.sleep(min(WARMUP_POLL_S, budget.remaining()))
+                result, polls = await self._warmup_until(budget)
         except TimeoutError:
             raise ModelDeadlineError() from None
+        logger.info(
+            "model_warmup_ready",
+            polls=polls,
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
+        return result
+
+    async def _warmup_until(self, budget: Deadline) -> tuple[ReadyResult, int]:
+        polls = 0
+        while budget.remaining() > 0:
+            polls += 1
+            result = await self._ready_poll(budget)
+            if result is not None:
+                return result, polls
+            await asyncio.sleep(min(WARMUP_POLL_S, budget.remaining()))
         raise ModelDeadlineError()
 
     async def _ready_poll(self, deadline: Deadline) -> ReadyResult | None:
@@ -279,7 +283,10 @@ class ModelRuntimeClient:
 
     async def _embed_batch(self, request: EmbedRequest, deadline: Deadline) -> EmbedResult:
         raw = await self._call(
-            "/v1/embed", request.model_dump_json(), deadline, min(20, self._settings.embed_timeout_s)
+            "/v1/embed",
+            request.model_dump_json(),
+            deadline,
+            min(20, self._settings.embed_timeout_s),
         )
         try:
             result = EmbedResult.model_validate_json(raw)
@@ -306,7 +313,10 @@ class ModelRuntimeClient:
 
     async def _rerank_once(self, request: RerankRequest, deadline: Deadline) -> RerankResult:
         raw = await self._call(
-            "/v1/rerank", request.model_dump_json(), deadline, min(30, self._settings.rerank_timeout_s)
+            "/v1/rerank",
+            request.model_dump_json(),
+            deadline,
+            min(30, self._settings.rerank_timeout_s),
         )
         try:
             result = RerankResult.model_validate_json(raw)

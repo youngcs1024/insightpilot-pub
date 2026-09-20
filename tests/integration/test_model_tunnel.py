@@ -1,7 +1,7 @@
 """Real isolated double-hop SSH; no company keys, host access or live GPU."""
 
-import json
 import asyncio
+import json
 import os
 import shutil
 import subprocess
@@ -273,12 +273,16 @@ async def test_model_client_outage_and_reconnect_over_isolated_tunnel(
         await asyncio.to_thread(command, ["docker", "stop", "--time", "2", prefix + "-target"])
         try:
             with pytest.raises(ModelError) as error:
-                await client.embed(["isolated query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5))
+                await client.embed(
+                    ["isolated query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5)
+                )
             assert error.value.kind in {ModelFailureKind.UNAVAILABLE, ModelFailureKind.DEADLINE}
         finally:
             await asyncio.to_thread(command, ["docker", "start", prefix + "-target"])
             await asyncio.to_thread(wait_healthy, url)
-        result = await client.embed(["recovered query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5))
+        result = await client.embed(
+            ["recovered query"], EmbedMode.QUERY, deadline=Deadline(time.monotonic() + 5)
+        )
         assert len(result.dense) == len(result.sparse) == 1
         assert result.batches[0].metadata == FakeModels().metadata()
         assert client.breaker.failures == 0

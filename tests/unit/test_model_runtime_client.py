@@ -13,8 +13,8 @@ from pydantic import ValidationError
 from structlog.testing import capture_logs
 from tenacity import wait_none
 
-from app.clients.model_runtime import ModelRuntimeClient
 from app.clients.model_resilience import ModelCircuitBreaker
+from app.clients.model_runtime import ModelRuntimeClient
 from app.core.config_models import ModelRuntimeClientSettings
 from app.core.deadline import Deadline
 from app.schemas.model_runtime import (
@@ -155,7 +155,9 @@ async def client() -> AsyncIterator[ModelRuntimeClient]:
         await value.aclose()
 
 
-async def test_batches_respect_size_limit(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_batches_respect_size_limit(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(side_effect=embedding_response)
     texts = ["x" * size for size in range(1, 36)]
     output = await client.embed(texts, EmbedMode.DOCUMENT, deadline=deadline())
@@ -173,14 +175,20 @@ async def test_batches_respect_size_limit(client: ModelRuntimeClient, respx_mock
     assert output.client_ms >= 0
 
 
-async def test_configured_small_batches(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_configured_small_batches(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     client._settings.embed_batch = 2
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(side_effect=embedding_response)
     await client.embed(["x"] * 5, EmbedMode.DOCUMENT, deadline=deadline())
-    assert [len(EmbedRequest.model_validate_json(c.request.content).texts) for c in route.calls] == [2, 2, 1]
+    assert [
+        len(EmbedRequest.model_validate_json(c.request.content).texts) for c in route.calls
+    ] == [2, 2, 1]
 
 
-async def test_bounded_concurrency(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_bounded_concurrency(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     entered, release, queued = asyncio.Event(), asyncio.Event(), asyncio.Event()
     active = peak = 0
 
@@ -200,10 +208,17 @@ async def test_bounded_concurrency(client: ModelRuntimeClient, respx_mock: respx
         parsed = RerankRequest.model_validate_json(request.content)
         assert len(parsed.passages) == 20
         active -= 1
-        return httpx.Response(200, json=RerankResult(
-            request_id="rerank", ms=1, queue_ms=0, inference_ms=1,
-            metadata=FakeModels().metadata(), scores=[0.8] * 20,
-        ).model_dump(mode="json"))
+        return httpx.Response(
+            200,
+            json=RerankResult(
+                request_id="rerank",
+                ms=1,
+                queue_ms=0,
+                inference_ms=1,
+                metadata=FakeModels().metadata(),
+                scores=[0.8] * 20,
+            ).model_dump(mode="json"),
+        )
 
     async def second() -> None:
         queued.set()
@@ -227,7 +242,10 @@ async def test_bounded_concurrency(client: ModelRuntimeClient, respx_mock: respx
 
 @pytest.mark.parametrize("error", [ModelError(), ModelQueueError()])
 async def test_retries_on_503_not_on_400(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None, error: ModelError,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
+    error: ModelError,
 ) -> None:
     calls = 0
 
@@ -247,9 +265,20 @@ async def test_retries_on_503_not_on_400(
     assert client.breaker.failures == 0
 
 
-@pytest.mark.parametrize("error", [ModelAuthError(), ModelInputError(), ModelOOMError(), ModelDeadlineError(), ModelContractError()])
+@pytest.mark.parametrize(
+    "error",
+    [
+        ModelAuthError(),
+        ModelInputError(),
+        ModelOOMError(),
+        ModelDeadlineError(),
+        ModelContractError(),
+    ],
+)
 async def test_typed_nonretryable_failure_once(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, error: ModelError,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    error: ModelError,
 ) -> None:
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(return_value=failure(error))
     with pytest.raises(type(error)):
@@ -258,7 +287,9 @@ async def test_typed_nonretryable_failure_once(
     assert client.breaker.failures == 0
 
 
-async def test_oom_failure_is_not_retried(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_oom_failure_is_not_retried(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(return_value=failure(ModelOOMError()))
     with pytest.raises(ModelOOMError):
         await client.embed(["x"] * 17, EmbedMode.DOCUMENT, deadline=deadline())
@@ -267,17 +298,25 @@ async def test_oom_failure_is_not_retried(client: ModelRuntimeClient, respx_mock
 
 @pytest.mark.parametrize("status", [400, 429, 503])
 async def test_status_and_retryable_fields_cannot_invent_retries(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, status: int,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    status: int,
 ) -> None:
-    payload = ModelFailure(code=ModelFailureKind.OOM, message="retry please", request_id="x", retryable=True)
-    route = respx_mock.post(BASE_URL + "/v1/embed").mock(return_value=httpx.Response(status, json=payload.model_dump(mode="json")))
+    payload = ModelFailure(
+        code=ModelFailureKind.OOM, message="retry please", request_id="x", retryable=True
+    )
+    route = respx_mock.post(BASE_URL + "/v1/embed").mock(
+        return_value=httpx.Response(status, json=payload.model_dump(mode="json"))
+    )
     with pytest.raises(ModelContractError):
         await client.embed(["x"], EmbedMode.QUERY, deadline=deadline())
     assert route.call_count == 1
 
 
 async def test_connection_failure_retries_then_succeeds(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
 ) -> None:
     calls = 0
 
@@ -294,7 +333,9 @@ async def test_connection_failure_retries_then_succeeds(
 
 
 async def test_circuit_breaker_opens_after_threshold(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
 ) -> None:
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(return_value=failure(ModelError()))
     for _ in range(5):
@@ -305,7 +346,14 @@ async def test_circuit_breaker_opens_after_threshold(
     with pytest.raises(ModelError):
         await client.rerank("x", ["x"], deadline=deadline())
     assert route.call_count == 10
-    ready_route = respx_mock.get(BASE_URL + "/ready").mock(return_value=httpx.Response(200, json=ReadyResult(request_id="r", metadata=FakeModels().metadata()).model_dump(mode="json")))
+    ready_route = respx_mock.get(BASE_URL + "/ready").mock(
+        return_value=httpx.Response(
+            200,
+            json=ReadyResult(request_id="r", metadata=FakeModels().metadata()).model_dump(
+                mode="json"
+            ),
+        )
+    )
     assert (await client.ready(deadline=deadline())).ready
     assert ready_route.call_count == 1
     assert client.breaker.failures == 5
@@ -315,7 +363,8 @@ async def test_circuit_breaker_opens_after_threshold(
 
 
 async def test_half_open_has_one_probe_and_success_recovers(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
 ) -> None:
     now = [0.0]
     client.breaker = ModelCircuitBreaker(clock=lambda: now[0])
@@ -345,7 +394,9 @@ async def test_half_open_has_one_probe_and_success_recovers(
 
 
 async def test_half_open_failure_restarts_cooldown(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
 ) -> None:
     now = [0.0]
     client.breaker = ModelCircuitBreaker(clock=lambda: now[0])
@@ -363,7 +414,9 @@ async def test_half_open_failure_restarts_cooldown(
     assert route.call_count == 2
 
 
-async def test_deadline_shrinks_timeout(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_deadline_shrinks_timeout(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     observed = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -378,7 +431,9 @@ async def test_deadline_shrinks_timeout(client: ModelRuntimeClient, respx_mock: 
 
 
 async def test_partial_batch_failure_fails_whole_call(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
 ) -> None:
     calls = 0
 
@@ -394,9 +449,13 @@ async def test_partial_batch_failure_fails_whole_call(
     assert client.breaker.failures == 1
 
 
-async def test_revision_mismatch_is_rejected(client: ModelRuntimeClient, respx_mock: respx.MockRouter) -> None:
+async def test_revision_mismatch_is_rejected(
+    client: ModelRuntimeClient, respx_mock: respx.MockRouter
+) -> None:
     metadata = FakeModels().metadata().model_copy(update={"embed_revision": "a" * 40})
-    route = respx_mock.post(BASE_URL + "/v1/embed").mock(side_effect=lambda request: embedding_response(request, metadata))
+    route = respx_mock.post(BASE_URL + "/v1/embed").mock(
+        side_effect=lambda request: embedding_response(request, metadata)
+    )
     with pytest.raises(ModelContractError):
         await client.embed(["x"], EmbedMode.QUERY, deadline=deadline())
     assert route.call_count == 1
@@ -404,7 +463,9 @@ async def test_revision_mismatch_is_rejected(client: ModelRuntimeClient, respx_m
 
 @pytest.mark.parametrize("field", ["embed_max_length", "embed_batch"])
 async def test_batch_metadata_preserves_recovery_and_rejects_semantic_drift(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, field: str,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    field: str,
 ) -> None:
     calls = 0
 
@@ -427,7 +488,9 @@ async def test_batch_metadata_preserves_recovery_and_rejects_semantic_drift(
 
 
 @pytest.mark.parametrize("texts", [[], [""], ["x" * 32_001], ["ok"] * 16 + [""]])
-async def test_invalid_input_rejected_before_http(client: ModelRuntimeClient, texts: list[str]) -> None:
+async def test_invalid_input_rejected_before_http(
+    client: ModelRuntimeClient, texts: list[str]
+) -> None:
     with pytest.raises(ModelInputError):
         await client.embed(texts, EmbedMode.DOCUMENT, deadline=deadline())
     assert client.breaker.failures == 0
@@ -452,7 +515,9 @@ def test_aggregate_rejects_invalid_receipts(defect: str) -> None:
 
 
 async def test_model_token_not_logged(
-    client: ModelRuntimeClient, respx_mock: respx.MockRouter, no_backoff: None,
+    client: ModelRuntimeClient,
+    respx_mock: respx.MockRouter,
+    no_backoff: None,
 ) -> None:
     route = respx_mock.post(BASE_URL + "/v1/embed").mock(return_value=failure(ModelError()))
     with capture_logs() as logs:
