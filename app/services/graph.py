@@ -250,4 +250,6 @@ class GraphService:
             return None
         if prior.evidence_refs is None:
             raise ConflictError("failed turn has no committed evidence to recover")
+        # Recovery input writes overlay the prior checkpoint's get_state() view.
+        # Historical auditing reads the saver's original channel_values instead.
         return Command(update={"failures": Overwrite([])}, goto="format_answer")

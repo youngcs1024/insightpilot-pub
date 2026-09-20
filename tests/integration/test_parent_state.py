@@ -130,7 +130,9 @@ async def test_same_turn_recovery_failure_then_success_resets_only_current_failu
         assert first.status == "failed"
         assert len(first.failures) == 1
         config = {"configurable": {"thread_id": str(identity.turn_id)}}
-        before = await service.graph.aget_state(config)
+        before = await service.graph.checkpointer.aget_tuple(config)
+        assert before is not None
+        assert before.checkpoint["channel_values"]["failures"] == first.failures
         second = await service.invoke(
             replace(ctx, llm=FakeChatModel([LlmStructuredOutputError()])), resume=True
         )
@@ -144,7 +146,9 @@ async def test_same_turn_recovery_failure_then_success_resets_only_current_failu
         assert third.failures == []
         assert third.evidence_refs == second.evidence_refs == first.evidence_refs
         assert len(ctx.mcp.calls) == 1
-        historical = await service.graph.aget_state(before.config)
-        assert len(historical.values["failures"]) == 1
+        historical = await service.graph.checkpointer.aget_tuple(before.config)
+        assert historical is not None
+        assert historical.checkpoint["channel_values"] == before.checkpoint["channel_values"]
+        assert historical.checkpoint["channel_values"]["failures"] == first.failures
     finally:
         await service.aclose()
