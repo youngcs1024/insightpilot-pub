@@ -7,8 +7,8 @@ from uuid import uuid4
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.channels.binop import BinaryOperatorAggregate
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import InvalidUpdateError
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
@@ -44,9 +44,9 @@ async def test_assumptions_accumulate_from_both_specialists() -> None:
 
 async def test_failures_accumulate() -> None:
     ctx = context(responses=[decision()])
-    graph = contract_topology(
-        failed_nodes=frozenset({"data_agent", "knowledge_agent"})
-    ).compile(checkpointer=InMemorySaver(serde=serializer()))
+    graph = contract_topology(failed_nodes=frozenset({"data_agent", "knowledge_agent"})).compile(
+        checkpointer=InMemorySaver(serde=serializer())
+    )
     config = {"configurable": {"thread_id": str(ctx.identity.turn_id)}}
     await graph.ainvoke(GraphInput(**ctx.identity.model_dump()), config, context=ctx)
     state = AgentState.model_validate((await graph.aget_state(config)).values)
@@ -76,18 +76,22 @@ async def test_no_concurrent_writes_to_same_field() -> None:
 async def test_conflicting_parallel_single_writer_field_is_rejected() -> None:
     ctx = context(responses=[decision()])
     with pytest.raises(InvalidUpdateError, match="question"):
-        await contract_topology(collide=True).compile().ainvoke(
-            GraphInput(**ctx.identity.model_dump()), context=ctx
+        await (
+            contract_topology(collide=True)
+            .compile()
+            .ainvoke(GraphInput(**ctx.identity.model_dump()), context=ctx)
         )
 
 
 async def test_context_finalized_after_current_route() -> None:
     ctx = context(responses=[decision(Route.KNOWLEDGE_ONLY)])
-    values = []
-    async for value in contract_topology().compile().astream(
-        GraphInput(**ctx.identity.model_dump()), context=ctx, stream_mode="values"
-    ):
-        values.append(AgentState.model_validate(value))
+    graph = contract_topology().compile()
+    values = [
+        AgentState.model_validate(value)
+        async for value in graph.astream(
+            GraphInput(**ctx.identity.model_dump()), context=ctx, stream_mode="values"
+        )
+    ]
     routed = next(item for item in values if item.route is not None)
     assert routed.context is None
     finalized_state = next(item for item in values if item.context is not None)
@@ -156,19 +160,32 @@ def test_state_serializable_for_checkpointer() -> None:
         ToolMessage(content="result", tool_call_id="call", id="tool"),
     ]
     state = AgentState(
-        **ctx.identity.model_dump(), messages=messages,
+        **ctx.identity.model_dump(),
+        messages=messages,
         context=TurnContext(
-            time_scope=finalized().time_scope, memories=[memory()], recent_messages=messages,
+            time_scope=finalized().time_scope,
+            memories=[memory()],
+            recent_messages=messages,
             format_preference=FormatPreferenceContent(prefer="table", decimals=2),
-            prior_sql=["SELECT 42"], token_accounting={"history": 12},
+            prior_sql=["SELECT 42"],
+            token_accounting={"history": 12},
             region_scope=RegionScope(region_ids=[1]),
-            selected_overrides=SelectedOverrides(items=[SelectedMetricOverride(
-                id=uuid4(), user_id=ctx.identity.user_id, created_at=datetime.now(UTC),
-                confidence=1, metric_key="gmv", patch={"date_field": "paid_at"},
-            )]),
+            selected_overrides=SelectedOverrides(
+                items=[
+                    SelectedMetricOverride(
+                        id=uuid4(),
+                        user_id=ctx.identity.user_id,
+                        created_at=datetime.now(UTC),
+                        confidence=1,
+                        metric_key="gmv",
+                        patch={"date_field": "paid_at"},
+                    )
+                ]
+            ),
         ),
         routing_context=RoutingContext(terminology=[TerminologyContent(term="大促", means="618")]),
-        route=decision(), failures=[failure("test")],
+        route=decision(),
+        failures=[failure("test")],
     )
     codec = serializer()
     restored = codec.loads_typed(codec.dumps_typed(state))
@@ -183,7 +200,8 @@ def test_state_serializable_for_checkpointer() -> None:
 def test_only_concurrent_fields_have_reducers() -> None:
     graph = contract_topology().compile()
     assert {
-        name for name, channel in graph.channels.items()
+        name
+        for name, channel in graph.channels.items()
         if isinstance(channel, BinaryOperatorAggregate)
     } == {"messages", "assumptions", "failures", "degraded_components"}
 
@@ -201,19 +219,28 @@ async def test_messages_merge_by_id_preserves_tool_structure() -> None:
     graph = StateGraph(AgentState)
 
     def update(state: AgentState) -> dict[str, list[AIMessage]]:
-        return {"messages": [AIMessage(content="updated", id="ai", tool_calls=[
-            {"id": "call", "name": "lookup", "args": {"value": 42}}
-        ])]}
+        return {
+            "messages": [
+                AIMessage(
+                    content="updated",
+                    id="ai",
+                    tool_calls=[{"id": "call", "name": "lookup", "args": {"value": 42}}],
+                )
+            ]
+        }
 
     graph.add_node("update", update)
     graph.add_edge(START, "update")
     graph.add_edge("update", END)
-    output = await graph.compile().ainvoke(AgentState(
-        **ctx.identity.model_dump(), messages=[
-            AIMessage(content="old", id="ai"),
-            ToolMessage(content="result", tool_call_id="call", id="tool"),
-        ],
-    ))
+    output = await graph.compile().ainvoke(
+        AgentState(
+            **ctx.identity.model_dump(),
+            messages=[
+                AIMessage(content="old", id="ai"),
+                ToolMessage(content="result", tool_call_id="call", id="tool"),
+            ],
+        )
+    )
     assert [item.id for item in output["messages"]] == ["ai", "tool"]
     assert output["messages"][0].tool_calls[0]["args"] == {"value": 42}
     assert output["messages"][1].tool_call_id == "call"
@@ -243,7 +270,8 @@ def test_graph_input_cannot_override_loaded_state(field: str) -> None:
 
 async def test_router_preserves_reserved_context_during_budgeting() -> None:
     preferences = RoutingContext(
-        summary="history", recent_messages=[HistoryMessage(role="user", content="hello")],
+        summary="history",
+        recent_messages=[HistoryMessage(role="user", content="hello")],
         terminology=[TerminologyContent(term="大促", means="618")],
         format_preference=FormatPreferenceContent(prefer="table", decimals=2),
     )

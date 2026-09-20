@@ -24,10 +24,13 @@ from tests.agents.support import result
 
 def memory() -> Memory:
     return Memory(
-        id=uuid4(), user_id=uuid4(), source_turn_id=uuid4(),
+        id=uuid4(),
+        user_id=uuid4(),
+        source_turn_id=uuid4(),
         memory_type=MemoryType.TERMINOLOGY,
         content=TerminologyContent(term="大促", means="618"),
-        summary="Campaign terminology", confidence=1,
+        summary="Campaign terminology",
+        confidence=1,
     )
 
 
@@ -41,31 +44,38 @@ def finalized() -> TurnContext:
     return TurnContext(time_scope=PointTimeScope(as_of=date(2026, 8, 1)))
 
 
+async def _prepared(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
+    command = await prepare(state, runtime)
+    return Command(update=command.update, goto="router")
+
+
+def _finalize(state: AgentState) -> dict[str, TurnContext]:
+    assert state.context is None
+    assert state.route is not None
+    return {"context": finalized().model_copy(update={"summary": state.route.route.value})}
+
+
+def _dispatch(state: AgentState) -> list[str]:
+    match state.route.route:
+        case Route.DATA_ONLY:
+            return ["data_agent"]
+        case Route.KNOWLEDGE_ONLY:
+            return ["knowledge_agent"]
+        case Route.BOTH:
+            return ["data_agent", "knowledge_agent"]
+        case Route.CLARIFY:
+            return ["finish"]
+
+
+def _finish(state: AgentState) -> dict[str, str]:
+    return {"status": "failed" if state.failures else "succeeded"}
+
+
 def contract_topology(
     *, failed_nodes: frozenset[str] = frozenset(), collide: bool = False
 ) -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput]:
     """Exercise actual reducers, preparation and router with synthetic specialists."""
     barrier = asyncio.Barrier(2)
-
-    async def prepared(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
-        command = await prepare(state, runtime)
-        return Command(update=command.update, goto="router")
-
-    def finalize(state: AgentState) -> dict[str, TurnContext]:
-        assert state.context is None
-        assert state.route is not None
-        return {"context": finalized().model_copy(update={"summary": state.route.route.value})}
-
-    def dispatch(state: AgentState) -> list[str]:
-        match state.route.route:
-            case Route.DATA_ONLY:
-                return ["data_agent"]
-            case Route.KNOWLEDGE_ONLY:
-                return ["knowledge_agent"]
-            case Route.BOTH:
-                return ["data_agent", "knowledge_agent"]
-            case Route.CLARIFY:
-                return ["finish"]
 
     async def contribution(state: AgentState, node: str) -> dict[str, object]:
         assert state.context.summary == state.route.route.value
@@ -90,22 +100,22 @@ def contract_topology(
             update["knowledge_evidence"] = package_evidence(ranked(), runtime.context)
         return update
 
-    def finish(state: AgentState) -> dict[str, str]:
-        return {"status": "failed" if state.failures else "succeeded"}
-
     graph = StateGraph(
-        AgentState, context_schema=RuntimeContext, input_schema=GraphInput, output_schema=GraphOutput
+        AgentState,
+        context_schema=RuntimeContext,
+        input_schema=GraphInput,
+        output_schema=GraphOutput,
     )
-    graph.add_node("prepare", prepared, destinations=("router",))
+    graph.add_node("prepare", _prepared, destinations=("router",))
     graph.add_node("router", router)
-    graph.add_node("finalize_context", finalize)
+    graph.add_node("finalize_context", _finalize)
     graph.add_node("data_agent", data)
     graph.add_node("knowledge_agent", knowledge)
-    graph.add_node("finish", finish)
+    graph.add_node("finish", _finish)
     graph.add_edge(START, "prepare")
     graph.add_edge("router", "finalize_context")
     graph.add_conditional_edges(
-        "finalize_context", dispatch, ["data_agent", "knowledge_agent", "finish"]
+        "finalize_context", _dispatch, ["data_agent", "knowledge_agent", "finish"]
     )
     graph.add_edge("data_agent", "finish")
     graph.add_edge("knowledge_agent", "finish")

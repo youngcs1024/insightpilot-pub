@@ -55,7 +55,9 @@ class Memory(Contract):
     user_id: UUID
     source_turn_id: UUID
     memory_type: MemoryType
-    content: MetricOverrideContent | RegionFocusContent | TerminologyContent | FormatPreferenceContent
+    content: (
+        MetricOverrideContent | RegionFocusContent | TerminologyContent | FormatPreferenceContent
+    )
     summary: str = Field(max_length=200)
     confidence: float = Field(ge=0, le=1)
     is_active: bool = True
@@ -72,5 +74,7 @@ class Memory(Contract):
             MemoryType.FORMAT_PREFERENCE: FormatPreferenceContent,
         }
         if not isinstance(self.content, expected[self.memory_type]):
-            raise PydanticCustomError("memory_content_type", "Memory content does not match its type")
+            raise PydanticCustomError(
+                "memory_content_type", "Memory content does not match its type"
+            )
         return self

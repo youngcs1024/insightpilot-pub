@@ -38,13 +38,18 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
     await first.start()
     try:
         original = await first.invoke(ctx)
-        await first.graph.aupdate_state(config, {
-            "context": finalized().model_copy(update={"memories": [memory()]}),
-            "route": decision(),
-            "knowledge_evidence": package_evidence(ranked(), ctx),
-            "assumptions": ["old turn"], "degraded_components": ["old component"],
-            "abstained": True,
-        }, as_node="format_answer")
+        await first.graph.aupdate_state(
+            config,
+            {
+                "context": finalized().model_copy(update={"memories": [memory()]}),
+                "route": decision(),
+                "knowledge_evidence": package_evidence(ranked(), ctx),
+                "assumptions": ["old turn"],
+                "degraded_components": ["old component"],
+                "abstained": True,
+            },
+            as_node="format_answer",
+        )
         saved = AgentState.model_validate((await first.graph.aget_state(config)).values)
     finally:
         await first.aclose()
@@ -61,9 +66,13 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
         next_identity = await admitted(database, identity=identity)
         next_ctx = connected_context(database, next_identity, followup=True)
         await restarted.invoke(next_ctx)
-        fresh = AgentState.model_validate((await restarted.graph.aget_state(
-            {"configurable": {"thread_id": str(next_identity.turn_id)}}
-        )).values)
+        fresh = AgentState.model_validate(
+            (
+                await restarted.graph.aget_state(
+                    {"configurable": {"thread_id": str(next_identity.turn_id)}}
+                )
+            ).values
+        )
         assert fresh.context is fresh.route is fresh.knowledge_evidence is None
         assert fresh.assumptions == fresh.failures == fresh.degraded_components == []
         assert not fresh.abstained
@@ -85,8 +94,12 @@ async def test_checkpoint_key_is_assistant_turn(
     try:
         ctx = connected_context(database, identity)
         await service.invoke(ctx)
-        actual = await service.graph.aget_state({"configurable": {"thread_id": str(identity.turn_id)}})
-        wrong = await service.graph.aget_state({"configurable": {"thread_id": str(identity.conversation_id)}})
+        actual = await service.graph.aget_state(
+            {"configurable": {"thread_id": str(identity.turn_id)}}
+        )
+        wrong = await service.graph.aget_state(
+            {"configurable": {"thread_id": str(identity.conversation_id)}}
+        )
         assert actual.values["turn_id"] == identity.turn_id
         assert actual.values["graph_version"] == "phase4-v1"
         assert not wrong.values
@@ -100,9 +113,16 @@ async def test_same_turn_recovery_failure_then_success_resets_only_current_failu
 ) -> None:
     database, settings = graph_database
     identity = await admitted(database)
-    ctx = replace(connected_context(database, identity), llm=FakeChatModel([
-        metric_intent(), sql_candidate(), LlmStructuredOutputError(),
-    ]))
+    ctx = replace(
+        connected_context(database, identity),
+        llm=FakeChatModel(
+            [
+                metric_intent(),
+                sql_candidate(),
+                LlmStructuredOutputError(),
+            ]
+        ),
+    )
     service = GraphService(settings)
     await service.start()
     try:
@@ -116,9 +136,10 @@ async def test_same_turn_recovery_failure_then_success_resets_only_current_failu
         )
         assert second.status == "failed"
         assert len(second.failures) == 1
-        third = await service.invoke(replace(
-            ctx, llm=FakeChatModel([AnswerDraft(markdown="Recovered", confidence=1)])
-        ), resume=True)
+        third = await service.invoke(
+            replace(ctx, llm=FakeChatModel([AnswerDraft(markdown="Recovered", confidence=1)])),
+            resume=True,
+        )
         assert third.status == "succeeded"
         assert third.failures == []
         assert third.evidence_refs == second.evidence_refs == first.evidence_refs
