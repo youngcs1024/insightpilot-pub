@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from app.core.config_models import DataAgentSettings, ObservabilitySettings, SanitySettings
+from app.core.config_models import DataAgentSettings, ObservabilitySettings, RouterSettings, SanitySettings
 from scripts.deployment import (
     ROOT,
     Command,
@@ -231,6 +231,14 @@ def test_secret_repr_is_redacted(deployment_settings: DeploymentSettings) -> Non
     assert deployment_settings.postgres_superuser_password.get_secret_value() not in str(
         deployment_settings
     )
+
+
+def test_router_threshold_reaches_only_api(deployment_settings: DeploymentSettings) -> None:
+    deployment_settings.router = RouterSettings(min_confidence=0.75)
+    config = render(deployment_settings)
+    assert json.loads(config.services["api"].environment["IP_ROUTER"]) == {"min_confidence": 0.75}
+    assert all("IP_ROUTER" not in service.environment
+        for name, service in config.services.items() if name != "api")
 
 
 def test_compose_paths_are_absolute(deployment_settings: DeploymentSettings) -> None:

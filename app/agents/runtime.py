@@ -9,7 +9,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 from app.agents.contracts import DataEvidence, EvidenceSnapshot, PreparedContext, TurnIdentity
-from app.core.config_models import Settings
+from app.core.config_models import RouterSettings, Settings
 from app.core.deadline import Deadline
 from app.core.errors import PeriodUnresolved
 from app.core.llm_config import ModelRole
@@ -26,6 +26,15 @@ class LlmPort(Protocol):
     async def generate_structured[T: BaseModel](
         self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
     ) -> T: ...
+
+
+@dataclass(frozen=True)
+class RoutingRuntime:
+    """Minimal ephemeral projection shared by the graph node and diagnostic CLI."""
+
+    llm: LlmPort
+    settings: RouterSettings
+    deadline: Deadline
 
 
 class RetrievalPort(Protocol):

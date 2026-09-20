@@ -1,7 +1,8 @@
 """Versioned graph and evidence boundaries; only JSON-safe values are durable."""
 
 from datetime import datetime
-from typing import Literal, Self
+from enum import StrEnum
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field, model_validator
@@ -28,6 +29,10 @@ __all__ = [
     "ResolvedMetricBinding",
     "ResultSummary",
     "RewrittenQuestion",
+    "Route",
+    "RouteDecision",
+    "RouterInput",
+    "RoutingContext",
     "SanityFlag",
     "SqlGeneratorOutput",
     "TurnIdentity",
@@ -211,3 +216,55 @@ class RewrittenQuestion(Contract):
     standalone: str = Field(min_length=1, max_length=32_000)
     referenced_prior_turn: bool
     unresolved_references: list[str] = Field(default_factory=list, max_length=20)
+
+
+class Route(StrEnum):
+    """Closed evidence-source choices, never provider prose."""
+
+    DATA_ONLY = "data_only"
+    KNOWLEDGE_ONLY = "knowledge_only"
+    BOTH = "both"
+    CLARIFY = "clarify"
+
+
+class RouteDecision(Contract):
+    """A bounded classification and independently scoped specialist tasks."""
+
+    schema_version: Literal[1] = 1
+    route: Route
+    confidence: float = Field(ge=0, le=1)
+    data_intent: str = Field(default="", max_length=32_000)
+    knowledge_intent: str = Field(default="", max_length=32_000)
+    metric_hints: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=6)
+    reasoning: str = Field(default="", max_length=2000)
+    decided_by: Literal["prefilter", "llm"] = "llm"
+    clarification_question: str = Field(default="", max_length=1000)
+
+    @model_validator(mode="after")
+    def required_intents(self) -> Self:
+        """An analytical route cannot silently fall back to the raw question."""
+        needs_data = self.route in {Route.DATA_ONLY, Route.BOTH}
+        needs_knowledge = self.route in {Route.KNOWLEDGE_ONLY, Route.BOTH}
+        if (needs_data and not self.data_intent.strip()) or (
+            needs_knowledge and not self.knowledge_intent.strip()
+        ):
+            raise PydanticCustomError("route_intent", "Selected specialists require scoped intents")
+        if any(not hint.strip() for hint in self.metric_hints):
+            raise PydanticCustomError("route_hint", "Metric hints must be bounded nonempty keys")
+        return self
+
+
+class RoutingContext(Contract):
+    """Already-loaded history, without SQL, evidence or saved metric overrides."""
+
+    schema_version: Literal[1] = 1
+    summary: str = Field(default="", max_length=32_000)
+    recent_messages: list[HistoryMessage] = Field(default_factory=list, max_length=100)
+
+
+class RouterInput(Contract):
+    """Minimal input independent of the later parent state migration."""
+
+    schema_version: Literal[1] = 1
+    question: str = Field(max_length=32_000)
+    routing_context: RoutingContext = Field(default_factory=RoutingContext)

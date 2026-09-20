@@ -19,6 +19,7 @@ from app.core.observability import TraceMetadata, current_role, observe
 from app.core.retry import run_operation
 from app.services.llm.contracts import Completion, CompletionRequest, ErrorResponse
 from app.services.llm.registry import StructuredTier
+from app.services.llm.usage import record_attempt, record_usage
 
 logger = structlog.get_logger(__name__)
 _TEMPORARY = {500, 502, 503, 504}
@@ -45,6 +46,7 @@ class LlmTransport:
         async def operation() -> Completion:
             nonlocal attempts
             attempts += 1
+            record_attempt()
             with observe(
                 "llm_completion",
                 TraceMetadata(
@@ -70,6 +72,7 @@ class LlmTransport:
                 except ValidationError:
                     raise LlmResponseError() from None
                 _record(request.model, tier, attempts, result)
+                record_usage(result.usage)
                 if observation is not None and result.usage is not None:
                     observation.usage(result.usage.prompt_tokens, result.usage.completion_tokens)
                 return result

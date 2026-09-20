@@ -34,6 +34,7 @@ def compose_files(tmp_path: Path) -> tuple[Path, Path]:
 def test_repository_declarations_match_independent_contract() -> None:
     assert check_files(ROOT / "docker-compose.yml", ROOT / "docker-compose.dev.yml") == []
     assert "IP_DATA_AGENT" in API_ENVIRONMENT_KEYS
+    assert "IP_ROUTER" in API_ENVIRONMENT_KEYS
 
 
 @pytest.mark.parametrize(

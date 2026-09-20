@@ -77,7 +77,12 @@ class TraceMetadata(BaseModel):
     conversation_id: str | None = None
     turn_id: str | None = None
     request_id: str | None = None
-    route: Literal["DATA_ONLY"] | None = None
+    route: Literal["DATA_ONLY", "data_only", "knowledge_only", "both", "clarify"] | None = None
+    original_route: Literal["data_only", "knowledge_only", "both", "clarify"] | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    decided_by: Literal["prefilter", "llm"] | None = None
+    prefilter_hit: bool | None = None
+    router_tokens: int | None = Field(default=None, ge=0)
     status: str | None = None
     degraded_components: list[str] = Field(default_factory=list)
     role: str | None = None

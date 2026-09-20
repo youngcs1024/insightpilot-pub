@@ -245,6 +245,12 @@ class DataAgentSettings(ConfigModel):
         return self
 
 
+class RouterSettings(ConfigModel):
+    """Classification acceptance threshold; equality is accepted."""
+
+    min_confidence: float = Field(default=0.6, ge=0, le=1, allow_inf_nan=False)
+
+
 class Settings(ProcessSettings):
     """Validated API process configuration with conditional service requirements."""
 
@@ -260,6 +266,7 @@ class Settings(ProcessSettings):
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     schema_catalog: SchemaCatalogSettings = Field(default_factory=SchemaCatalogSettings)
     data_agent: DataAgentSettings = Field(default_factory=DataAgentSettings)
+    router: RouterSettings = Field(default_factory=RouterSettings)
     semantic_memory_enabled: bool = False
     model_runtime: ModelRuntimeClientSettings | None = None
 

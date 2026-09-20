@@ -14,7 +14,7 @@ import structlog
 from pydantic import BaseModel, Field, SecretStr, TypeAdapter, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.config_models import DataAgentSettings, ObservabilitySettings
+from app.core.config_models import DataAgentSettings, ObservabilitySettings, RouterSettings
 from app.core.errors import InsightPilotError
 from app.core.llm_config import ModelRole, ModelRoleSettings
 from app.retrieval.config import RetrievalSettings
@@ -76,6 +76,7 @@ class DeploymentSettings(BaseSettings):
     )
     llm_api_key: Secret | None = None
     data_agent: DataAgentSettings = Field(default_factory=DataAgentSettings)
+    router: RouterSettings = Field(default_factory=RouterSettings)
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
     observability: ObservabilitySettings = Field(
@@ -95,6 +96,7 @@ class DeploymentSettings(BaseSettings):
             if self.minio.password
             else "",
             "IP_DATA_AGENT": self.data_agent.model_dump_json(),
+            "IP_ROUTER": self.router.model_dump_json(),
             "IP_OBSERVABILITY": json.dumps(observation),
             "IP_API_HOST_PORT": str(self.api_host_port),
             "IP_MCP_AUTH_TOKEN": self.mcp_auth_token.get_secret_value()

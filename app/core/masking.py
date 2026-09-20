@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Mapping
 
@@ -16,6 +17,7 @@ MAX_DEPTH = 12
 MAX_UNRESOLVED_REFERENCES = 20
 _ROW_MARKER = re.compile(r"\[<redacted: [0-9]+ rows × [0-9]+ cols>\]")  # noqa: RUF001 -- contract notation.
 REDACTED = "<redacted>"
+_ROUTING = frozenset({"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"})
 _SAFE = frozenset(
     {
         "referenced_prior_turn",
@@ -25,6 +27,11 @@ _SAFE = frozenset(
         "turn_id",
         "request_id",
         "route",
+        "original_route",
+        "confidence",
+        "decided_by",
+        "prefilter_hit",
+        "router_tokens",
         "status",
         "degraded_components",
         "role",
@@ -125,7 +132,9 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key in {"referenced_prior_turn", "unresolved_reference_count"}:
+        if key in _ROUTING:
+            result[key] = _routing_diagnostic(key, value)
+        elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)
         elif key in {"sanity_flags", "sanity_check_failed"}:
             result[key] = _sanity_diagnostic(key, value)
@@ -140,6 +149,35 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
         else:
             result[key] = REDACTED
     return result
+
+
+def _routing_diagnostic(key: str, value: object) -> object:
+    if value is None:
+        return None
+    if key in {"route", "original_route"}:
+        allowed = {"data_only", "knowledge_only", "both", "clarify"}
+        if key == "route":
+            allowed.add("DATA_ONLY")
+        return value if isinstance(value, str) and value in allowed else REDACTED
+    if key == "decided_by":
+        return value if isinstance(value, str) and value in {"prefilter", "llm"} else REDACTED
+    if key == "prefilter_hit":
+        return value if isinstance(value, bool) else REDACTED
+    if isinstance(value, bool):
+        return REDACTED
+    if key == "router_tokens":
+        return value if isinstance(value, int) and value >= 0 else REDACTED
+    return value if isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 1 else REDACTED
+
+
+def _routing_attribute(key: str, value: object) -> str:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (ValueError, RecursionError):
+            pass
+    safe = _routing_diagnostic(key, value)
+    return safe if isinstance(safe, str) else json.dumps(safe)
 
 
 def _rewrite_diagnostic(key: str, value: object) -> object:
@@ -230,6 +268,9 @@ def safe_attributes(attributes: Mapping[str, object]) -> dict[str, str | bool]:
             replacements[key] = value
             continue
         metadata_key = key.removeprefix("langfuse.observation.metadata.")
+        if metadata_key != key and metadata_key in _ROUTING:
+            replacements[key] = _routing_attribute(metadata_key, value)
+            continue
         if metadata_key != key and metadata_key in {
             "referenced_prior_turn",
             "unresolved_reference_count",
