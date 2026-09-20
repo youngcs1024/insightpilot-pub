@@ -8,7 +8,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from app.agents.budget import SUMMARY_TOKENS, bounded_text
-from app.agents.contracts import Route, RouteDecision, RouterInput, RoutingContext
+from app.agents.contracts import Route, RouteDecision, RouterInput
 from app.agents.multiturn import trim_history
 from app.agents.nodes.prefilter import CLARIFICATION_QUESTION, prefilter
 from app.agents.prompts import ROUTER
@@ -91,9 +91,12 @@ async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecis
             ctx.deadline.check("router")
             bounded = RouterInput(
                 question=inputs.question,
-                routing_context=RoutingContext(
-                    summary=bounded_text(inputs.routing_context.summary, SUMMARY_TOKENS),
-                    recent_messages=trim_history(inputs.routing_context.recent_messages),
+                routing_context=inputs.routing_context.model_copy(
+                    update={
+                        "summary": bounded_text(inputs.routing_context.summary, SUMMARY_TOKENS),
+                        "recent_messages": trim_history(inputs.routing_context.recent_messages),
+                    },
+                    deep=True,
                 ),
             )
             original = await _classify(bounded, ctx)

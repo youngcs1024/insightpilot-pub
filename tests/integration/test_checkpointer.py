@@ -242,8 +242,10 @@ async def test_sanity_flags_survive_committed_snapshot_reload(
     assert restored.data.sanity_flags == list(SanityFlag)
 
 
+@pytest.mark.parametrize("version", ["phase2-v1", "phase2-v2"])
 async def test_unknown_checkpoint_version_rejected(
     graph_database: tuple[Database, DatabaseSettings],
+    version: str,
 ) -> None:
     database, settings = graph_database
     identity = await admitted(database)
@@ -254,7 +256,7 @@ async def test_unknown_checkpoint_version_rejected(
         await graph.invoke(ctx)
         await graph.graph.aupdate_state(
             {"configurable": {"thread_id": str(identity.turn_id)}},
-            {"graph_version": "phase2-v1"},
+            {"graph_version": version},
             as_node="format_answer",
         )
         with pytest.raises(ConflictError):

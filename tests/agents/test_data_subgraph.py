@@ -188,8 +188,8 @@ async def test_terminal_failure_appends_without_overwriting_parent_failures() ->
     )
     state.failures = [prior]
     output = await answer_data(state, Runtime(context=ctx), {})
-    assert output.update["failures"][0] == prior
-    assert len(output.update["failures"]) == 2
+    assert state.failures == [prior]
+    assert len(output.update["failures"]) == 1
     assert output.update["failures"][-1].kind is FailureKind.MCP_UNAVAILABLE
 
 

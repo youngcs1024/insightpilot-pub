@@ -58,4 +58,4 @@ def failed(node: str, state: AgentState, exc: InsightPilotError) -> Command[str]
     """No exception prose becomes durable failure detail or answer content."""
     logger.exception("graph_node_failed", node=node, code=exc.code, exc_info=False)
     failure = node_failure(node, exc)
-    return Command(update={"failures": [*state.failures, failure], "status": "failed"}, goto=END)
+    return Command(update={"failures": [failure], "status": "failed"}, goto=END)

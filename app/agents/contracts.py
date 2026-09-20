@@ -9,6 +9,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from app.schemas.mcp import ColumnSpec, Contract, SqlValue
+from app.schemas.memory import FormatPreferenceContent, TerminologyContent
 from app.schemas.metric_resolution import BindingFieldSource, RegionScope
 from app.schemas.metrics import Grain, MetricExample
 from app.schemas.sanity import SanityFlag
@@ -262,6 +263,8 @@ class RoutingContext(Contract):
     schema_version: Literal[1] = 1
     summary: str = Field(default="", max_length=32_000)
     recent_messages: list[HistoryMessage] = Field(default_factory=list, max_length=100)
+    terminology: list[TerminologyContent] = Field(default_factory=list, max_length=5)
+    format_preference: FormatPreferenceContent | None = None
 
 
 class RouterInput(Contract):

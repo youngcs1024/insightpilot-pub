@@ -1,8 +1,11 @@
 """Fresh per-assistant-turn state with separate node-owned outputs."""
 
-from typing import Literal, Self
+import operator
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from langchain_core.messages import AnyMessage
+from langgraph.graph import add_messages
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from app.agents.contracts import (
@@ -11,19 +14,44 @@ from app.agents.contracts import (
     EvidenceRefs,
     PreparedContext,
     RewrittenQuestion,
+    RouteDecision,
+    RoutingContext,
     TurnIdentity,
 )
 from app.agents.failures import NodeFailure
+from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.mcp import Contract
-from app.schemas.metric_resolution import MetricClarification
+from app.schemas.memory import FormatPreferenceContent, Memory
+from app.schemas.metric_resolution import MetricClarification, RegionScope, SelectedOverrides
+from app.schemas.retrieval import KnowledgeTimeScope
 
-GRAPH_VERSION: Literal["phase2-v2"] = "phase2-v2"
+GRAPH_VERSION: Literal["phase4-v1"] = "phase4-v1"
+
+
+class TurnContext(Contract):
+    """Written once after routing; downstream projections must copy nested values.
+
+    Freezing prevents field replacement. Lists retain the shared wire contracts;
+    their contents are read-only by ownership, not recursively frozen by Pydantic.
+    """
+
+    model_config = ConfigDict(frozen=True, hide_input_in_errors=True)
+    schema_version: Literal[1] = 1
+    recent_messages: list[AnyMessage] = Field(default_factory=list)
+    summary: str = Field(default="", max_length=32_000)
+    memories: list[Memory] = Field(default_factory=list, max_length=5)
+    time_scope: KnowledgeTimeScope
+    region_scope: RegionScope | None = None
+    selected_overrides: SelectedOverrides = Field(default_factory=SelectedOverrides)
+    format_preference: FormatPreferenceContent | None = None
+    prior_sql: list[str] = Field(default_factory=list, max_length=3)
+    token_accounting: dict[str, Annotated[int, Field(ge=0)]] = Field(default_factory=dict)
 
 
 class GraphInput(TurnIdentity):
     """A question is loaded from its admitted user message, never caller-overridden."""
 
-    graph_version: Literal["phase2-v2"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v1"] = GRAPH_VERSION
 
 
 class GraphOutput(Contract):
@@ -54,12 +82,23 @@ class GraphOutput(Contract):
 class AgentState(GraphInput):
     """No service, credential, runtime object or checkpoint from another turn."""
 
-    graph_version: Literal["phase2-v2"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v1"] = GRAPH_VERSION
+    # prepare owns the loaded question/history. GraphInput cannot supply them.
+    question: str = Field(default="", max_length=32_000)
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
+    routing_context: RoutingContext | None = None
+    # Reserved owners: finalize_context, router, knowledge wrapper (Steps 4.3-4.4).
+    context: TurnContext | None = None
+    route: RouteDecision | None = None
+    knowledge_evidence: KnowledgeEvidence | None = None
+    assumptions: Annotated[list[str], operator.add] = Field(default_factory=list)
+    degraded_components: Annotated[list[str], operator.add] = Field(default_factory=list)
+    abstained: bool = False
     prepared: PreparedContext | None = None
     rewritten: RewrittenQuestion | None = None
     data_evidence: DataEvidence | None = None
     evidence_refs: EvidenceRefs | None = None
     answer: Answer | None = None
     clarification: MetricClarification | None = None
-    failures: list[NodeFailure] = Field(default_factory=list)
+    failures: Annotated[list[NodeFailure], operator.add] = Field(default_factory=list)
     status: Literal["succeeded", "failed"] = "failed"

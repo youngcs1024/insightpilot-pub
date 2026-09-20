@@ -41,7 +41,7 @@ async def answer_data(
             )
         if output.failure is not None:
             return Command(
-                update={"failures": [*state.failures, output.failure], "status": "failed"},
+                update={"failures": [output.failure], "status": "failed"},
                 goto=END,
             )
         if output.evidence is None:

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 import psycopg
 import structlog
-from langgraph.types import Command
+from langgraph.types import Command, Overwrite
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ from app.schemas import (
     knowledge,
     knowledge_query,
     mcp,
+    memory,
     metric_resolution,
     metrics,
     model_runtime,
@@ -80,6 +81,7 @@ def serializer() -> JsonPlusSerializer:
             model_runtime,
             retrieval,
             mcp,
+            memory,
             metric_resolution,
             metrics,
             sanity,
@@ -248,4 +250,4 @@ class GraphService:
             return None
         if prior.evidence_refs is None:
             raise ConflictError("failed turn has no committed evidence to recover")
-        return Command(update={"failures": []}, goto="format_answer")
+        return Command(update={"failures": Overwrite([])}, goto="format_answer")
