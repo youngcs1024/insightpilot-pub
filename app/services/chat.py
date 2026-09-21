@@ -219,9 +219,8 @@ class ChatService:
                             )
                         )
                     )
-                    if both_sources:
-                        raise BothSourcesFailedError(reason)
-                    raise TurnFailedError(reason)
+                    error_type = BothSourcesFailedError if both_sources else TurnFailedError
+                    raise error_type(reason)
                 latency_ms = int((monotonic() - started) * 1000)
                 if output.clarification is not None:
                     await self._clarify(ctx.identity, output, latency_ms)
