@@ -254,6 +254,12 @@ class GraphService:
             raise ConflictError("turn already has a checkpoint")
         if checkpoint.next or prior.answer is not None or prior.clarification is not None:
             return None
+        return await self._recovery_input(ctx, prior)
+
+    async def _recovery_input(
+        self, ctx: RuntimeContext, prior: AgentState
+    ) -> Command[Literal["synthesize", "format_answer", "persist_evidence"]]:
+        """Recover only from the owned immutable bundle, including a lost commit receipt."""
         bundle = await ctx.evidence.read_bundle(ctx.identity)
         if bundle.data is None and bundle.knowledge is None:
             raise ConflictError("failed turn has no committed evidence to recover")

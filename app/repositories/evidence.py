@@ -190,10 +190,6 @@ class EvidenceRepository:
             raise NotFoundError()
         data, knowledge = row
         return EvidenceBundle(
-            data=data_snapshot(data)
-            if data is not None
-            else None,
-            knowledge=knowledge_snapshot(knowledge)
-            if knowledge is not None
-            else None,
+            data=data_snapshot(data) if data is not None else None,
+            knowledge=knowledge_snapshot(knowledge) if knowledge is not None else None,
         )

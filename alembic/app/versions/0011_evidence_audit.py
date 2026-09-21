@@ -1,6 +1,7 @@
 """Backfill explicit evidence versions without rewriting historical JSON or digests."""
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 
 from alembic import op
 
@@ -14,11 +15,15 @@ def upgrade() -> None:
     """Retain append-only runtime grants while the owner backfills original versions."""
     for table in ("data_evidence", "knowledge_evidence"):
         op.add_column(table, sa.Column("schema_version", sa.Integer(), nullable=True))
-        # Identifiers come only from this migration's fixed table names.
+        evidence = sa.table(
+            table,
+            sa.column("schema_version", sa.Integer()),
+            sa.column("payload", JSONB()),
+            schema="public",
+        )
         op.execute(
-            sa.text(
-                "UPDATE public." + table
-                + " SET schema_version = (payload ->> 'schema_version')::integer"
+            evidence.update().values(
+                schema_version=evidence.c.payload["schema_version"].as_integer()
             )
         )
         op.alter_column(table, "schema_version", existing_type=sa.Integer(), nullable=False)

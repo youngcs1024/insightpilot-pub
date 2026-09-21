@@ -9,15 +9,16 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+import sqlalchemy as sa
 from alembic.autogenerate import produce_migrations
 from alembic.runtime.environment import EnvironmentContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, inspect, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from alembic import command
 from app.db.base import Base
@@ -502,8 +503,100 @@ def test_cli_upgrade_and_make_migrate(migrated: MigrationSettings) -> None:
     assert result.stdout.count("migration_completed") == len(MigrationTarget)
 
 
+def evidence_table(name: str) -> sa.TableClause:
+    """Typed SQL identifiers for the two migration-owned tables."""
+    return sa.table(
+        name,
+        sa.column("id", sa.Uuid()),
+        sa.column("user_id", sa.Uuid()),
+        sa.column("assistant_turn_id", sa.Uuid()),
+        sa.column("payload", sa.JSON()),
+        sa.column("content_sha256", sa.String()),
+        sa.column("created_at", sa.DateTime(timezone=True)),
+        sa.column("schema_version", sa.Integer()),
+        schema="public",
+    )
+
+
+async def seed_legacy_evidence(connection: AsyncConnection, identifier: UUID) -> None:
+    """Seed only pre-upgrade columns, using the existing application ownership chain."""
+    async with AsyncSession(bind=connection) as session:
+        user = User(
+            email=f"audit-{identifier}@example.com",
+            hashed_password=uuid4().hex,
+            display_name="Audit",
+        )
+        session.add(user)
+        await session.flush()
+        conversation = Conversation(user_id=user.id, title="Audit")
+        session.add(conversation)
+        await session.flush()
+        turn = Turn(
+            conversation_id=conversation.id,
+            seq=1,
+            role=TurnRole.ASSISTANT,
+            status=TurnStatus.SUCCEEDED,
+            content="Historical answer",
+        )
+        session.add(turn)
+        await session.flush()
+        for name, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
+            await connection.execute(
+                evidence_table(name)
+                .insert()
+                .values(
+                    id=identifier,
+                    user_id=user.id,
+                    assistant_turn_id=turn.id,
+                    content_sha256="a" * 64,
+                    payload={"schema_version": version, "historical": "原始文本"},
+                )
+            )
+
+
+async def read_legacy_evidence(
+    connection: AsyncConnection, identifier: UUID, *, upgraded: bool
+) -> list[tuple[object, ...]]:
+    """Compare every immutable audit field and the effective runtime grants."""
+    rows = []
+    for name, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
+        evidence = evidence_table(name)
+        row = (
+            await connection.execute(
+                sa.select(
+                    evidence.c.id,
+                    evidence.c.payload,
+                    evidence.c.content_sha256,
+                    evidence.c.created_at,
+                ).where(evidence.c.id == identifier)
+            )
+        ).one()
+        rows.append(tuple(row))
+        if upgraded:
+            assert (
+                await connection.scalar(
+                    sa.select(evidence.c.schema_version).where(evidence.c.id == identifier)
+                )
+                == version
+            )
+        for privilege, expected in (
+            ("UPDATE", False),
+            ("DELETE", False),
+            ("SELECT", True),
+            ("INSERT", True),
+        ):
+            assert (
+                await connection.scalar(
+                    text("SELECT has_table_privilege('app_rw', :table, :privilege)"),
+                    {"table": name, "privilege": privilege},
+                )
+                is expected
+            )
+    return rows
+
+
 def test_evidence_audit_backfill_preserves_original_records(migrated: MigrationSettings) -> None:
-    """An owner-only upgrade adds versions while historical bytes, IDs and grants survive."""
+    """Owner upgrade/backfill and downgrade preserve records and runtime permissions."""
     config = migration_config(MigrationTarget.APP)
     identifier = uuid4()
 
@@ -512,34 +605,8 @@ def test_evidence_audit_backfill_preserves_original_records(migrated: MigrationS
         try:
             async with resource.begin() as connection:
                 if seed:
-                    async with AsyncSession(bind=connection) as session:
-                        user = User(email=f"audit-{identifier}@example.com", hashed_password="unused", display_name="Audit")
-                        session.add(user)
-                        await session.flush()
-                        conversation = Conversation(user_id=user.id, title="Audit")
-                        session.add(conversation)
-                        await session.flush()
-                        turn = Turn(conversation_id=conversation.id, seq=1, role=TurnRole.ASSISTANT, status=TurnStatus.SUCCEEDED, content="Historical answer")
-                        session.add(turn)
-                        await session.flush()
-                        for table, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
-                            await connection.execute(
-                                text("INSERT INTO public." + table + " (id,user_id,assistant_turn_id,content_sha256,payload) VALUES (:id,:uid,:tid,:digest,CAST(:payload AS jsonb))"),
-                                {"id": identifier, "uid": user.id, "tid": turn.id, "digest": "a" * 64, "payload": '{"schema_version":' + str(version) + ',"historical":"原始文本"}'},
-                            )
-                rows = []
-                for table, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
-                    row = (await connection.execute(
-                        text("SELECT id,payload,content_sha256,created_at FROM public." + table + " WHERE id=:id"), {"id": identifier}
-                    )).one()
-                    rows.append(tuple(row))
-                    if upgraded:
-                        assert await connection.scalar(text("SELECT schema_version FROM public." + table + " WHERE id=:id"), {"id": identifier}) == version
-                    for privilege in ("UPDATE", "DELETE"):
-                        assert not await connection.scalar(text("SELECT has_table_privilege('app_rw', :table, :privilege)"), {"table": table, "privilege": privilege})
-                    for privilege in ("SELECT", "INSERT"):
-                        assert await connection.scalar(text("SELECT has_table_privilege('app_rw', :table, :privilege)"), {"table": table, "privilege": privilege})
-                return rows
+                    await seed_legacy_evidence(connection, identifier)
+                return await read_legacy_evidence(connection, identifier, upgraded=upgraded)
         finally:
             await resource.dispose()
 

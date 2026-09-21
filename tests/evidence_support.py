@@ -39,8 +39,17 @@ class HistoricalKnowledge:
         """Exercise actual history routes with all external service methods forbidden."""
         for name in ("mcp", "llm", "retrieval", "model_runtime", "knowledge_generation"):
             service = AsyncMock()
-            for method in ("call_tool", "generate_structured", "retrieve", "embed", "rerank", "generate"):
-                setattr(service, method, AsyncMock(side_effect=AssertionError("external history call")))
+            for method in (
+                "call_tool",
+                "generate_structured",
+                "retrieve",
+                "embed",
+                "rerank",
+                "generate",
+            ):
+                setattr(
+                    service, method, AsyncMock(side_effect=AssertionError("external history call"))
+                )
             monkeypatch.setattr(self.app.state, name, service)
         # A new service instance must read the same persisted records.
         self.app.state.evidence = EvidenceService(self.app.state.database)
@@ -66,9 +75,10 @@ async def committed_knowledge(
     service = EvidenceService(database)
     bundle = await service.commit_bundle(identity, None, evidence)
     llm = FakeChatModel([draft(evidence.chunks[0].chunk_id)])
-    async with database.session() as session:
+    trace_id = identity.turn_id.hex
+    async with database.session() as session, session.begin():
         turn = await session.get(Turn, identity.turn_id)
-        trace_id = turn.trace_id
+        turn.trace_id = trace_id
     ctx = replace(
         context(settings=settings),
         identity=identity,

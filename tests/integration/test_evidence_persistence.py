@@ -37,11 +37,21 @@ from tests.integration.checkpoint_support import (
     connected_context,
     graph_database,
 )
-from tests.integration.mcp_support import business_tables, client as mcp_client, mcp_endpoint, query
-from tests.retrieval_support import RetrievalHarness, deadline, harness, query as retrieval_query
+from tests.integration.mcp_support import business_tables, mcp_endpoint, query
+from tests.integration.mcp_support import client as mcp_client
+from tests.retrieval_support import RetrievalHarness, deadline, harness
+from tests.retrieval_support import query as retrieval_query
 
 pytestmark = pytest.mark.integration
-__all__ = ["business_tables", "chat", "checkpoint_setup", "graph_database", "harness", "mcp_client", "mcp_endpoint"]
+__all__ = [
+    "business_tables",
+    "chat",
+    "checkpoint_setup",
+    "graph_database",
+    "harness",
+    "mcp_client",
+    "mcp_endpoint",
+]
 
 
 async def test_data_evidence_persisted_with_sql_and_bindings(
@@ -67,7 +77,9 @@ async def test_data_evidence_persisted_with_sql_and_bindings(
     assert data.result_summary.statistics_scope == "returned_rows"
     assert data.mcp_call_id
     async with database.session() as session:
-        row = await session.scalar(select(DataEvidenceRecord).where(DataEvidenceRecord.id == bundle.data.id))
+        row = await session.scalar(
+            select(DataEvidenceRecord).where(DataEvidenceRecord.id == bundle.data.id)
+        )
         assert row.payload == data.model_dump(mode="json")
         assert row.schema_version == data.schema_version
         assert row.created_at is not None
@@ -82,7 +94,9 @@ async def test_knowledge_evidence_persisted_with_chunk_ids_and_scores(
     value = package_evidence(ranked(), EvidenceConfig(), SchemaTokenCounter())
     bundle = await EvidenceService(database).commit_bundle(identity, None, value)
     async with database.session() as session:
-        row = await session.scalar(select(KnowledgeEvidenceRecord).where(KnowledgeEvidenceRecord.id == bundle.knowledge.id))
+        row = await session.scalar(
+            select(KnowledgeEvidenceRecord).where(KnowledgeEvidenceRecord.id == bundle.knowledge.id)
+        )
         assert row.payload == value.model_dump(mode="json")
         assert row.schema_version == value.schema_version
         assert row.created_at is not None
@@ -102,7 +116,9 @@ async def test_answer_references_persisted_ids(chat: Harness) -> None:
     response = await chat.client.post(chat.url, json={"content": "请分析2026年8月的经营情况"})
     assert response.status_code == 200, response.text  # noqa: PLR2004
     body = response.json()
-    evidence = (await chat.client.get(f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence")).json()
+    evidence = (
+        await chat.client.get(f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence")
+    ).json()
     assert body["answer"]["evidence_refs"]["data_snapshot_id"] == evidence["data"]["id"]
     assert body["answer"]["evidence_refs"]["knowledge_snapshot_id"] == evidence["knowledge"]["id"]
     assert (await chat.stored())[-1]["answer"] == body["answer"]
@@ -114,7 +130,8 @@ async def test_evidence_readable_after_restart(
     database, settings = graph_database
     identity = await admitted(database)
     before = await EvidenceService(database).commit_bundle(
-        identity, package_result(result(), []),
+        identity,
+        package_result(result(), []),
         package_evidence(ranked(), EvidenceConfig(), SchemaTokenCounter()),
     )
     # Dispose the writer's entire connection pool before constructing another service.
@@ -156,8 +173,10 @@ async def test_retrieval_config_snapshot_present(
 
 
 async def test_business_update_preserves_snapshot(
-    graph_database: tuple[Database, DatabaseSettings], mcp_client: McpClient,
-    business_tables: None, database_stack: DatabaseStack,
+    graph_database: tuple[Database, DatabaseSettings],
+    mcp_client: McpClient,
+    business_tables: None,
+    database_stack: DatabaseStack,
 ) -> None:
     database, _ = graph_database
     identity = await admitted(database)
@@ -165,8 +184,10 @@ async def test_business_update_preserves_snapshot(
     before = await query(mcp_client, sql)
     frozen = await EvidenceService(database).commit(identity, package_result(before, []))
     admin = await psycopg.AsyncConnection.connect(
-        host="127.0.0.1", port=database_stack.settings.db_host_port,
-        dbname="insightpilot_business", user="postgres",
+        host="127.0.0.1",
+        port=database_stack.settings.db_host_port,
+        dbname="insightpilot_business",
+        user="postgres",
         password=database_stack.settings.postgres_superuser_password.get_secret_value(),
         connect_timeout=5,
     )
@@ -183,9 +204,13 @@ async def test_business_update_preserves_snapshot(
 
 @pytest.mark.storage
 async def test_reingest_preserves_original_citation_text(
-    harness: RetrievalHarness, settings: Settings, monkeypatch: pytest.MonkeyPatch,
+    harness: RetrievalHarness,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    retrieved = await harness.pipeline(RetrievalConfig(record_arm_scores=True)).retrieve(retrieval_query(), deadline=deadline())
+    retrieved = await harness.pipeline(RetrievalConfig(record_arm_scores=True)).retrieve(
+        retrieval_query(), deadline=deadline()
+    )
     value = package_evidence(retrieved, EvidenceConfig(), SchemaTokenCounter())
     history = await committed_knowledge(harness.database, settings, value)
     for name in ("sku.md", "august.md"):
@@ -199,7 +224,9 @@ async def test_reingest_preserves_original_citation_text(
 
 @pytest.mark.storage
 async def test_source_removal_preserves_history(
-    harness: RetrievalHarness, settings: Settings, monkeypatch: pytest.MonkeyPatch,
+    harness: RetrievalHarness,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     retrieved = await harness.pipeline().retrieve(retrieval_query(), deadline=deadline())
     value = package_evidence(retrieved, EvidenceConfig(), SchemaTokenCounter())
@@ -213,7 +240,9 @@ async def test_source_removal_preserves_history(
 
 @pytest.mark.storage
 async def test_milvus_rebuild_does_not_affect_history(
-    harness: RetrievalHarness, settings: Settings, monkeypatch: pytest.MonkeyPatch,
+    harness: RetrievalHarness,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     retrieved = await harness.pipeline().retrieve(retrieval_query(), deadline=deadline())
     value = package_evidence(retrieved, EvidenceConfig(), SchemaTokenCounter())
@@ -230,15 +259,24 @@ async def test_milvus_rebuild_does_not_affect_history(
     await history.assert_unchanged(monkeypatch)
 
 
-async def test_snapshot_endpoint_makes_no_external_calls(chat: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_snapshot_endpoint_makes_no_external_calls(
+    chat: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ctx = parent_context(Route.BOTH, settings=chat.app.state.settings)
     chat.app.state.llm = ctx.llm
     chat.app.state.retrieval = ctx.retrieval
     chat.app.state.knowledge_generation = ctx.knowledge_generation
     body = (await chat.client.post(chat.url, json={"content": "请分析2026年8月的经营情况"})).json()
-    for service, method in ((chat.app.state.mcp, "call_tool"), (ctx.llm, "generate_structured"), (ctx.retrieval, "retrieve"), (ctx.knowledge_generation, "generate")):
+    for service, method in (
+        (chat.app.state.mcp, "call_tool"),
+        (ctx.llm, "generate_structured"),
+        (ctx.retrieval, "retrieve"),
+        (ctx.knowledge_generation, "generate"),
+    ):
         monkeypatch.setattr(service, method, AsyncMock(side_effect=AssertionError("external read")))
-    response = await chat.client.get(f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence")
+    response = await chat.client.get(
+        f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence"
+    )
     assert response.status_code == 200, response.text  # noqa: PLR2004
     assert response.json()["knowledge"]["knowledge"]["chunks"]
 
@@ -249,11 +287,15 @@ async def test_snapshot_retry_idempotent(graph_database: tuple[Database, Databas
     service = EvidenceService(database)
     data = package_result(result(), [])
     knowledge = package_evidence(ranked(), EvidenceConfig(), SchemaTokenCounter())
-    bundles = await asyncio.gather(*(service.commit_bundle(identity, data, knowledge) for _ in range(3)))
+    bundles = await asyncio.gather(
+        *(service.commit_bundle(identity, data, knowledge) for _ in range(3))
+    )
     assert bundles[0] == bundles[1] == bundles[2]
 
 
-async def test_conflicting_retry_payload_rejected(graph_database: tuple[Database, DatabaseSettings]) -> None:
+async def test_conflicting_retry_payload_rejected(
+    graph_database: tuple[Database, DatabaseSettings],
+) -> None:
     database, _ = graph_database
     identity = await admitted(database)
     service = EvidenceService(database)
@@ -267,14 +309,20 @@ async def test_conflicting_retry_payload_rejected(graph_database: tuple[Database
 
 @pytest.mark.parametrize("streamed", [False, True])
 async def test_failed_evidence_write_never_publishes_answer(
-    chat: Harness, monkeypatch: pytest.MonkeyPatch, streamed: bool,
+    chat: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    streamed: bool,
 ) -> None:
     ctx = parent_context(Route.BOTH, settings=chat.app.state.settings)
     chat.app.state.llm = ctx.llm
     chat.app.state.retrieval = ctx.retrieval
     chat.app.state.knowledge_generation = ctx.knowledge_generation
-    monkeypatch.setattr(EvidenceRepository, "insert_knowledge", AsyncMock(side_effect=DatabaseError()))
-    response = await chat.client.post(chat.url + ("/stream" if streamed else ""), json={"content": "请分析2026年8月的经营情况"})
+    monkeypatch.setattr(
+        EvidenceRepository, "insert_knowledge", AsyncMock(side_effect=DatabaseError())
+    )
+    response = await chat.client.post(
+        chat.url + ("/stream" if streamed else ""), json={"content": "请分析2026年8月的经营情况"}
+    )
     if streamed:
         assert all(name != "token" for name, _ in events(response))
         assert events(response)[-1][0] == "error"
@@ -283,13 +331,16 @@ async def test_failed_evidence_write_never_publishes_answer(
     stored = (await chat.stored())[-1]
     assert stored["status"] == "failed"
     assert stored["answer"] is None
-    response = await chat.client.get(f"/api/v1/conversations/{chat.cid}/turns/{stored['id']}/evidence")
+    response = await chat.client.get(
+        f"/api/v1/conversations/{chat.cid}/turns/{stored['id']}/evidence"
+    )
     assert response.json()["data"] is response.json()["knowledge"] is None
 
 
 @pytest.mark.parametrize("truncated", [False, True])
 async def test_bounded_samples_preserve_all_returned_statistics(
-    graph_database: tuple[Database, DatabaseSettings], truncated: bool,
+    graph_database: tuple[Database, DatabaseSettings],
+    truncated: bool,
 ) -> None:
     database, _ = graph_database
     identity = await admitted(database)
@@ -309,7 +360,9 @@ async def test_bounded_samples_preserve_all_returned_statistics(
 
 @pytest.mark.parametrize("route", [Route.DATA_ONLY, Route.KNOWLEDGE_ONLY, Route.BOTH])
 async def test_recovery_after_commit_before_checkpoint_reference(
-    graph_database: tuple[Database, DatabaseSettings], monkeypatch: pytest.MonkeyPatch, route: Route,
+    graph_database: tuple[Database, DatabaseSettings],
+    monkeypatch: pytest.MonkeyPatch,
+    route: Route,
 ) -> None:
     database, settings = graph_database
     identity = await admitted(database)
@@ -319,7 +372,9 @@ async def test_recovery_after_commit_before_checkpoint_reference(
         user.content = "请分析2026年8月的经营情况"
     base = parent_context(route)
     service = EvidenceService(database)
-    ctx = replace(base, identity=identity, conversations=ConversationService(database), evidence=service)
+    ctx = replace(
+        base, identity=identity, conversations=ConversationService(database), evidence=service
+    )
     original = service.commit_bundle
 
     async def interrupted(*args: object, **kwargs: object) -> EvidenceBundle:
@@ -341,7 +396,8 @@ async def test_recovery_after_commit_before_checkpoint_reference(
     restarted = GraphService(settings)
     await restarted.start()
     resumed = replace(
-        ctx, deadline=deadline(60),
+        ctx,
+        deadline=deadline(60),
         mcp=AsyncMock(call_tool=AsyncMock(side_effect=AssertionError("SQL repeated"))),
         retrieval=AsyncMock(retrieve=AsyncMock(side_effect=AssertionError("retrieval repeated"))),
     )
@@ -359,7 +415,10 @@ async def test_recovery_after_commit_before_checkpoint_reference(
 @pytest.mark.parametrize("kind", ["data", "knowledge"])
 @pytest.mark.parametrize("damage", ["digest", "version"])
 async def test_corrupt_snapshot_endpoint_fails_safely(
-    chat: Harness, migration_stack: DatabaseStack, kind: str, damage: str,
+    chat: Harness,
+    migration_stack: DatabaseStack,
+    kind: str,
+    damage: str,
 ) -> None:
     ctx = parent_context(Route.BOTH, settings=chat.app.state.settings)
     chat.app.state.llm = ctx.llm
@@ -372,8 +431,10 @@ async def test_corrupt_snapshot_endpoint_fails_safely(
     field = "content_sha256" if damage == "digest" else "schema_version"
     replacement = "0" * 64 if damage == "digest" else 99
     admin = await psycopg.AsyncConnection.connect(
-        host="127.0.0.1", port=migration_stack.settings.db_host_port,
-        dbname="insightpilot_app", user="postgres",
+        host="127.0.0.1",
+        port=migration_stack.settings.db_host_port,
+        dbname="insightpilot_app",
+        user="postgres",
         password=migration_stack.settings.postgres_superuser_password.get_secret_value(),
         connect_timeout=5,
     )
@@ -386,7 +447,9 @@ async def test_corrupt_snapshot_endpoint_fails_safely(
             ),
             (replacement, body["evidence_refs"][kind + "_snapshot_id"]),
         )
-    response = await chat.client.get(f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence")
+    response = await chat.client.get(
+        f"/api/v1/conversations/{chat.cid}/turns/{body['id']}/evidence"
+    )
     assert response.status_code == 500  # noqa: PLR2004
     assert response.json()["code"] == "EVIDENCE_INTEGRITY_ERROR"
     assert "SELECT" not in response.text
