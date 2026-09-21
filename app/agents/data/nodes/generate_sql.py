@@ -53,7 +53,7 @@ def build_messages(state: DataAgentState, ctx: RuntimeContext) -> list[BaseMessa
         HumanMessage(
             content=json.dumps(
                 {
-                    "question": state.question,
+                    "question": state.data_intent or state.question,
                     "prior_queries_for_reference": prior_queries(state.prior_sql),
                 },
                 ensure_ascii=False,

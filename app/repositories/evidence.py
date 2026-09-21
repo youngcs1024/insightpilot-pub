@@ -7,13 +7,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.contracts import DataEvidence, EvidenceSnapshot, TurnIdentity
+from app.agents.contracts import DataEvidence, EvidenceBundle, EvidenceSnapshot, KnowledgeSnapshot, TurnIdentity
 from app.core.errors import ConflictError, NotFoundError
-from app.db.models.evidence import DataEvidenceRecord
+from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
 from app.repositories.turns import TurnRepository
+from app.schemas.knowledge import KnowledgeEvidence
 
 
-def fingerprint(data: DataEvidence) -> str:
+def fingerprint(data: DataEvidence | KnowledgeEvidence) -> str:
     """Canonical content identity excludes persistence-generated fields."""
     return hashlib.sha256(
         json.dumps(
@@ -68,3 +69,43 @@ class EvidenceRepository:
         self.session.add(record)
         await self.session.flush()
         return EvidenceSnapshot(id=record.id, data=data)
+
+
+    async def find_knowledge(self, snapshot_id: UUID | None = None) -> KnowledgeSnapshot | None:
+        """Validate turn ownership even when it has no knowledge snapshot."""
+        identity = self.identity
+        if await TurnRepository(self.session, identity.user_id).get(
+            identity.conversation_id, identity.turn_id
+        ) is None:
+            raise NotFoundError()
+        query = select(KnowledgeEvidenceRecord).where(
+            KnowledgeEvidenceRecord.user_id == identity.user_id,
+            KnowledgeEvidenceRecord.assistant_turn_id == identity.turn_id,
+        )
+        if snapshot_id is not None:
+            query = query.where(KnowledgeEvidenceRecord.id == snapshot_id)
+        record = await self.session.scalar(query)
+        return None if record is None else KnowledgeSnapshot(
+            id=record.id, knowledge=KnowledgeEvidence.model_validate(record.payload)
+        )
+
+    async def insert_knowledge(self, knowledge: KnowledgeEvidence) -> KnowledgeSnapshot:
+        """Reuse identical snapshots; never overwrite original source text."""
+        previous = await self.find_knowledge()
+        if previous is not None:
+            if fingerprint(previous.knowledge) != fingerprint(knowledge):
+                raise ConflictError("knowledge differs from committed snapshot")
+            return previous
+        record = KnowledgeEvidenceRecord(
+            user_id=self.identity.user_id,
+            assistant_turn_id=self.identity.turn_id,
+            content_sha256=fingerprint(knowledge),
+            payload=knowledge.model_dump(mode="json"),
+        )
+        self.session.add(record)
+        await self.session.flush()
+        return KnowledgeSnapshot(id=record.id, knowledge=knowledge)
+
+    async def read_bundle(self) -> EvidenceBundle:
+        """Read both kinds without consulting either external evidence source."""
+        return EvidenceBundle(data=await self.find(), knowledge=await self.find_knowledge())

@@ -16,6 +16,13 @@ _NAMES = frozenset(
     {
         "turn",
         "prepare",
+        "prepare_context",
+        "route",
+        "finalize_context",
+        "data_agent",
+        "knowledge_agent",
+        "clarify",
+        "synthesize",
         "rewrite_question",
         "router",
         "select_schema",

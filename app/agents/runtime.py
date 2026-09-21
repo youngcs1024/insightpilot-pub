@@ -8,11 +8,13 @@ from uuid import UUID
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from app.agents.contracts import DataEvidence, EvidenceSnapshot, PreparedContext, TurnIdentity
+from app.agents.contracts import DataEvidence, EvidenceBundle, EvidenceSnapshot, PreparedContext, TurnIdentity
 from app.core.config_models import RouterSettings, Settings
 from app.core.deadline import Deadline
 from app.core.errors import PeriodUnresolved
 from app.core.llm_config import ModelRole
+from app.schemas.memory import FormatPreferenceContent
+from app.schemas.knowledge import KnowledgeEvidence, KnowledgeGeneration
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.metric_resolution import RegionReference, RegionScope
 from app.schemas.metrics import MetricDefinition
@@ -59,6 +61,21 @@ class EvidencePort(Protocol):
     ) -> EvidenceSnapshot | None: ...
 
     async def commit(self, identity: TurnIdentity, data: DataEvidence) -> EvidenceSnapshot: ...
+
+    async def read_bundle(self, identity: TurnIdentity) -> EvidenceBundle: ...
+
+    async def commit_bundle(
+        self, identity: TurnIdentity, data: DataEvidence | None, knowledge: KnowledgeEvidence | None
+    ) -> EvidenceBundle: ...
+
+
+class KnowledgeGenerationPort(Protocol):
+    """Generate only citation-validated prose from committed knowledge."""
+
+    async def generate(
+        self, evidence: KnowledgeEvidence, *, deadline: Deadline,
+        format_preference: FormatPreferenceContent | None = None, presentation_request: str = ""
+    ) -> KnowledgeGeneration: ...
 
 
 class ConversationPort(Protocol):
@@ -122,6 +139,7 @@ class RuntimeContext:
     metrics: MetricPort
     now: datetime
     retrieval: RetrievalPort | None = None
+    knowledge_generation: KnowledgeGenerationPort | None = None
 
     def __post_init__(self) -> None:
         """Reject a host-local or otherwise ambiguous reference instant."""

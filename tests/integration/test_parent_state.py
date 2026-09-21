@@ -89,8 +89,10 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
                 )
             ).values
         )
-        assert fresh.context is fresh.route is fresh.knowledge_evidence is None
-        assert fresh.assumptions == fresh.failures == fresh.degraded_components == []
+        assert fresh.context is not None and fresh.route is not None
+        assert fresh.knowledge_evidence is None
+        assert fresh.assumptions == fresh.data_evidence.assumptions
+        assert fresh.failures == fresh.degraded_components == []
         assert fresh.knowledge_clarification is fresh.data_clarification is None
         assert fresh.knowledge_abstention_reason is None
         assert not fresh.abstained
@@ -119,7 +121,7 @@ async def test_checkpoint_key_is_assistant_turn(
             {"configurable": {"thread_id": str(identity.conversation_id)}}
         )
         assert actual.values["turn_id"] == identity.turn_id
-        assert actual.values["graph_version"] == "phase4-v1"
+        assert actual.values["graph_version"] == "phase4-v2"
         assert not wrong.values
         assert actual.values["messages"][-1].content == actual.values["prepared"].question
     finally:

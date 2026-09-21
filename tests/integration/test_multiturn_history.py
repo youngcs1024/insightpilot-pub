@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 from sqlalchemy import update
 
-from app.agents.contracts import RewrittenQuestion
+from app.agents.contracts import Route, RouteDecision
 from app.agents.state import AgentState
 from app.agents.summarize import package_result
 from app.core.config_models import DatabaseSettings
@@ -74,9 +74,12 @@ async def test_clarification_rewrite_survives_checkpoint_restart(
     database, settings = graph_database
     prior = await admitted(database)
     identity = await admitted(database, identity=prior)
-    rewritten = RewrittenQuestion(
-        standalone="昨天那个", referenced_prior_turn=False, unresolved_references=["那个"]
-    )
+    rewritten = RouteDecision(route=Route.CLARIFY, confidence=1,
+                              clarification_question="请说明昨天所指的问题。")
+    async with database.session() as session, session.begin():
+        row = await session.get(Turn, identity.turn_id)
+        await session.execute(update(Turn).where(Turn.id == row.reply_to_turn_id)
+                              .values(content="昨天那个"))
     ctx = replace(connected_context(database, identity), llm=FakeChatModel([rewritten]))
     graph = GraphService(settings)
     await graph.start()
@@ -95,8 +98,8 @@ async def test_clarification_rewrite_survives_checkpoint_restart(
             {"configurable": {"thread_id": str(identity.turn_id)}}
         )
         saved = AgentState.model_validate(checkpoint.values)
-        assert saved.rewritten == rewritten
-        assert saved.prepared.question == "How many orders?"
+        assert saved.route == rewritten
+        assert saved.prepared.question == "昨天那个"
         assert not ctx.llm.calls
     finally:
         await restarted.aclose()

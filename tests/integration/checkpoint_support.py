@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.agents.contracts import AnswerDraft, RewrittenQuestion, TurnIdentity
+from app.agents.contracts import AnswerDraft, TurnIdentity
 from app.agents.runtime import RuntimeContext
 from app.core.config_models import DatabaseSettings
 from app.db.models import Conversation, TurnStatus, User
@@ -66,7 +66,7 @@ async def admitted(database: Database, *, identity: TurnIdentity | None = None) 
             prior.content = "There were 42 orders."
             await session.flush()
         assistant = await TurnRepository(session, user_id).create_pair(
-            conversation_id, "How many orders?", None
+            conversation_id, "2026年8月GMV", None
         )
         return TurnIdentity(user_id=user_id, conversation_id=conversation_id, turn_id=assistant.id)
 
@@ -80,7 +80,6 @@ def connected_context(
             base,
             llm=FakeChatModel(
                 [
-                    RewrittenQuestion(standalone="How many orders?", referenced_prior_turn=False),
                     metric_intent(),
                     sql_candidate(),
                     AnswerDraft(markdown="42 orders", confidence=1),

@@ -9,10 +9,9 @@ from langgraph.runtime import Runtime
 from pydantic import ValidationError
 
 from app.agents.budget import HISTORY_TOKENS, token_bound
-from app.agents.contracts import AnswerDraft, HistoryMessage, PreparedContext, RewrittenQuestion
+from app.agents.contracts import AnswerDraft, HistoryMessage, PreparedContext, RewrittenQuestion, Route, RouteDecision
 from app.agents.data.nodes.generate_sql import build_messages
 from app.agents.data.state import DataAgentInput
-from app.agents.failures import FailureKind
 from app.agents.multiturn import PRIOR_SQL_TOKENS, prior_queries, trim_history
 from app.agents.nodes.rewrite_question import rewrite_question
 from app.agents.state import AgentState
@@ -65,7 +64,7 @@ async def test_followup_grain_change_reuses_metric() -> None:
     standalone = "2026年8月GMV按月拆分"
     ctx = context(
         responses=[
-            RewrittenQuestion(standalone=standalone, referenced_prior_turn=True),
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent=standalone),
             metric_intent().model_copy(update={"grain": "month"}),
             sql_candidate(),
             AnswerDraft(markdown="Monthly GMV", confidence=1),
@@ -81,7 +80,7 @@ async def test_followup_grain_change_reuses_metric() -> None:
     assert binding.grain.value == "month"
     assert binding.period_start.month == AUGUST
     intent_call = ctx.llm.calls[1]
-    assert json.loads(intent_call.messages[1].content)["question"] == standalone
+    assert json.loads(intent_call.messages[1].content)["data_intent"] == standalone
     generation = json.loads(ctx.llm.calls[2].messages[1].content)
     assert generation == {"question": standalone, "prior_queries_for_reference": ["SELECT 42"]}
 
@@ -93,21 +92,18 @@ async def test_unresolvable_reference_requests_clarification(empty_history: bool
         inputs.messages = []
     ctx = context(
         responses=[
-            RewrittenQuestion(
-                standalone=inputs.question,
-                referenced_prior_turn=False,
-                unresolved_references=["昨天那个"],
-            )
+            RouteDecision(route=Route.CLARIFY, confidence=1,
+                          clarification_question="请明确昨天所指的指标或政策。")
         ]
     )
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=inputs)))
     output = await invoke(ctx)
     assert output.clarification.kind is ClarificationKind.REFERENCE_UNRESOLVED
-    assert output.status == "succeeded"
+    assert output.status == "abstained"
     assert output.answer is None
     assert output.data_evidence is None
     assert not ctx.mcp.calls
-    assert len(ctx.llm.calls) == 1
+    assert len(ctx.llm.calls) == (0 if empty_history else 1)
 
 
 async def test_first_turn_skips_rewrite() -> None:
@@ -131,9 +127,9 @@ async def test_rewrite_failure_does_not_guess_or_execute() -> None:
     ctx = context(responses=[LlmStructuredOutputError()])
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=prepared())))
     output = await invoke(ctx)
-    assert output.status == "failed"
-    assert output.failures[0].kind is FailureKind.LLM_STRUCTURED_OUTPUT_FAILED
-    assert output.clarification is None
+    assert output.status == "abstained"
+    assert output.failures == []
+    assert output.clarification is not None
     assert not ctx.mcp.calls
 
 
@@ -200,10 +196,10 @@ async def test_prior_turn_evidence_reuse_skips_rewrite() -> None:
     ctx = context()
     assert (await invoke(ctx)).status == "succeeded"
     before = len(ctx.llm.calls)
-    ctx.llm.enqueue(AnswerDraft(markdown="Reused evidence", confidence=1))
+    ctx.llm.enqueue(RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"), AnswerDraft(markdown="Reused evidence", confidence=1))
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=prepared())))
     assert (await invoke(ctx)).status == "succeeded"
-    assert len(ctx.llm.calls) == before + 1
+    assert len(ctx.llm.calls) == before + 2
     assert len(ctx.mcp.calls) == 1
     assert ctx.llm.calls[-1].role is ModelRole.SYNTHESIS
 

@@ -12,6 +12,8 @@ from app.agents.contracts import (
     AnswerDraft,
     DataEvidence,
     EvidenceSnapshot,
+    EvidenceBundle,
+    KnowledgeSnapshot,
     PreparedContext,
     SqlGeneratorOutput,
     TurnIdentity,
@@ -22,6 +24,7 @@ from app.agents.state import GraphInput, GraphOutput
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
 from app.core.errors import ConflictError
+from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.mcp import QueryResultPayload
 from app.schemas.metric_resolution import MetricIntent
 from app.schemas.metrics import MetricDefinition
@@ -39,6 +42,7 @@ class FakeEvidence:
     def __init__(self) -> None:
         self.snapshot: EvidenceSnapshot | None = None
         self.committed = False
+        self.knowledge: KnowledgeSnapshot | None = None
 
     async def find(
         self, identity: TurnIdentity, snapshot_id: UUID | None = None
@@ -53,9 +57,25 @@ class FakeEvidence:
         return self.snapshot
 
 
+    async def read_bundle(self, identity: TurnIdentity) -> EvidenceBundle:
+        return EvidenceBundle(data=self.snapshot, knowledge=self.knowledge)
+
+    async def commit_bundle(
+        self, identity: TurnIdentity, data: DataEvidence | None, knowledge: KnowledgeEvidence | None
+    ) -> EvidenceBundle:
+        if knowledge is not None and self.knowledge and self.knowledge.knowledge != knowledge:
+            raise ConflictError()
+        if data is not None:
+            await self.commit(identity, data)
+        if knowledge is not None:
+            self.knowledge = self.knowledge or KnowledgeSnapshot(id=uuid4(), knowledge=knowledge)
+            self.committed = True
+        return await self.read_bundle(identity)
+
+
 class FakeConversations:
     async def prepare(self, identity: TurnIdentity) -> PreparedContext:
-        return PreparedContext(question="有多少订单?", summary="", messages=[], prior_sql=[])
+        return PreparedContext(question="2026年8月GMV", summary="", messages=[], prior_sql=[])
 
 
 class FakeSchemaCatalog:

@@ -225,7 +225,7 @@ class GraphService:
 
     async def _input(
         self, ctx: RuntimeContext, config: RunnableConfig, resume: bool
-    ) -> GraphInput | Command[Literal["format_answer"]] | None:
+    ) -> GraphInput | Command[Literal["synthesize", "format_answer"]] | None:
         if self.graph is None:
             raise CheckpointError()
         checkpoint = await self.graph.aget_state(config)
@@ -250,8 +250,15 @@ class GraphService:
             raise ConflictError("turn already has a checkpoint")
         if checkpoint.next or prior.answer is not None or prior.clarification is not None:
             return None
-        if prior.evidence_refs is None:
+        if prior.evidence_refs is None or (
+            prior.evidence_refs.data_snapshot_id is None
+            and prior.evidence_refs.knowledge_snapshot_id is None
+        ):
             raise ConflictError("failed turn has no committed evidence to recover")
         # Recovery input writes overlay the prior checkpoint's get_state() view.
         # Historical auditing reads the saver's original channel_values instead.
-        return Command(update={"failures": Overwrite([])}, goto="format_answer")
+        return Command(
+            update={"failures": Overwrite([])},
+            goto="synthesize" if prior.route and prior.route.route is contracts.Route.BOTH
+            else "format_answer",
+        )

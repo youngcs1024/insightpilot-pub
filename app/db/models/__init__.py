@@ -3,7 +3,7 @@
 from app.db.models.chunk import Chunk
 from app.db.models.conversation import Conversation
 from app.db.models.document import CorpusManifestRecord, Document
-from app.db.models.evidence import DataEvidenceRecord
+from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
 from app.db.models.metric_definition import MetricDefinitionRecord
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.schema_metadata import SchemaMetadataRecord, SchemaTableRecord
@@ -16,6 +16,7 @@ __all__ = [
     "CorpusManifestRecord",
     "DataEvidenceRecord",
     "Document",
+    "KnowledgeEvidenceRecord",
     "MetricDefinitionRecord",
     "RefreshToken",
     "SchemaMetadataRecord",

@@ -36,6 +36,8 @@ from app.schemas.chat import TurnResponse
 from app.services.conversations import ConversationService
 from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
+from app.services.knowledge_generation import validate_citations
+from app.schemas.knowledge import KnowledgeDraft
 from app.services.turn_results import TurnFailedError, failure_reason, turn_response
 
 logger = structlog.get_logger(__name__)
@@ -171,14 +173,13 @@ class ChatService:
             conversation_id=str(ctx.identity.conversation_id),
             turn_id=str(ctx.identity.turn_id),
             request_id=ctx.trace_id,
-            route="DATA_ONLY",
             status="running",
         )
         with self.observability.turn(ctx.trace_id, metadata) as observation:
             try:
                 result = await self._execute(ctx, observation)
             except BaseException:
-                if observation.metadata.status != "succeeded":
+                if observation.metadata.status not in {"succeeded", "degraded", "abstained"}:
                     observation.update(TraceMetadata(status="failed"))
                 raise
             else:
@@ -194,7 +195,7 @@ class ChatService:
                     output = await self.graph.invoke(ctx, callbacks=[callback])
                 finally:
                     callback.close()
-                if output.status != "succeeded" or (
+                if output.status == "failed" or (
                     output.answer is None and output.clarification is None
                 ):
                     reason = (
@@ -208,7 +209,7 @@ class ChatService:
                     await self._clarify(ctx.identity, output, latency_ms)
                 else:
                     await self._succeed(ctx.identity, output, latency_ms)
-                observation.update(TraceMetadata(status="succeeded"))
+                observation.update(TraceMetadata(status=output.status))
                 return await self.read(ctx.identity)
         except TimeoutError as exc:
             await self.cleanup(ctx.identity, FailureKind.DEADLINE_EXCEEDED)
@@ -237,7 +238,10 @@ class ChatService:
         clarification = output.clarification
         if clarification is None or output.answer is not None or output.data_evidence is not None:
             raise ConflictError("inconsistent clarification result")
-        if output.evidence_refs is not None or output.failures:
+        if (output.evidence_refs is not None and (
+            output.evidence_refs.data_snapshot_id is not None
+            or output.evidence_refs.knowledge_snapshot_id is not None
+        )) or output.failures:
             raise ConflictError("clarification contains analysis state")
         async with self.database.session() as session, session.begin():
             repo = TurnRepository(session, identity.user_id)
@@ -248,7 +252,7 @@ class ChatService:
             row.clarification = clarification.model_dump(mode="json")
             row.content = clarification.message
             row.answer = None
-            row.status = TurnStatus.SUCCEEDED
+            row.status = TurnStatus(output.status)
             row.failure_reason = None
             row.latency_ms = latency_ms
         logger.info("turn_clarified", turn_id=str(identity.turn_id), kind=clarification.kind.value)
@@ -266,29 +270,39 @@ class ChatService:
             await self._validate_answer(EvidenceRepository(session, identity), answer)
             row.answer = answer.model_dump(mode="json")
             row.content = answer.markdown
-            row.status = TurnStatus.SUCCEEDED
+            row.status = TurnStatus(output.status)
             row.failure_reason = None
             row.latency_ms = latency_ms
         logger.info(
             "turn_completed",
             turn_id=str(identity.turn_id),
-            status="succeeded",
+            status=output.status,
             latency_ms=latency_ms,
         )
 
     async def _validate_answer(self, repo: EvidenceRepository, answer: Answer) -> None:
-        if (
-            answer.evidence_refs.data_snapshot_id is None
-            or answer.evidence_refs.knowledge_snapshot_id is not None
-        ):
-            raise ConflictError()
-        snapshot = await repo.find(answer.evidence_refs.data_snapshot_id)
-        if (
-            snapshot is None
-            or answer.sql != snapshot.data.sql
-            or answer.assumptions != snapshot.data.assumptions
-        ):
-            raise ConflictError()
+        bundle = await repo.read_bundle()
+        if bundle.refs != answer.evidence_refs:
+            raise ConflictError("answer references differ from snapshots")
+        expected_sql = bundle.data.data.sql if bundle.data else ""
+        expected_assumptions = list(dict.fromkeys([
+            *(bundle.data.data.assumptions if bundle.data else []),
+            *(bundle.knowledge.knowledge.assumptions if bundle.knowledge else []),
+        ]))
+        if answer.sql != expected_sql or answer.assumptions != expected_assumptions:
+            raise ConflictError("answer fields differ from snapshots")
+        if answer.knowledge_passages:
+            if bundle.knowledge is None:
+                raise ConflictError("knowledge answer without snapshot")
+            citations = validate_citations(
+                KnowledgeDraft(passages=tuple(answer.knowledge_passages)), bundle.knowledge.knowledge
+            )
+            if list(citations) != answer.citations:
+                raise ConflictError("citation metadata differs from snapshot")
+        elif answer.citations:
+            raise ConflictError("citations without passages")
+        if bundle.data is None and bundle.knowledge is None and not answer.abstained:
+            raise ConflictError("analytical answer without evidence")
 
     async def cleanup(self, identity: TurnIdentity, reason: FailureKind) -> None:
         """Shield bounded cleanup from disconnect cancellation; preserve terminal outcomes."""

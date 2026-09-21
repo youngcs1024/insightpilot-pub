@@ -102,7 +102,7 @@ def to_knowledge_input(state: AgentState, *, token_counter: SchemaTokenPort) -> 
     inputs = KnowledgeAgentInput(
         question=state.question,
         knowledge_intent=route.knowledge_intent or state.question,
-        time_scope=context.time_scope.model_copy(deep=True),
+        time_scope=context.time_scope.model_copy(deep=True) if context.time_scope else None,
         region_scope=context.region_scope.model_copy(deep=True) if context.region_scope else None,
         relevant_memories=_terminology(context),
         conversation_summary=bounded_text(context.summary, SUMMARY_TOKENS),

@@ -32,6 +32,9 @@ from app.core.logging import setup_logging
 from app.core.middleware import DeadlineMiddleware, LoggingContextMiddleware, RequestIdMiddleware
 from app.core.observability import Observability
 from app.db.session import Database
+from app.retrieval.pipeline import RetrievalPipeline
+from app.retrieval.search_store import HybridSearchStore
+from app.services.knowledge_generation import KnowledgeGenerationService
 from app.services.auth import AuthService
 from app.services.chat import ChatService
 from app.services.conversations import ConversationService
@@ -84,6 +87,14 @@ async def _close_model(client: ModelRuntimeClient | None) -> None:
         logger.exception("model_cleanup_failed")
 
 
+async def _close_retrieval(store: HybridSearchStore | None) -> None:
+    if store is not None:
+        try:
+            await store.aclose()
+        except Exception:
+            logger.exception("retrieval_cleanup_failed")
+
+
 async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle owner per resource.
     service: HealthService,
     database: Database,
@@ -92,6 +103,7 @@ async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle 
     graph: GraphService,
     timeout_s: float,
     model: ModelRuntimeClient | None,
+    store: HybridSearchStore | None = None,
 ) -> None:
     try:
         async with asyncio.timeout(timeout_s), asyncio.TaskGroup() as group:
@@ -102,6 +114,7 @@ async def _close_resources(  # noqa: PLR0913, PLR0917 -- one explicit lifecycle 
             group.create_task(_close_llm(llm))
             group.create_task(_close_graph(graph))
             group.create_task(_close_model(model))
+            group.create_task(_close_retrieval(store))
     except TimeoutError:
         logger.exception("application_shutdown_timeout")
 
@@ -139,10 +152,16 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
         startup_deadline = Deadline(time.monotonic() + STARTUP_BUDGET_S)
         setup_logging(settings)
         app.state.ready = False
+        store = None
         try:
             await observability.start()
             await llm_service.start()
             database.start()
+            if settings.retrieval.enabled:
+                store = HybridSearchStore(settings.retrieval.milvus)
+                app.state.retrieval = RetrievalPipeline(
+                    database, store, model_runtime_client, settings.retrieval
+                )
             await graph_service.start()
             await app.state.metrics.validate_startup()
             await app.state.chat.reconcile()
@@ -171,6 +190,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
                 graph_service,
                 settings.http.shutdown_timeout_s,
                 model_runtime_client,
+                store,
             )
             await observability.aclose()
             logger.info("application_stopped")
@@ -185,6 +205,8 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     app.state.llm = llm_service
     app.state.mcp = mcp_client
     app.state.model_runtime = model_runtime_client
+    app.state.retrieval = None
+    app.state.knowledge_generation = KnowledgeGenerationService(llm_service)
     app.state.metrics = MetricService(database, settings.database)
     app.state.schema_token_counter = SchemaTokenCounter()
     app.state.schema_catalog = SchemaCatalogService(database, mcp_client, settings.schema_catalog)

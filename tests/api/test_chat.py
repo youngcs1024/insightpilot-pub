@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.agents.contracts import TurnIdentity
+from app.agents.contracts import Route, RouteDecision, TurnIdentity
 from app.agents.failures import FailureKind
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
@@ -211,15 +211,15 @@ async def test_answer_not_emitted_before_snapshot_commit(
     chat: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     evidence = chat.app.state.evidence
-    original = evidence.commit
+    original = evidence.commit_bundle
     committed = asyncio.Event()
 
-    async def commit(identity: TurnIdentity, data: object) -> object:
-        snapshot = await original(identity, data)
+    async def commit(identity: TurnIdentity, data: object, knowledge: object) -> object:
+        snapshot = await original(identity, data, knowledge)
         committed.set()
         return snapshot
 
-    monkeypatch.setattr(evidence, "commit", commit)
+    monkeypatch.setattr(evidence, "commit_bundle", commit)
     await asgi_stream(chat, "complete", monkeypatch)
     assert committed.is_set()
 
@@ -521,7 +521,7 @@ async def test_create_conversation_without_body(chat: Harness) -> None:
 
 @pytest.mark.parametrize("streamed", [False, True])
 async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: bool) -> None:
-    chat.app.state.llm = FakeChatModel([metric_intent().model_copy(update={"metric_keys": []})])
+    chat.app.state.llm = FakeChatModel([RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"), metric_intent().model_copy(update={"metric_keys": []})])
     chat.app.state.mcp = FakeMcpClient([])
     suffix = "/stream" if streamed else ""
     headers = {"Idempotency-Key": "clarification"}
@@ -530,7 +530,7 @@ async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: 
     )
     assert response.status_code == OK, response.text
     body = events(response)[-1][1] if streamed else response.json()
-    assert body["status"] == "succeeded"
+    assert body["status"] == "abstained"
     assert body["failure_reason"] is None
     assert body["answer"] is None
     assert body["clarification"]["kind"] == "metric_not_identified"
@@ -562,7 +562,7 @@ async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: 
 
 
 async def test_clarification_cannot_be_read_by_another_user(chat: Harness) -> None:
-    chat.app.state.llm = FakeChatModel([metric_intent().model_copy(update={"metric_keys": []})])
+    chat.app.state.llm = FakeChatModel([RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"), metric_intent().model_copy(update={"metric_keys": []})])
     response = await chat.client.post(chat.url, json={"content": "算一下"})
     assert response.status_code == OK
     other = chat.user.model_copy(update={"id": uuid4()})

@@ -11,7 +11,7 @@ import pytest
 import respx
 from tenacity import wait_none
 
-from app.agents.contracts import PreparedContext, RewrittenQuestion
+from app.agents.contracts import PreparedContext, Route, RouteDecision
 from app.clients.mcp_client import McpClient
 from app.core.errors import McpUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
@@ -37,15 +37,17 @@ async def test_business_graph_span_topology_and_parentage() -> None:
         ids = await asyncio.gather(run(), run())
         service.client.flush()
         spans = exporter.get_finished_spans()
-        assert len(spans) == 28  # noqa: PLR2004 -- fourteen spans for each isolated turn.
+        assert len(spans) == 32  # noqa: PLR2004 -- sixteen spans for each isolated turn.
         for trace_id in ids:
             group = [span for span in spans if format(span.context.trace_id, "032x") == trace_id]
             root = next(span for span in group if span.name == "turn")
             children = [span for span in group if span.name != "turn"]
             assert {span.name for span in children} == {
-                "prepare",
-                "rewrite_question",
-                "answer_data",
+                "prepare_context",
+                "route",
+                "router",
+                "finalize_context",
+                "data_agent",
                 "specialist_projection",
                 "persist_evidence",
                 "format_answer",
@@ -57,16 +59,19 @@ async def test_business_graph_span_topology_and_parentage() -> None:
                 "sanity_check",
                 "package_evidence",
             }
-            data = next(span for span in children if span.name == "answer_data")
+            data = next(span for span in children if span.name == "data_agent")
             parent_nodes = {
-                "prepare",
-                "rewrite_question",
-                "answer_data",
+                "prepare_context",
+                "route",
+                "router",
+                "finalize_context",
+                "data_agent",
                 "persist_evidence",
                 "format_answer",
             }
             for span in children:
-                parent = root if span.name in parent_nodes else data
+                parent = (next(item for item in children if item.name == "route")
+                          if span.name == "router" else root if span.name in parent_nodes else data)
                 assert span.parent is not None
                 assert span.parent.span_id == parent.context.span_id
                 assert span.parent.trace_id == root.context.trace_id
@@ -82,7 +87,7 @@ async def test_typed_node_failure_has_failed_status() -> None:
         with service.turn(uuid4().hex, TraceMetadata()):
             await invoke(ctx, [GraphTraceCallback()])
         service.client.flush()
-        node = next(span for span in exporter.get_finished_spans() if span.name == "answer_data")
+        node = next(span for span in exporter.get_finished_spans() if span.name == "data_agent")
         assert node.attributes["langfuse.observation.metadata.status"] == "failed"
     finally:
         await service.aclose()
@@ -147,11 +152,8 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
 async def test_rewrite_trace_has_diagnostics_without_question_prose() -> None:
     ctx = context(
         responses=[
-            RewrittenQuestion(
-                standalone="private-rewrite-marker",
-                referenced_prior_turn=True,
-                unresolved_references=["private-reference-marker"],
-            )
+            RouteDecision(route=Route.CLARIFY, confidence=0.9,
+                          clarification_question="private-reference-marker")
         ]
     )
     ctx = replace(
@@ -174,9 +176,9 @@ async def test_rewrite_trace_has_diagnostics_without_question_prose() -> None:
             await invoke(ctx, [GraphTraceCallback()])
         service.client.flush()
         spans = exporter.get_finished_spans()
-        rewrite = next(span for span in spans if span.name == "rewrite_question")
-        assert rewrite.attributes["langfuse.observation.metadata.referenced_prior_turn"] == "true"
-        assert rewrite.attributes["langfuse.observation.metadata.unresolved_reference_count"] == "1"
+        rewrite = next(span for span in spans if span.name == "router")
+        assert rewrite.attributes["langfuse.observation.metadata.route"] == "clarify"
+        assert rewrite.attributes["langfuse.observation.metadata.decided_by"] == "llm"
         assert "private-" not in str([span.attributes for span in spans])
     finally:
         await service.aclose()

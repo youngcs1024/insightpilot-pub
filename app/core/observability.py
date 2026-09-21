@@ -39,6 +39,13 @@ _role: ContextVar[str | None] = ContextVar("ip_llm_role", default=None)
 _NODES = frozenset(
     {
         "prepare",
+        "prepare_context",
+        "route",
+        "finalize_context",
+        "data_agent",
+        "knowledge_agent",
+        "clarify",
+        "synthesize",
         "rewrite_question",
         "answer_data",
         "answer_data_routed",

@@ -8,8 +8,11 @@ from app.agents.contracts import DataEvidence, HistoryMessage, PreparedContext, 
 from app.agents.multiturn import trim_history
 from app.core.errors import ConflictError, NotFoundError
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus
-from app.db.models.evidence import DataEvidenceRecord
+from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
 from app.repositories.turns import TurnRepository
+from app.schemas.knowledge import KnowledgeEvidence
+from app.schemas.knowledge_query import KnowledgeHistoryTurn
+from app.schemas.retrieval import PointTimeScope, RangeTimeScope
 
 
 async def validate_turn(repository: TurnRepository, identity: TurnIdentity) -> Turn:
@@ -81,10 +84,32 @@ class HistoryRepository:
                 .limit(3)
             )
         ).all()
+        knowledge_records = (await session.scalars(
+            select(KnowledgeEvidenceRecord)
+            .join(Turn, KnowledgeEvidenceRecord.assistant_turn_id == Turn.id)
+            .where(
+                KnowledgeEvidenceRecord.user_id == identity.user_id,
+                Turn.conversation_id == identity.conversation_id,
+                Turn.seq < user.seq,
+                Turn.status.in_([TurnStatus.SUCCEEDED, TurnStatus.DEGRADED]),
+            )
+            .order_by(Turn.seq.desc()).limit(3)
+        )).all()
+        knowledge_history = []
+        for record in reversed(knowledge_records):
+            evidence = KnowledgeEvidence.model_validate(record.payload)
+            scope = evidence.time_scope.model_dump(mode="json")
+            knowledge_history.append(KnowledgeHistoryTurn(
+                turn_id=record.assistant_turn_id,
+                question=evidence.query_used[:300],
+                time_scope=(PointTimeScope if evidence.time_scope.kind == "point" else RangeTimeScope)
+                    .model_validate(scope),
+            ))
         return PreparedContext(
             has_prior_turns=has_prior_turns,
             question=user.content,
             summary=bounded_text(conversation.summary or "", SUMMARY_TOKENS),
             messages=messages,
             prior_sql=[DataEvidence.model_validate(record.payload).sql for record in records],
+            knowledge_history=knowledge_history,
         )

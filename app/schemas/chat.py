@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from app.agents.contracts import Answer, EvidenceRefs, EvidenceSnapshot
+from app.agents.contracts import Answer, EvidenceRefs, EvidenceSnapshot, KnowledgeSnapshot
 from app.agents.failures import FailureKind
 from app.db.models import TurnRole, TurnStatus
 from app.schemas.auth import AuthResponse
@@ -94,6 +94,7 @@ class EvidenceResponse(ChatResponse):
 
     turn_id: UUID
     data: EvidenceSnapshot | None
+    knowledge: KnowledgeSnapshot | None = None
 
 
 class TokenEvent(BaseModel):

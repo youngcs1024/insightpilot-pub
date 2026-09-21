@@ -99,7 +99,7 @@ async def evidence(
 ) -> EvidenceResponse:
     """Read immutable snapshots with no external calls."""
     service: EvidenceService = request.app.state.evidence
-    snapshot = await service.find(
+    snapshot = await service.read_bundle(
         TurnIdentity(user_id=user.id, conversation_id=conversation_id, turn_id=turn_id)
     )
-    return EvidenceResponse(turn_id=turn_id, data=snapshot)
+    return EvidenceResponse(turn_id=turn_id, data=snapshot.data, knowledge=snapshot.knowledge)

@@ -74,6 +74,8 @@ def runtime(request: Request, claim: AdmittedTurn, deadline: Deadline) -> Runtim
         schema_catalog=request.app.state.schema_catalog,
         schema_token_counter=request.app.state.schema_token_counter,
         llm=request.app.state.llm,
+        retrieval=request.app.state.retrieval,
+        knowledge_generation=request.app.state.knowledge_generation,
         mcp=request.app.state.mcp,
         evidence=request.app.state.evidence,
         conversations=request.app.state.conversations,

@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from langchain_core.callbacks import BaseCallbackHandler
 from starlette.types import Message
 
-from app.agents.contracts import AnswerDraft
+from app.agents.contracts import AnswerDraft, Route, RouteDecision
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
 from app.api.dependencies import get_current_user
@@ -93,6 +93,7 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
     application.state.chat.graph = graph
     application.state.llm = FakeChatModel(
         [
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"),
             metric_intent(),
             sql_candidate(),
             AnswerDraft(markdown="订单总数为 42。\nSQL 已执行。" * 20, confidence=0.9),

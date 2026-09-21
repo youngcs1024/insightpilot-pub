@@ -311,10 +311,10 @@ async def test_restart_loads_application_history(
     # No graph ever ran: the recreated service must still find application history.
     prepared = await ConversationService(database).prepare(second_identity)
     assert [message.content for message in prepared.messages] == [
-        "How many orders?",
+        "2026年8月GMV",
         "There were 42 orders.",
     ]
-    assert prepared.question == "How many orders?"
+    assert prepared.question == "2026年8月GMV"
 
 
 async def test_small_pool_reserves_checkpoint_capacity(
@@ -355,7 +355,7 @@ async def test_parent_child_checkpoints_use_same_turn_and_isolated_namespace(
                 .all()
             )
         assert "" in namespaces
-        assert any(namespace.startswith("answer_data:") for namespace in namespaces)
+        assert any(namespace.startswith("data_agent:") for namespace in namespaces)
     finally:
         await graph.aclose()
 

@@ -1,26 +1,28 @@
-"""Commit evidence through the injected service before entering the formatter."""
+"""Commit both specialist outputs once, before synthesis or formatting."""
 
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.contracts import EvidenceRefs
+from app.agents.contracts import Route
 from app.agents.nodes.common import failed
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
-from app.core.errors import ConflictError, InsightPilotError
+from app.core.errors import InsightPilotError
 
 
 async def persist_evidence(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
-    """Identical recovery writes reuse the committed immutable snapshot ID."""
+    """No-evidence outcomes retain empty references, never fabricated snapshots."""
     ctx = runtime.context
     try:
         ctx.deadline.check("persist_evidence")
-        if state.data_evidence is None:
-            raise ConflictError("missing data evidence")
-        snapshot = await ctx.evidence.commit(ctx.identity, state.data_evidence)
+        bundle = await ctx.evidence.commit_bundle(
+            ctx.identity, state.data_evidence, state.knowledge_evidence
+        )
+        has_evidence = bundle.data is not None or bundle.knowledge is not None
+        both = state.route is not None and state.route.route is Route.BOTH
         return Command(
-            update={"evidence_refs": EvidenceRefs(data_snapshot_id=snapshot.id)},
-            goto="format_answer",
+            update={"evidence_refs": bundle.refs},
+            goto="synthesize" if both and has_evidence else "format_answer",
         )
     except InsightPilotError as exc:
         return failed("persist_evidence", state, exc)

@@ -21,3 +21,16 @@ class DataEvidenceRecord(TimestampMixin, Base):
     assistant_turn_id: Mapped[UUID] = mapped_column(ForeignKey("turns.id"))
     content_sha256: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, JsonValue]] = mapped_column(JSONB())
+
+
+class KnowledgeEvidenceRecord(TimestampMixin, Base):
+    """Immutable original text, citations, temporal scope and retrieval provenance."""
+
+    __tablename__ = "knowledge_evidence"
+    __table_args__ = (UniqueConstraint("user_id", "assistant_turn_id"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    assistant_turn_id: Mapped[UUID] = mapped_column(ForeignKey("turns.id"))
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, JsonValue]] = mapped_column(JSONB())

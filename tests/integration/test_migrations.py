@@ -77,7 +77,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
         assert str(clarification["type"]) == "JSONB"
         assert (
             await connection.scalar(text("SELECT version_num FROM alembic_version_app"))
-            == "0009_ingestion_registry"
+            == "0010_knowledge_evidence"
         )
     business = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
     try:

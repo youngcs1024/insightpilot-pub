@@ -16,6 +16,7 @@ from app.agents.contracts import (
     RewrittenQuestion,
     RouteDecision,
     RoutingContext,
+    SourceSummary,
     TurnIdentity,
 )
 from app.agents.failures import NodeFailure
@@ -32,7 +33,7 @@ from app.schemas.metric_resolution import (
 from app.schemas.retrieval import KnowledgeTimeScope
 from app.services.periods import Period
 
-GRAPH_VERSION: Literal["phase4-v1"] = "phase4-v1"
+GRAPH_VERSION: Literal["phase4-v2"] = "phase4-v2"
 
 
 class TurnContext(Contract):
@@ -47,7 +48,7 @@ class TurnContext(Contract):
     recent_messages: list[AnyMessage] = Field(default_factory=list)
     summary: str = Field(default="", max_length=32_000)
     memories: list[Memory] = Field(default_factory=list, max_length=5)
-    time_scope: KnowledgeTimeScope
+    time_scope: KnowledgeTimeScope | None
     region_scope: RegionScope | None = None
     selected_overrides: SelectedOverrides = Field(default_factory=SelectedOverrides)
     format_preference: FormatPreferenceContent | None = None
@@ -61,7 +62,7 @@ class TurnContext(Contract):
 class GraphInput(TurnIdentity):
     """A question is loaded from its admitted user message, never caller-overridden."""
 
-    graph_version: Literal["phase4-v1"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v2"] = GRAPH_VERSION
 
 
 class GraphOutput(Contract):
@@ -73,7 +74,7 @@ class GraphOutput(Contract):
     clarification: MetricClarification | None = None
     evidence_refs: EvidenceRefs | None = None
     failures: list[NodeFailure] = Field(default_factory=list)
-    status: Literal["succeeded", "failed"] = "failed"
+    status: Literal["succeeded", "degraded", "abstained", "failed"] = "failed"
 
     @model_validator(mode="after")
     def separate_clarification(self) -> Self:
@@ -81,7 +82,10 @@ class GraphOutput(Contract):
         if self.clarification is not None and (
             self.answer is not None
             or self.data_evidence is not None
-            or self.evidence_refs is not None
+            or (self.evidence_refs is not None and (
+                self.evidence_refs.data_snapshot_id is not None
+                or self.evidence_refs.knowledge_snapshot_id is not None
+            ))
         ):
             raise PydanticCustomError(
                 "graph_clarification", "Clarification cannot contain analysis"
@@ -92,7 +96,7 @@ class GraphOutput(Contract):
 class AgentState(GraphInput):
     """No service, credential, runtime object or checkpoint from another turn."""
 
-    graph_version: Literal["phase4-v1"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v2"] = GRAPH_VERSION
     # prepare owns the loaded question/history. GraphInput cannot supply them.
     question: str = Field(default="", max_length=32_000)
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
@@ -107,6 +111,7 @@ class AgentState(GraphInput):
     assumptions: Annotated[list[str], operator.add] = Field(default_factory=list)
     degraded_components: Annotated[list[str], operator.add] = Field(default_factory=list)
     abstained: bool = False
+    source_summary: SourceSummary | None = None
     prepared: PreparedContext | None = None
     rewritten: RewrittenQuestion | None = None
     data_evidence: DataEvidence | None = None
@@ -114,4 +119,4 @@ class AgentState(GraphInput):
     answer: Answer | None = None
     clarification: MetricClarification | None = None
     failures: Annotated[list[NodeFailure], operator.add] = Field(default_factory=list)
-    status: Literal["succeeded", "failed"] = "failed"
+    status: Literal["succeeded", "degraded", "abstained", "failed"] = "failed"

@@ -35,7 +35,7 @@ async def prepare(state: AgentState, runtime: Runtime[RuntimeContext]) -> Comman
                     summary=prepared.summary, recent_messages=prepared.messages
                 ),
             },
-            goto="rewrite_question",
+            goto="route",
         )
     except InsightPilotError as exc:
         return failed("prepare", state, exc)

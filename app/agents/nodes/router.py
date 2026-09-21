@@ -10,10 +10,12 @@ from langgraph.types import Command
 from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.contracts import Route, RouteDecision, RouterInput
 from app.agents.multiturn import trim_history
+from app.agents.nodes.common import failed
+from app.agents.state import AgentState
 from app.agents.nodes.prefilter import CLARIFICATION_QUESTION, prefilter
 from app.agents.prompts import ROUTER
 from app.agents.runtime import RoutingRuntime, RuntimeContext
-from app.core.errors import InsightPilotError, LlmStructuredOutputError
+from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, update_current_observation
 from app.services.llm.usage import collect_usage
@@ -135,3 +137,18 @@ async def router(state: RouterInput, runtime: Runtime[RuntimeContext]) -> Comman
         state, RoutingRuntime(llm=ctx.llm, settings=ctx.settings.router, deadline=ctx.deadline)
     )
     return Command(update={"route": decision})
+
+
+async def parent_router(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
+    """Adapt the bounded router to parent failure and next-node ownership."""
+    ctx = runtime.context
+    try:
+        if state.routing_context is None:
+            raise ConflictError("missing prepared routing context")
+        decision = await route_question(
+            RouterInput(question=state.question, routing_context=state.routing_context),
+            RoutingRuntime(llm=ctx.llm, settings=ctx.settings.router, deadline=ctx.deadline),
+        )
+        return Command(update={"route": decision}, goto="finalize_context")
+    except InsightPilotError as exc:
+        return failed("route", state, exc)

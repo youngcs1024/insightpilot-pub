@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.prompts import KNOWLEDGE_CITATION_REPAIR, KNOWLEDGE_SYSTEM
 from app.core.errors import FabricatedCitation, KnowledgeEvidenceError
 from app.core.llm_config import ModelRole
+from app.schemas.memory import FormatPreferenceContent
 from app.retrieval.evidence import render_documents
 from app.schemas.knowledge import (
     Citation,
@@ -43,7 +44,9 @@ def validate_citations(draft: KnowledgeDraft, evidence: KnowledgeEvidence) -> tu
     )
 
 
-def _messages(evidence: KnowledgeEvidence, *, repair: bool) -> list[BaseMessage]:
+def _messages(evidence: KnowledgeEvidence, *, repair: bool,
+              format_preference: FormatPreferenceContent | None = None,
+              presentation_request: str = "") -> list[BaseMessage]:
     # Keep the frozen document block as its own message: JSON-escaping it again would
     # change the evidence token accounting. Query metadata is a separate context slot.
     system = KNOWLEDGE_SYSTEM + ("\n" + KNOWLEDGE_CITATION_REPAIR if repair else "")
@@ -53,6 +56,8 @@ def _messages(evidence: KnowledgeEvidence, *, repair: bool) -> list[BaseMessage]
             content=json.dumps(
                 {
                     "question": evidence.query_used,
+                    "format_preference": format_preference.model_dump() if format_preference else None,
+                    "presentation_request": presentation_request,
                     "original_question": evidence.original_question,
                     "time_scope": evidence.time_scope.model_dump(mode="json"),
                     "assumptions": evidence.assumptions,
@@ -74,7 +79,8 @@ class KnowledgeGenerationService:
         self.llm = llm
 
     async def generate(
-        self, evidence: KnowledgeEvidence, *, deadline: Deadline
+        self, evidence: KnowledgeEvidence, *, deadline: Deadline,
+        format_preference: FormatPreferenceContent | None = None, presentation_request: str = ""
     ) -> KnowledgeGeneration:
         """Return only validated passages; rejected drafts are never returned or logged."""
         deadline.check("knowledge_generation")
@@ -91,7 +97,8 @@ class KnowledgeGenerationService:
             deadline.check("knowledge_generation")
             draft = await self.llm.generate_structured(
                 ModelRole.SYNTHESIS,
-                _messages(evidence, repair=attempt > 1),
+                _messages(evidence, repair=attempt > 1, format_preference=format_preference,
+                          presentation_request=presentation_request),
                 KnowledgeDraft,
                 deadline=deadline,
             )
