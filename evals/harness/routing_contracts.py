@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "evals/datasets/routing/cases.yaml"
 SELECTION = CASES.with_name("selected.yaml")
 ROUTES = tuple(Route)
+MIN_REPEATS = 3
+MAX_BOTH_MISROUTE = 0.05
 
 
 class Split(StrEnum):

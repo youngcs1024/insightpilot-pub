@@ -64,7 +64,9 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--threshold-result-accuracy applies only to nl2sql")
             args.pop("seed_manifest")
             return routing_cli.run(
-                routing.Options.model_validate({key: value for key, value in args.items() if value is not None})
+                routing.Options.model_validate(
+                    {key: value for key, value in args.items() if value is not None}
+                )
             )
         if args.pop("threshold_accuracy") is not None or args.pop("split") is not None:
             parser.error("--threshold-accuracy and --split apply only to routing")

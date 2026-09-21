@@ -35,7 +35,9 @@ def test_balanced_reviewed_semantically_disjoint_dataset() -> None:
     assert all(c.question not in prompt for c in cases if c.split is Split.FROZEN)
 
 
-@pytest.mark.parametrize("defect", ["empty", "duplicate", "group", "quota", "ambiguity", "kind", "yaml_key"])
+@pytest.mark.parametrize(
+    "defect", ["empty", "duplicate", "group", "quota", "ambiguity", "kind", "yaml_key"]
+)
 def test_invalid_dataset_fails_before_execution(tmp_path: Path, defect: str) -> None:
     rows = yaml.safe_load(CASES.read_text())
     if defect == "empty":
@@ -62,7 +64,8 @@ def test_invalid_dataset_fails_before_execution(tmp_path: Path, defect: str) -> 
 def test_confusion_matrix_shape() -> None:
     report = evaluate(measurements(), load_cases())
     matrix = report.arms[RoutingStrategy.HYBRID].overall.confusion_matrix
-    assert len(matrix) == 4 and all(len(row) == 4 for row in matrix)
+    assert len(matrix) == 4
+    assert all(len(row) == 4 for row in matrix)
     assert [matrix[i][i] for i in range(4)] == [30] * 4
     assert report.evidence_valid
 
@@ -73,7 +76,9 @@ def test_misroute_rate_computed() -> None:
     both = next(c for c in cases if c.expected is Route.BOTH)
     data = next(c for c in cases if c.expected is Route.DATA_ONLY)
     attempts = [a for a in raw.attempts if a.arm is RoutingStrategy.HYBRID]
-    next(a for a in attempts if a.case_id == both.id).observation.decision = decision(Route.DATA_ONLY)
+    next(a for a in attempts if a.case_id == both.id).observation.decision = decision(
+        Route.DATA_ONLY
+    )
     next(a for a in attempts if a.case_id == data.id).observation.decision = decision(Route.BOTH)
     result = metrics(attempts, cases)
     assert result.misroute == Score(passed=2, total=120)
@@ -132,7 +137,9 @@ def test_missing_tokens_remain_unknown() -> None:
     assert result.variation["mean_tokens"].mean is None
 
 
-@pytest.mark.parametrize("defect", ["missing", "duplicate", "unknown", "dirty", "incomplete", "ids"])
+@pytest.mark.parametrize(
+    "defect", ["missing", "duplicate", "unknown", "dirty", "incomplete", "ids"]
+)
 def test_incomplete_or_invalid_evidence_never_passes(defect: str) -> None:
     raw = measurements()
     if defect == "missing":
@@ -162,7 +169,12 @@ def test_threshold_gate_exits_nonzero(monkeypatch: pytest.MonkeyPatch, tmp_path:
         return raw
 
     monkeypatch.setattr(routing_cli, "collect", collect)
-    assert cli.main(["run", "--suite", "routing", "--report", str(tmp_path), "--threshold-accuracy", "0.90"]) == 1
+    assert (
+        cli.main(
+            ["run", "--suite", "routing", "--report", str(tmp_path), "--threshold-accuracy", "0.90"]
+        )
+        == 1
+    )
     assert (tmp_path / "routing_latest.md").exists()
 
 
@@ -182,7 +194,9 @@ def test_strategy_selection_is_accuracy_first_with_no_misroute_regression() -> N
     assert choose(evaluate(raw, load_cases())) is RoutingStrategy.HYBRID
     next(a for a in raw.attempts if a.arm is RoutingStrategy.HYBRID).observation.decision = None
     assert choose(evaluate(raw, load_cases())) is RoutingStrategy.LLM_ONLY
-    next(a for a in raw.attempts if a.arm is RoutingStrategy.LLM_ONLY).observation.decision = decision(Route.BOTH)
+    next(
+        a for a in raw.attempts if a.arm is RoutingStrategy.LLM_ONLY
+    ).observation.decision = decision(Route.BOTH)
     assert choose(evaluate(raw, load_cases())) is RoutingStrategy.HYBRID
 
 
