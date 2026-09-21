@@ -430,3 +430,10 @@ class SynthesisEvidenceError(InsightPilotError):
 
     code = "SYNTHESIS_EVIDENCE_INVALID"
     user_message = "The stored analysis evidence could not be verified."
+
+
+class EvidenceIntegrityError(InsightPilotError):
+    """Stored evidence failed its digest, version or contract validation."""
+
+    code = "EVIDENCE_INTEGRITY_ERROR"
+    user_message = "The stored evidence could not be verified."

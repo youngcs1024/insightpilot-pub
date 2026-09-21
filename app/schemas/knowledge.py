@@ -148,7 +148,7 @@ class EvidenceChunk(FrozenContract):
 
 
 class KnowledgeEvidence(Contract):
-    """A bounded immutable payload; durable knowledge storage is introduced in Step 4.9."""
+    """A bounded immutable payload retained in application-owned historical snapshots."""
 
     model_config = ConfigDict(frozen=True, hide_input_in_errors=True)
     schema_version: Literal[1, 2] = 2

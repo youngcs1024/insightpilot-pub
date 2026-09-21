@@ -229,7 +229,7 @@ class GraphService:
 
     async def _input(
         self, ctx: RuntimeContext, config: RunnableConfig, resume: bool
-    ) -> GraphInput | Command[Literal["synthesize", "format_answer"]] | None:
+    ) -> GraphInput | Command[Literal["synthesize", "format_answer", "persist_evidence"]] | None:
         if self.graph is None:
             raise CheckpointError()
         checkpoint = await self.graph.aget_state(config)
@@ -254,11 +254,25 @@ class GraphService:
             raise ConflictError("turn already has a checkpoint")
         if checkpoint.next or prior.answer is not None or prior.clarification is not None:
             return None
+        bundle = await ctx.evidence.read_bundle(ctx.identity)
+        if bundle.data is None and bundle.knowledge is None:
+            raise ConflictError("failed turn has no committed evidence to recover")
         if prior.evidence_refs is None or (
             prior.evidence_refs.data_snapshot_id is None
             and prior.evidence_refs.knowledge_snapshot_id is None
         ):
-            raise ConflictError("failed turn has no committed evidence to recover")
+            # A commit can succeed before its node result reaches the checkpointer.
+            # Replay the persistence barrier using only the verified committed bundle.
+            return Command(
+                update={
+                    "failures": Overwrite([]),
+                    "data_evidence": bundle.data.data if bundle.data else None,
+                    "knowledge_evidence": bundle.knowledge.knowledge if bundle.knowledge else None,
+                },
+                goto="persist_evidence",
+            )
+        if prior.evidence_refs != bundle.refs:
+            raise ConflictError("checkpoint references differ from committed evidence")
         # Recovery input writes overlay the prior checkpoint's get_state() view.
         # Historical auditing reads the saver's original channel_values instead.
         return Command(

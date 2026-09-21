@@ -4,6 +4,7 @@ import hashlib
 import json
 from uuid import UUID
 
+from pydantic import JsonValue, ValidationError
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,7 @@ from app.agents.contracts import (
     KnowledgeSnapshot,
     TurnIdentity,
 )
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, EvidenceIntegrityError, NotFoundError
 from app.db.models.conversation import Conversation
 from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
 from app.db.models.turn import Turn
@@ -22,13 +23,49 @@ from app.repositories.turns import TurnRepository
 from app.schemas.knowledge import KnowledgeEvidence
 
 
+def payload_fingerprint(payload: dict[str, JsonValue]) -> str:
+    """Hash original JSON without inserting current model defaults into old evidence."""
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def fingerprint(data: DataEvidence | KnowledgeEvidence) -> str:
     """Canonical content identity excludes persistence-generated fields."""
-    return hashlib.sha256(
-        json.dumps(
-            data.model_dump(mode="json"), sort_keys=True, ensure_ascii=False, separators=(",", ":")
-        ).encode()
-    ).hexdigest()
+    return payload_fingerprint(data.model_dump(mode="json"))
+
+
+def validate_record(record: DataEvidenceRecord | KnowledgeEvidenceRecord) -> None:
+    """Check storage integrity before interpreting a historical payload."""
+    if not isinstance(record.payload, dict):
+        raise EvidenceIntegrityError()
+    version = record.payload.get("schema_version")
+    if (
+        type(version) is not int
+        or version != record.schema_version
+        or payload_fingerprint(record.payload) != record.content_sha256
+    ):
+        raise EvidenceIntegrityError()
+
+
+def data_snapshot(record: DataEvidenceRecord) -> EvidenceSnapshot:
+    """Decode a supported data version after validating the original JSON digest."""
+    validate_record(record)
+    try:
+        return EvidenceSnapshot(id=record.id, data=DataEvidence.model_validate(record.payload))
+    except ValidationError as exc:
+        raise EvidenceIntegrityError() from exc
+
+
+def knowledge_snapshot(record: KnowledgeEvidenceRecord) -> KnowledgeSnapshot:
+    """Decode original citation text without consulting a mutable source registry."""
+    validate_record(record)
+    try:
+        return KnowledgeSnapshot(
+            id=record.id, knowledge=KnowledgeEvidence.model_validate(record.payload)
+        )
+    except ValidationError as exc:
+        raise EvidenceIntegrityError() from exc
 
 
 class EvidenceRepository:
@@ -55,11 +92,7 @@ class EvidenceRepository:
         if snapshot_id is not None:
             query = query.where(DataEvidenceRecord.id == snapshot_id)
         record = await self.session.scalar(query)
-        return (
-            None
-            if record is None
-            else EvidenceSnapshot(id=record.id, data=DataEvidence.model_validate(record.payload))
-        )
+        return data_snapshot(record) if record is not None else None
 
     async def insert(self, data: DataEvidence) -> EvidenceSnapshot:
         """Caller holds the conversation lock, serializing concurrent identical writes."""
@@ -68,9 +101,14 @@ class EvidenceRepository:
             if fingerprint(previous.data) != fingerprint(data):
                 raise ConflictError("evidence differs from committed snapshot")
             return previous
+        try:
+            data = DataEvidence.model_validate(data.model_dump(mode="json"))
+        except ValidationError as exc:
+            raise EvidenceIntegrityError() from exc
         record = DataEvidenceRecord(
             user_id=self.identity.user_id,
             assistant_turn_id=self.identity.turn_id,
+            schema_version=data.schema_version,
             content_sha256=fingerprint(data),
             payload=data.model_dump(mode="json"),
         )
@@ -95,13 +133,7 @@ class EvidenceRepository:
         if snapshot_id is not None:
             query = query.where(KnowledgeEvidenceRecord.id == snapshot_id)
         record = await self.session.scalar(query)
-        return (
-            None
-            if record is None
-            else KnowledgeSnapshot(
-                id=record.id, knowledge=KnowledgeEvidence.model_validate(record.payload)
-            )
-        )
+        return knowledge_snapshot(record) if record is not None else None
 
     async def insert_knowledge(self, knowledge: KnowledgeEvidence) -> KnowledgeSnapshot:
         """Reuse identical snapshots; never overwrite original source text."""
@@ -110,9 +142,14 @@ class EvidenceRepository:
             if fingerprint(previous.knowledge) != fingerprint(knowledge):
                 raise ConflictError("knowledge differs from committed snapshot")
             return previous
+        try:
+            knowledge = KnowledgeEvidence.model_validate(knowledge.model_dump(mode="json"))
+        except ValidationError as exc:
+            raise EvidenceIntegrityError() from exc
         record = KnowledgeEvidenceRecord(
             user_id=self.identity.user_id,
             assistant_turn_id=self.identity.turn_id,
+            schema_version=knowledge.schema_version,
             content_sha256=fingerprint(knowledge),
             payload=knowledge.model_dump(mode="json"),
         )
@@ -153,12 +190,10 @@ class EvidenceRepository:
             raise NotFoundError()
         data, knowledge = row
         return EvidenceBundle(
-            data=EvidenceSnapshot(id=data.id, data=DataEvidence.model_validate(data.payload))
+            data=data_snapshot(data)
             if data is not None
             else None,
-            knowledge=KnowledgeSnapshot(
-                id=knowledge.id, knowledge=KnowledgeEvidence.model_validate(knowledge.payload)
-            )
+            knowledge=knowledge_snapshot(knowledge)
             if knowledge is not None
             else None,
         )

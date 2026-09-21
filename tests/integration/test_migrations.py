@@ -77,7 +77,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
         assert str(clarification["type"]) == "JSONB"
         assert (
             await connection.scalar(text("SELECT version_num FROM alembic_version_app"))
-            == "0010_knowledge_evidence"
+            == "0011_evidence_audit"
         )
     business = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
     try:
@@ -500,3 +500,57 @@ def test_cli_upgrade_and_make_migrate(migrated: MigrationSettings) -> None:
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count("migration_completed") == len(MigrationTarget)
+
+
+def test_evidence_audit_backfill_preserves_original_records(migrated: MigrationSettings) -> None:
+    """An owner-only upgrade adds versions while historical bytes, IDs and grants survive."""
+    config = migration_config(MigrationTarget.APP)
+    identifier = uuid4()
+
+    async def inspect_evidence(*, seed: bool, upgraded: bool) -> list[tuple[object, ...]]:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with resource.begin() as connection:
+                if seed:
+                    async with AsyncSession(bind=connection) as session:
+                        user = User(email=f"audit-{identifier}@example.com", hashed_password="unused", display_name="Audit")
+                        session.add(user)
+                        await session.flush()
+                        conversation = Conversation(user_id=user.id, title="Audit")
+                        session.add(conversation)
+                        await session.flush()
+                        turn = Turn(conversation_id=conversation.id, seq=1, role=TurnRole.ASSISTANT, status=TurnStatus.SUCCEEDED, content="Historical answer")
+                        session.add(turn)
+                        await session.flush()
+                        for table, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
+                            await connection.execute(
+                                text("INSERT INTO public." + table + " (id,user_id,assistant_turn_id,content_sha256,payload) VALUES (:id,:uid,:tid,:digest,CAST(:payload AS jsonb))"),
+                                {"id": identifier, "uid": user.id, "tid": turn.id, "digest": "a" * 64, "payload": '{"schema_version":' + str(version) + ',"historical":"原始文本"}'},
+                            )
+                rows = []
+                for table, version in (("data_evidence", 1), ("knowledge_evidence", 2)):
+                    row = (await connection.execute(
+                        text("SELECT id,payload,content_sha256,created_at FROM public." + table + " WHERE id=:id"), {"id": identifier}
+                    )).one()
+                    rows.append(tuple(row))
+                    if upgraded:
+                        assert await connection.scalar(text("SELECT schema_version FROM public." + table + " WHERE id=:id"), {"id": identifier}) == version
+                    for privilege in ("UPDATE", "DELETE"):
+                        assert not await connection.scalar(text("SELECT has_table_privilege('app_rw', :table, :privilege)"), {"table": table, "privilege": privilege})
+                    for privilege in ("SELECT", "INSERT"):
+                        assert await connection.scalar(text("SELECT has_table_privilege('app_rw', :table, :privilege)"), {"table": table, "privilege": privilege})
+                return rows
+        finally:
+            await resource.dispose()
+
+    command.downgrade(config, "0010_knowledge_evidence")
+    try:
+        before = asyncio.run(inspect_evidence(seed=True, upgraded=False))
+    finally:
+        command.upgrade(config, "head")
+    assert asyncio.run(inspect_evidence(seed=False, upgraded=True)) == before
+    command.downgrade(config, "0010_knowledge_evidence")
+    try:
+        assert asyncio.run(inspect_evidence(seed=False, upgraded=False)) == before
+    finally:
+        command.upgrade(config, "head")

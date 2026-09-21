@@ -4,14 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.budget import SUMMARY_TOKENS, bounded_text
-from app.agents.contracts import DataEvidence, PreparedContext, TurnIdentity
+from app.agents.contracts import PreparedContext, TurnIdentity
 from app.agents.multiturn import trim_history
 from app.core.errors import ConflictError, NotFoundError
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus
 from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
 from app.repositories.clarification_history import history_message, load_clarification_history
+from app.repositories.evidence import data_snapshot, knowledge_snapshot
 from app.repositories.turns import TurnRepository
-from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.knowledge_query import KnowledgeHistoryTurn
 from app.schemas.retrieval import PointTimeScope, RangeTimeScope
 
@@ -99,7 +99,7 @@ class HistoryRepository:
         ).all()
         knowledge_history = []
         for record in reversed(knowledge_records):
-            evidence = KnowledgeEvidence.model_validate(record.payload)
+            evidence = knowledge_snapshot(record).knowledge
             scope = evidence.time_scope.model_dump(mode="json")
             knowledge_history.append(
                 KnowledgeHistoryTurn(
@@ -118,6 +118,6 @@ class HistoryRepository:
             question=user.content,
             summary=bounded_text(conversation.summary or "", SUMMARY_TOKENS),
             messages=messages,
-            prior_sql=[DataEvidence.model_validate(record.payload).sql for record in records],
+            prior_sql=[data_snapshot(record).data.sql for record in records],
             knowledge_history=knowledge_history,
         )
