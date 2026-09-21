@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import time
 from datetime import UTC, datetime
+from itertools import product
 from pathlib import Path
 from uuid import uuid4
 
@@ -136,6 +137,7 @@ async def _attempts(
     directory: Path,
 ) -> None:
     """Rotate arm order across repeats; never share model outputs between arms."""
+
     async def run_case(case: Case, repeat: int) -> None:
         arms = list(RoutingStrategy)
         rotated = arms[(repeat - 1) % len(arms) :] + arms[: (repeat - 1) % len(arms)]
@@ -164,12 +166,11 @@ async def _attempts(
                 failure_code=observation.failure_code,
             )
 
-    for repeat in range(1, raw.repeats + 1):
-        for offset in range(0, len(cases), CONCURRENCY):
-            async with asyncio.TaskGroup() as group:
-                for case in cases[offset : offset + CONCURRENCY]:
-                    group.create_task(run_case(case, repeat))
-            await asyncio.to_thread(save_partial, raw, directory)
+    for repeat, offset in product(range(1, raw.repeats + 1), range(0, len(cases), CONCURRENCY)):
+        async with asyncio.TaskGroup() as group:
+            for case in cases[offset : offset + CONCURRENCY]:
+                group.create_task(run_case(case, repeat))
+        await asyncio.to_thread(save_partial, raw, directory)
 
 
 def save_partial(raw: Measurements, directory: Path) -> None:
