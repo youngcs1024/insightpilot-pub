@@ -33,6 +33,7 @@ from app.agents.state import GRAPH_VERSION, AgentState, GraphInput, GraphOutput
 from app.core.errors import CheckpointError, ConflictError, DeadlineExceededError
 from app.retrieval import config as retrieval_config
 from app.schemas import (
+    clarification,
     corpus,
     ingestion,
     knowledge,
@@ -75,6 +76,7 @@ def serializer() -> JsonPlusSerializer:
             data_state,
             knowledge_state,
             retrieval_config,
+            clarification,
             corpus,
             ingestion,
             knowledge,

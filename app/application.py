@@ -36,6 +36,7 @@ from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
 from app.services.auth import AuthService
 from app.services.chat import ChatService
+from app.services.clarification_capabilities import ClarificationCapabilityService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
 from app.services.graph import GraphService
@@ -208,6 +209,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     app.state.retrieval = None
     app.state.knowledge_generation = KnowledgeGenerationService(llm_service)
     app.state.metrics = MetricService(database, settings.database)
+    app.state.clarification_capabilities = ClarificationCapabilityService(database, settings.database)
     app.state.schema_token_counter = SchemaTokenCounter()
     app.state.schema_catalog = SchemaCatalogService(database, mcp_client, settings.schema_catalog)
     app.state.auth = AuthService(database, settings.security)

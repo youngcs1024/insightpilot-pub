@@ -70,6 +70,7 @@ def runtime(request: Request, claim: AdmittedTurn, deadline: Deadline) -> Runtim
     return RuntimeContext(
         regions=RegionService(request.app.state.mcp),
         metrics=request.app.state.metrics,
+        clarification_capabilities=request.app.state.clarification_capabilities,
         now=datetime.now(UTC),
         schema_catalog=request.app.state.schema_catalog,
         schema_token_counter=request.app.state.schema_token_counter,

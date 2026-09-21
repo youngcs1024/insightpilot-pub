@@ -12,13 +12,14 @@ from app.agents.contracts import Route, RouteDecision, RouterInput
 from app.agents.multiturn import trim_history
 from app.agents.nodes.common import failed
 from app.agents.nodes.prefilter import CLARIFICATION_QUESTION, prefilter
-from app.agents.prompts import ROUTER
+from app.agents.prompts import CLARIFY, ROUTER
 from app.agents.runtime import RoutingRuntime, RuntimeContext
 from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
 from app.services.llm.usage import collect_usage
+from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
 
 logger = structlog.get_logger(__name__)
 _SPECIALIST_COUNT = 2
@@ -30,6 +31,10 @@ def _clarify(decision: RouteDecision) -> RouteDecision:
         confidence=decision.confidence,
         decided_by=decision.decided_by,
         clarification_question=CLARIFICATION_QUESTION,
+        clarification_intent=ClarificationIntent(
+            category=ClarificationCategory.AMBIGUOUS_SCOPE,
+            missing_dimensions=[MissingDimension.METRIC, MissingDimension.PERIOD],
+        ),
     )
 
 
@@ -43,6 +48,8 @@ def _scoped(decision: RouteDecision, question: str) -> RouteDecision:
         if _normalize(question) in intents or len(intents) != _SPECIALIST_COUNT:
             return _clarify(decision)
     values = decision.model_dump()
+    if decision.route is not Route.CLARIFY:
+        values["clarification_intent"] = None
     if decision.route not in {Route.DATA_ONLY, Route.BOTH}:
         values.update(data_intent="", metric_hints=[])
     if decision.route not in {Route.KNOWLEDGE_ONLY, Route.BOTH}:
@@ -66,7 +73,7 @@ async def _classify(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
             decision = await ctx.llm.generate_structured(
                 ModelRole.ROUTER,
                 [
-                    SystemMessage(content=ROUTER),
+                    SystemMessage(content=ROUTER + "\n\n" + CLARIFY),
                     HumanMessage(content=json.dumps(inputs.model_dump(), ensure_ascii=False)),
                 ],
                 RouteDecision,
@@ -81,6 +88,10 @@ async def _classify(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
                 confidence=0,
                 decided_by="llm",
                 clarification_question=CLARIFICATION_QUESTION,
+                clarification_intent=ClarificationIntent(
+                    category=ClarificationCategory.AMBIGUOUS_SCOPE,
+                    missing_dimensions=[MissingDimension.METRIC, MissingDimension.PERIOD],
+                ),
             )
         finally:
             update_current_observation(TraceMetadata(router_tokens=usage.total))

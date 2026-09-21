@@ -20,9 +20,11 @@ async def persist_evidence(state: AgentState, runtime: Runtime[RuntimeContext]) 
         )
         has_evidence = bundle.data is not None or bundle.knowledge is not None
         both = state.route is not None and state.route.route is Route.BOTH
-        return Command(
-            update={"evidence_refs": bundle.refs},
-            goto="synthesize" if both and has_evidence else "format_answer",
-        )
+        destination = "synthesize" if both and has_evidence else "format_answer"
+        if not has_evidence and not state.failures and (
+            state.data_clarification is not None or state.knowledge_clarification is not None
+        ):
+            destination = "clarify"
+        return Command(update={"evidence_refs": bundle.refs}, goto=destination)
     except InsightPilotError as exc:
         return failed("persist_evidence", state, exc)

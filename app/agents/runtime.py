@@ -19,6 +19,7 @@ from app.core.config_models import RouterSettings, Settings
 from app.core.deadline import Deadline
 from app.core.errors import PeriodUnresolved
 from app.core.llm_config import ModelRole
+from app.schemas.clarification import ClarificationCapabilities
 from app.schemas.knowledge import KnowledgeEvidence, KnowledgeGeneration
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.memory import FormatPreferenceContent
@@ -88,6 +89,12 @@ class KnowledgeGenerationPort(Protocol):
     ) -> KnowledgeGeneration: ...
 
 
+class ClarificationCapabilityPort(Protocol):
+    """Available business scope, without business database credentials."""
+
+    async def read(self, *, deadline: Deadline) -> ClarificationCapabilities: ...
+
+
 class ConversationPort(Protocol):
     """Owned application history is the source of truth."""
 
@@ -148,6 +155,7 @@ class RuntimeContext:
     regions: RegionPort
     metrics: MetricPort
     now: datetime
+    clarification_capabilities: ClarificationCapabilityPort | None = None
     retrieval: RetrievalPort | None = None
     knowledge_generation: KnowledgeGenerationPort | None = None
 

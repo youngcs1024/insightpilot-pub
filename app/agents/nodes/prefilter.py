@@ -3,6 +3,7 @@
 import re
 
 from app.agents.contracts import Route, RouteDecision, RoutingContext
+from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
 
 CLARIFICATION_QUESTION = "请说明要查询的业务指标或政策，以及相关时间和地区。"
 _WHY = re.compile(r"为什么|为何|原因|\bwhy\b", re.IGNORECASE)
@@ -54,6 +55,10 @@ def prefilter(question: str, context: RoutingContext | None = None) -> RouteDeci
             confidence=0.9,
             decided_by="prefilter",
             clarification_question=CLARIFICATION_QUESTION,
+            clarification_intent=ClarificationIntent(
+                category=ClarificationCategory.AMBIGUOUS_REFERENCE,
+                missing_dimensions=[MissingDimension.REFERENCE],
+            ),
         )
     if _REFERENCE.search(question):
         return None

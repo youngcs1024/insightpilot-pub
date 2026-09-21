@@ -23,6 +23,8 @@ from app.agents.state import GraphInput, GraphOutput
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
 from app.core.errors import ConflictError
+from app.schemas.clarification import AvailableMetric, ClarificationCapabilities
+from app.schemas.corpus import DocumentType
 from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.mcp import QueryResultPayload
 from app.schemas.metric_resolution import MetricIntent
@@ -95,6 +97,15 @@ class FakeMetrics:
         return next(item for item in await self.list_active(deadline=deadline) if item.key == key)
 
 
+class FakeClarificationCapabilities:
+    async def read(self, *, deadline: Deadline) -> ClarificationCapabilities:
+        return ClarificationCapabilities(
+            metrics=[AvailableMetric(key=item.key, display_name=item.display_name)
+                     for item in await FakeMetrics().list_active(deadline=deadline)],
+            document_categories=list(DocumentType),
+        )
+
+
 def metric_intent() -> MetricIntent:
     return MetricIntent(metric_keys=["gmv"], period_expression="2026年8月", grain="total")
 
@@ -120,6 +131,7 @@ def context(
     return RuntimeContext(
         regions=RegionService(mcp),
         metrics=FakeMetrics(),
+        clarification_capabilities=FakeClarificationCapabilities(),
         now=datetime(2026, 9, 8, tzinfo=UTC),
         schema_catalog=FakeSchemaCatalog(),
         schema_token_counter=SchemaTokenCounter(),

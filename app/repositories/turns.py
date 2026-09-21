@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
@@ -110,10 +110,30 @@ class TurnRepository:
         return (
             self._scoped(conversation_id)
             .where(
-                Turn.seq < before_seq, Turn.status.in_([TurnStatus.SUCCEEDED, TurnStatus.DEGRADED])
+                Turn.seq < before_seq,
+                or_(
+                    Turn.status.in_([TurnStatus.SUCCEEDED, TurnStatus.DEGRADED]),
+                    and_(Turn.status == TurnStatus.ABSTAINED, Turn.clarification.is_not(None)),
+                )
             )
             .order_by(Turn.seq.desc())
             .limit(100)
+        )
+
+    def previous_assistants(self, conversation_id: UUID, before_seq: int) -> Select[tuple[Turn]]:
+        """Do not filter status: a failure must break a consecutive clarification sequence."""
+        return (
+            self._scoped(conversation_id)
+            .where(Turn.seq < before_seq, Turn.role == TurnRole.ASSISTANT)
+            .order_by(Turn.seq.desc()).limit(2)
+        )
+
+    def recent_topics(self, conversation_id: UUID, before_seq: int) -> Select[tuple[Turn]]:
+        """Return actual prior user questions without crossing conversation ownership."""
+        return (
+            self._scoped(conversation_id)
+            .where(Turn.seq < before_seq, Turn.role == TurnRole.USER)
+            .order_by(Turn.seq.desc()).limit(3)
         )
 
     async def page(self, conversation_id: UUID, limit: int, offset: int) -> list[Turn]:

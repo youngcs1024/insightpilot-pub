@@ -265,7 +265,7 @@ async def test_parent_failure_delta_preserves_prior_failures_exactly_once() -> N
 def test_graph_input_cannot_override_loaded_state(field: str) -> None:
     with pytest.raises(ValidationError):
         GraphInput.model_validate({**context().identity.model_dump(), field: None})
-    assert GRAPH_VERSION == "phase4-v4"
+    assert GRAPH_VERSION == "phase4-v5"
 
 
 async def test_router_preserves_reserved_context_during_budgeting() -> None:

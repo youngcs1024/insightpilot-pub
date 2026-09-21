@@ -4,11 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.budget import SUMMARY_TOKENS, bounded_text
-from app.agents.contracts import DataEvidence, HistoryMessage, PreparedContext, TurnIdentity
+from app.agents.contracts import DataEvidence, PreparedContext, TurnIdentity
 from app.agents.multiturn import trim_history
 from app.core.errors import ConflictError, NotFoundError
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus
 from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
+from app.repositories.clarification_history import history_message, load_clarification_history
 from app.repositories.turns import TurnRepository
 from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.knowledge_query import KnowledgeHistoryTurn
@@ -56,7 +57,7 @@ class HistoryRepository:
             await session.scalars(repository.history(identity.conversation_id, user.seq))
         ).all()
         messages = trim_history(
-            [HistoryMessage(role=turn.role.value, content=turn.content) for turn in reversed(turns)]
+            [history_message(turn) for turn in reversed(turns)]
         )
         has_prior_turns = (
             await session.scalar(
@@ -112,6 +113,7 @@ class HistoryRepository:
                 )
             )
         return PreparedContext(
+            clarification_history=await load_clarification_history(repository, identity.conversation_id, user.seq),
             has_prior_turns=has_prior_turns,
             question=user.content,
             summary=bounded_text(conversation.summary or "", SUMMARY_TOKENS),

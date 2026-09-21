@@ -49,11 +49,11 @@ def topology() -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput
     graph.add_node("finalize_context", finalize_context)
     graph.add_node("data_agent", answer_data_routed_node)
     graph.add_node("knowledge_agent", answer_knowledge_node)
-    graph.add_node("clarify", clarify)
+    graph.add_node("clarify", clarify, destinations=("format_answer", "__end__"))
     graph.add_node(
         "persist_evidence",
         persist_evidence,
-        destinations=("synthesize", "format_answer", "__end__"),
+        destinations=("synthesize", "clarify", "format_answer", "__end__"),
     )
     graph.add_node("synthesize", synthesize, destinations=("format_answer", "__end__"))
     graph.add_node("format_answer", format_answer, destinations=("__end__",))
@@ -65,7 +65,6 @@ def topology() -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput
     )
     graph.add_edge("data_agent", "persist_evidence")
     graph.add_edge("knowledge_agent", "persist_evidence")
-    graph.add_edge("clarify", "format_answer")
     return graph
 
 

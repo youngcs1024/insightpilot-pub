@@ -4,10 +4,13 @@ from enum import StrEnum
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 from pydantic_core import PydanticCustomError
 
+from app.schemas.clarification import ClarificationCategory, ClarificationIntent
 from app.schemas.mcp import Contract
+
+CLARIFICATION_VERSION = 2
 
 MetricKey = Annotated[str, Field(min_length=1, max_length=64)]
 SqlFragment = Annotated[str, Field(min_length=1, max_length=2000)]
@@ -133,17 +136,42 @@ class ClarificationKind(StrEnum):
     UNSUPPORTED_GRAIN = "unsupported_grain"
     INVALID_EXPLICIT_PATCH = "invalid_explicit_patch"
     REGION_UNRESOLVED = "region_unresolved"
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 class MetricClarification(Contract):
     """Safe prose plus typed choices; never raw exception text."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     kind: ClarificationKind
     message: str
     metric_key: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
     supported_grains: list[str] = Field(default_factory=list)
+    category: ClarificationCategory | None = None
+    intent: ClarificationIntent | None = None
+    suggested_question: str = Field(default="", max_length=2000)
+    recent_topics: list[str] = Field(default_factory=list, max_length=3)
+    loop_prevented: bool = False
+
+    @model_validator(mode="after")
+    def versioned_policy(self) -> Self:
+        """New terminal responses require structured policy; old payloads stay old."""
+        if self.schema_version == CLARIFICATION_VERSION and (
+            self.category is None or self.intent is None or not self.suggested_question.strip()
+            or self.category is not self.intent.category
+        ):
+            raise PydanticCustomError("clarification_policy", "Missing clarification policy")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Do not add v2 defaults when replaying persisted v1 clarification JSON."""
+        result: dict[str, object] = handler(self)
+        if self.schema_version == 1:
+            for key in ("category", "intent", "suggested_question", "recent_topics", "loop_prevented"):
+                result.pop(key, None)
+        return result
 
 
 class BindingSource(StrEnum):

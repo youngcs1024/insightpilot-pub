@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from app.schemas.clarification import ClarificationHistory, ClarificationIntent
 from app.schemas.knowledge import Citation, KnowledgeEvidence, KnowledgePassage
 from app.schemas.knowledge_query import KnowledgeHistoryTurn
 from app.schemas.mcp import ColumnSpec, Contract, SqlValue
@@ -259,7 +260,8 @@ class HistoryMessage(Contract):
 class PreparedContext(Contract):
     """Preparation's sole output; future memory remains explicitly empty."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
+    clarification_history: ClarificationHistory = Field(default_factory=ClarificationHistory)
     has_prior_turns: bool = False
     question: str
     summary: str
@@ -310,7 +312,8 @@ class Route(StrEnum):
 class RouteDecision(Contract):
     """A bounded classification and independently scoped specialist tasks."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
+    clarification_intent: ClarificationIntent | None = None
     route: Route
     confidence: float = Field(ge=0, le=1)
     data_intent: str = Field(default="", max_length=32_000)

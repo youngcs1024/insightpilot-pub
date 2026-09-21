@@ -18,3 +18,5 @@ ROUTER = (_ROOT / "router.md").read_text()
 SYNTHESIS = (_ROOT / "synthesis.md").read_text()
 SYNTHESIS_REPAIR = (_ROOT / "synthesis_repair.md").read_text()
 DATA_ANSWER_REPAIR = (_ROOT / "data_answer_repair.md").read_text()
+
+CLARIFY = (_ROOT / "clarify.md").read_text()

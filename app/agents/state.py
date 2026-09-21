@@ -33,7 +33,7 @@ from app.schemas.metric_resolution import (
 from app.schemas.retrieval import KnowledgeTimeScope
 from app.services.periods import Period
 
-GRAPH_VERSION: Literal["phase4-v4"] = "phase4-v4"
+GRAPH_VERSION: Literal["phase4-v5"] = "phase4-v5"
 
 
 class TurnContext(Contract):
@@ -62,7 +62,7 @@ class TurnContext(Contract):
 class GraphInput(TurnIdentity):
     """A question is loaded from its admitted user message, never caller-overridden."""
 
-    graph_version: Literal["phase4-v4"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v5"] = GRAPH_VERSION
 
 
 class GraphOutput(Contract):
@@ -110,7 +110,7 @@ class GraphOutput(Contract):
 class AgentState(GraphInput):
     """No service, credential, runtime object or checkpoint from another turn."""
 
-    graph_version: Literal["phase4-v4"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v5"] = GRAPH_VERSION
     # prepare owns the loaded question/history. GraphInput cannot supply them.
     question: str = Field(default="", max_length=32_000)
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
