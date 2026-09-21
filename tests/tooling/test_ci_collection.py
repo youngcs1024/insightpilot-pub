@@ -91,7 +91,10 @@ def test_real_repository_partitions_are_complete_and_disjoint(pytester: pytest.P
     for left, right in (("unit", "integration"), ("unit", "storage"), ("integration", "storage")):
         assert collected[left].isdisjoint(collected[right])
     assert collected["unit"] | collected["integration"] | collected["storage"] == collected["all"]
-    for directory in ("api", "agents", "tooling", "security", "unit", "integration"):
+    chaos = "tests/e2e/test_chaos.py::test_mcp_killed_midturn"
+    assert chaos in collected["storage"]
+    assert chaos not in collected["unit"] | collected["integration"]
+    for directory in ("api", "agents", "tooling", "security", "unit", "integration", "e2e"):
         assert any(node.startswith(f"tests/{directory}/") for node in collected["all"])
 
 

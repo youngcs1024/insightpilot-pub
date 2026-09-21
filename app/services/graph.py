@@ -224,9 +224,7 @@ class GraphService:
         except psycopg.Error as exc:
             raise CheckpointError() from exc
 
-    async def _run(
-        self, ctx: RuntimeContext, config: RunnableConfig, resume: bool
-    ) -> GraphOutput:
+    async def _run(self, ctx: RuntimeContext, config: RunnableConfig, resume: bool) -> GraphOutput:
         if self.graph is None:
             raise CheckpointError()
         timer = asyncio.timeout(ctx.deadline.remaining())

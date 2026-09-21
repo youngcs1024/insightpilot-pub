@@ -14,7 +14,12 @@ import structlog
 from pydantic import BaseModel, Field, SecretStr, TypeAdapter, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.config_models import DataAgentSettings, HTTPSettings, ObservabilitySettings, RouterSettings
+from app.core.config_models import (
+    DataAgentSettings,
+    HTTPSettings,
+    ObservabilitySettings,
+    RouterSettings,
+)
 from app.core.errors import InsightPilotError
 from app.core.llm_config import ModelRole, ModelRoleSettings
 from app.retrieval.config import RetrievalSettings

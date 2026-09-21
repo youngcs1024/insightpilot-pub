@@ -1,5 +1,7 @@
 """Real PostgreSQL pending writes, durable partial answers and bounded HTTP/SSE."""
 
+# ruff: noqa: PLR2004 -- explicit HTTP and snapshot commit-count acceptance values.
+
 import asyncio
 import time
 from dataclasses import replace
@@ -16,11 +18,12 @@ from app.core.deadline import Deadline
 from app.core.errors import ConflictError, DeadlineExceededError, EvidenceIntegrityError
 from app.db.models import Turn
 from app.db.session import Database
+from app.repositories.turns import TurnRepository
+from app.services import chat_stream
 from app.services.chat import AdmittedTurn, ChatService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
 from app.services.graph import GraphService
-from app.services import chat_stream
 from tests.agents.parent_support import parent_context
 from tests.api.chat_support import Harness, chat, events
 from tests.integration.checkpoint_support import admitted, checkpoint_setup, graph_database
@@ -47,9 +50,16 @@ async def running_context(database: Database) -> RuntimeContext:
     async with database.session() as session, session.begin():
         row = await session.get(Turn, identity.turn_id)
         row.trace_id = identity.turn_id.hex
+        question = await session.scalar(
+            TurnRepository(session, identity.user_id).recent_topics(identity.conversation_id, row.seq)
+        )
+        question.content = "请分析2026年8月的经营情况"
     return replace(
-        parent_context(Route.BOTH), identity=identity, trace_id=identity.turn_id.hex,
-        conversations=ConversationService(database), evidence=EvidenceService(database),
+        parent_context(Route.BOTH),
+        identity=identity,
+        trace_id=identity.turn_id.hex,
+        conversations=ConversationService(database),
+        evidence=EvidenceService(database),
     )
 
 
@@ -67,7 +77,9 @@ async def test_completed_pending_writes_survive_deadline(
     else:
         original = ctx.llm.generate_structured
 
-        async def generate(role: object, messages: object, schema: type, **kwargs: object) -> object:
+        async def generate(
+            role: object, messages: object, schema: type, **kwargs: object
+        ) -> object:
             if schema.__name__ == "SynthesisOutput":
                 return await block()
             return await original(role, messages, schema, **kwargs)
@@ -80,7 +92,8 @@ async def test_completed_pending_writes_survive_deadline(
     claim = AdmittedTurn(identity=ctx.identity, result=await service.read(ctx.identity))
     try:
         result = await service.execute(claim, ctx)
-        assert block.entered.is_set() and block.cancelled.is_set()
+        assert block.entered.is_set()
+        assert block.cancelled.is_set()
         assert result.status.value == "degraded"
         assert result.answer.synthesis.attempts == 0
         assert "deadline" in result.answer.degraded_components
@@ -88,12 +101,19 @@ async def test_completed_pending_writes_survive_deadline(
         assert (bundle.data is not None) is (slow != "data")
         assert (bundle.knowledge is not None) is (slow != "knowledge")
         assert result.evidence_refs == bundle.refs
-        checkpoint = await graph.graph.aget_state({"configurable": {"thread_id": str(ctx.identity.turn_id)}})
+        checkpoint = await graph.graph.aget_state(
+            {"configurable": {"thread_id": str(ctx.identity.turn_id)}}
+        )
         state = AgentState.model_validate(checkpoint.values)
         assert state.data_evidence or state.knowledge_evidence
         assert time.monotonic() < ctx.finalization_deadline.at
         calls = (len(ctx.llm.calls), len(ctx.mcp.calls), len(ctx.retrieval.calls))
-        replay = await service.execute(AdmittedTurn(identity=ctx.identity, result=result.model_copy(update={"replayed": True})), ctx)
+        replay = await service.execute(
+            AdmittedTurn(
+                identity=ctx.identity, result=result.model_copy(update={"replayed": True})
+            ),
+            ctx,
+        )
         assert replay.answer == result.answer
         assert calls == (len(ctx.llm.calls), len(ctx.mcp.calls), len(ctx.retrieval.calls))
     finally:
@@ -145,8 +165,11 @@ async def test_deadline_recovery_validates_checkpoint_identity(field: str) -> No
 
 @pytest.mark.parametrize("streaming", [False, True])
 async def test_http_and_sse_return_committed_partial_and_replay(
-    chat: Harness, checkpoint_setup: None, graph_database: tuple[Database, DatabaseSettings],
-    monkeypatch: pytest.MonkeyPatch, streaming: bool,
+    chat: Harness,
+    checkpoint_setup: None,
+    graph_database: tuple[Database, DatabaseSettings],
+    monkeypatch: pytest.MonkeyPatch,
+    streaming: bool,
 ) -> None:
     _, settings = graph_database
     graph = GraphService(settings)
@@ -180,21 +203,32 @@ async def test_http_and_sse_return_committed_partial_and_replay(
     monkeypatch.setattr(chat_stream, "frame", frame)
     url = chat.url + ("/stream" if streaming else "")
     try:
-        response = await chat.client.post(url, json={"content": "请分析2026年8月经营情况"}, headers={"Idempotency-Key": "deadline-partial"})
+        response = await chat.client.post(
+            url,
+            json={"content": "请分析2026年8月经营情况"},
+            headers={"Idempotency-Key": "deadline-partial"},
+        )
         assert response.status_code == 200, response.text
         frames = events(response) if streaming else []
         result = frames[-1][1] if streaming else response.json()
         if streaming:
             assert sum(name in {"done", "error"} for name, _ in frames) == 1
             assert frames[-1][0] == "done"
-            assert "".join(value["delta"] for name, value in frames if name == "token") == result["answer"]["markdown"]
+            assert (
+                "".join(value["delta"] for name, value in frames if name == "token")
+                == result["answer"]["markdown"]
+            )
         assert result["status"] == "degraded"
         assert "data" in result["answer"]["degraded_components"]
         assert "deadline" in result["answer"]["degraded_components"]
         assert (await chat.stored())[-1]["answer"] == result["answer"]
         assert block.cancelled.is_set()
         graph.invoke = AsyncMock(side_effect=AssertionError("replay executed graph"))
-        replay = await chat.client.post(chat.url, json={"content": "请分析2026年8月经营情况"}, headers={"Idempotency-Key": "deadline-partial"})
+        replay = await chat.client.post(
+            chat.url,
+            json={"content": "请分析2026年8月经营情况"},
+            headers={"Idempotency-Key": "deadline-partial"},
+        )
         assert replay.json()["answer"] == result["answer"]
         graph.invoke.assert_not_awaited()
     finally:

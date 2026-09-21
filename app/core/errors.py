@@ -24,7 +24,7 @@ class InsightPilotError(Exception):
     @property
     def public_message(self) -> str:
         """Return safe public text, independent of internal exception diagnostics."""
-        return self.user_message
+        return type(self).user_message
 
 
 class ValidationError(InsightPilotError):

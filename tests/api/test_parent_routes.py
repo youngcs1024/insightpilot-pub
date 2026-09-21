@@ -151,7 +151,9 @@ async def test_both_failures_name_sources_without_emitting_an_answer(
     )
     assert response.status_code == (OK if streaming else 500)
     body = events(response)[-1][1] if streaming else response.json()
-    assert body["message"] == "业务数据与知识来源均未能提供可用证据，本次分析失败。"
+    assert body["message"].startswith("业务数据与知识来源均未能提供可用证据，本次分析失败。")
+    assert "数据源当前不可用" in body["message"]
+    assert "企业知识库当前不可用" in body["message"]
     stored = (await chat.stored())[-1]
     assert stored["status"] == "failed"
     assert stored["answer"] is None

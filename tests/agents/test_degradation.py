@@ -1,21 +1,30 @@
 """Every Step 4.10 matrix cell uses the actual parent and specialist contracts."""
 
 import asyncio
+import json
 import time
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from app.agents.contracts import Route
 from app.agents.degradation import deadline_synthesis
 from app.agents.failures import FailureKind, NodeFailure
 from app.agents.synthesis_answer import synthesis_answer, validate_synthesis_answer
+from app.api.exception_handlers import handle_known
 from app.core.config_models import HTTPSettings
 from app.core.deadline import Deadline, ResponseBudget
-from app.core.errors import ConflictError, DeadlineExceededError, McpUnavailableError, RetrievalUnavailableError
+from app.core.errors import (
+    ConflictError,
+    DeadlineExceededError,
+    McpUnavailableError,
+    RetrievalUnavailableError,
+)
 from app.schemas.model_runtime import ModelFailureKind
+from app.services.chat_stream import error_event
 from app.services.deadline_finalization import finalize_deadline
 from app.services.turn_results import BothSourcesFailedError, TurnFailedError
 from model_runtime.errors import ModelError
@@ -35,7 +44,8 @@ async def test_degradation_matrix(route: Route, failure: str) -> None:
         route,
         data_error=McpUnavailableError("private secret") if data_down else None,
         knowledge_error=(ModelError() if failure == "encode" else RetrievalUnavailableError())
-        if knowledge_down else None,
+        if knowledge_down
+        else None,
         empty=failure == "empty",
     )
     if failure == "rerank":
@@ -52,8 +62,14 @@ async def test_degradation_matrix(route: Route, failure: str) -> None:
         expected = "failed" if data_down else "succeeded"
         assert not ctx.retrieval.calls
     elif route is Route.KNOWLEDGE_ONLY:
-        expected = "failed" if knowledge_down else (
-            "abstained" if failure == "empty" else ("degraded" if failure == "rerank" else "succeeded")
+        expected = (
+            "failed"
+            if knowledge_down
+            else (
+                "abstained"
+                if failure == "empty"
+                else ("degraded" if failure == "rerank" else "succeeded")
+            )
         )
         assert not ctx.mcp.calls
     else:
@@ -86,7 +102,12 @@ async def test_mcp_down_never_connects_directly(monkeypatch: pytest.MonkeyPatch)
 def test_both_unavailable_names_both_reasons() -> None:
     failures = [
         NodeFailure(node="data", kind=FailureKind.MCP_UNAVAILABLE, detail="secret", retryable=True),
-        NodeFailure(node="knowledge", kind=FailureKind.RETRIEVAL_UNAVAILABLE, detail="secret", retryable=True),
+        NodeFailure(
+            node="knowledge",
+            kind=FailureKind.RETRIEVAL_UNAVAILABLE,
+            detail="secret",
+            retryable=True,
+        ),
     ]
     error = BothSourcesFailedError(FailureKind.RETRIEVAL_UNAVAILABLE, failures)
     assert "数据源当前不可用" in error.public_message
@@ -95,9 +116,21 @@ def test_both_unavailable_names_both_reasons() -> None:
     assert "数据源当前不可用" in TurnFailedError(FailureKind.MCP_UNAVAILABLE).public_message
 
 
+async def test_source_failure_http_and_sse_share_safe_message() -> None:
+    error = TurnFailedError(FailureKind.MCP_UNAVAILABLE)
+    error.detail = "private connection password"
+    response = await handle_known(Request({"type": "http"}), error)
+    body = json.loads(response.body)
+    assert "数据源当前不可用" in body["message"]
+    assert error_event(error).message == body["message"]
+    assert "password" not in response.body.decode()
+
+
 @pytest.mark.parametrize("source", ["data", "knowledge", "both"])
 async def test_deadline_partial_uses_completed_specialist(source: str) -> None:
-    ctx, state, bundle = await synthesis_context(data=source != "knowledge", knowledge=source != "data")
+    ctx, state, bundle = await synthesis_context(
+        data=source != "knowledge", knowledge=source != "data"
+    )
     ctx = replace(ctx, deadline=Deadline(time.monotonic() - 0.01))
     ctx.llm.generate_structured = AsyncMock(side_effect=AssertionError("post-deadline model call"))
     output = await finalize_deadline(state, ctx)
@@ -173,5 +206,8 @@ async def test_degraded_status_distinct_from_failed_and_abstained() -> None:
         parent_context(Route.DATA_ONLY, data_error=McpUnavailableError()),
     ]
     assert [(await invoke(ctx)).status for ctx in cases] == [
-        "succeeded", "degraded", "abstained", "failed"
+        "succeeded",
+        "degraded",
+        "abstained",
+        "failed",
     ]

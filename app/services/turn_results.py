@@ -1,8 +1,7 @@
 """Typed result conversion and public failure mapping."""
 
-from app.agents.contracts import Answer
+from app.agents.contracts import Answer, EvidenceBundle
 from app.agents.degradation import missing_explanations, public_failure
-from app.agents.contracts import EvidenceBundle
 from app.agents.failures import FailureKind, NodeFailure
 from app.core.errors import DeadlineExceededError, InsightPilotError
 from app.db.models import Turn
@@ -32,7 +31,9 @@ class BothSourcesFailedError(TurnFailedError):
 
     @property
     def public_message(self) -> str:
-        return self.user_message + " ".join(missing_explanations(EvidenceBundle(), self.failures))
+        return type(self).user_message + " ".join(
+            missing_explanations(EvidenceBundle(), self.failures)
+        )
 
 
 def turn_response(turn: Turn, *, replayed: bool = False) -> TurnResponse:

@@ -4,7 +4,17 @@ from app.agents.contracts import EvidenceBundle, SynthesisResult
 from app.agents.failures import FailureKind, NodeFailure
 from app.agents.synthesis_generation import missing_sources, synthesis_input
 from app.agents.synthesis_validation import data_view, validate_output
-from app.schemas.synthesis import CellReference, Claim, ClaimKind, DataReference, RowCountReference, SynthesisOutput
+from app.schemas.synthesis import (
+    CellReference,
+    Claim,
+    ClaimKind,
+    DataReference,
+    RowCountReference,
+    SynthesisOutput,
+)
+
+MAX_CELL_CHARS = 500
+MAX_EXCERPT_CHARS = 2000
 
 FAILURE_MESSAGES = {
     FailureKind.MCP_UNAVAILABLE: "数据源当前不可用，未能核对实际订单数据。",
@@ -53,7 +63,7 @@ def _data_claims(bundle: EvidenceBundle) -> list[Claim]:
         refs: list[DataReference] = [
             CellReference(row=row_index, column=column, value=value)
             for column, value in enumerate(row[:3])
-            if len(str(value)) <= 500
+            if len(str(value)) <= MAX_CELL_CHARS
         ]
         if refs:
             claims.append(
@@ -69,11 +79,11 @@ def _data_claims(bundle: EvidenceBundle) -> list[Claim]:
 
 def _excerpt(text: str) -> str:
     # Cut at a complete textual boundary, never halfway through a number or date.
-    if len(text) <= 2000:
+    if len(text) <= MAX_EXCERPT_CHARS:
         return text
-    prefix = text[:2000]
+    prefix = text[:MAX_EXCERPT_CHARS]
     boundary = max(prefix.rfind(mark) for mark in ("。", "；", "\n", " "))
-    return prefix[:boundary + 1] if boundary > 0 else "已找到适用文档，内容见对应证据快照。"
+    return prefix[: boundary + 1] if boundary > 0 else "已找到适用文档，内容见对应证据快照。"
 
 
 def deadline_synthesis(bundle: EvidenceBundle, failures: list[NodeFailure]) -> SynthesisResult:

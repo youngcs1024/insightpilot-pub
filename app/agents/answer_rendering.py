@@ -114,13 +114,17 @@ def render_answer(answer: Answer, bundle: EvidenceBundle) -> str:
     pieces = []
     if answer.degraded_components:
         sources = "、".join(
-            name for present, name in (
+            name
+            for present, name in (
                 (bundle.data is not None, "业务数据"),
                 (bundle.knowledge is not None, "企业知识库"),
-            ) if present
+            )
+            if present
         )
         pieces.append(
-            "> ⚠️ 本次为部分回答。仅基于" + sources + "。"
+            "> ⚠️ 本次为部分回答。仅基于"
+            + sources
+            + "。"
             + " ".join(
                 _IMPACTS.get(name, f"组件 {name} 降级，其提供的信息可能不完整。")
                 for name in dict.fromkeys(answer.degraded_components)

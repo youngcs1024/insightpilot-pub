@@ -22,9 +22,15 @@ async def synthesize(state: AgentState, runtime: Runtime[RuntimeContext]) -> Com
         question = state.rewritten.standalone if state.rewritten else state.question
         result = await generate_synthesis(synthesis_input(question, bundle), bundle, ctx)
         if result.missing_components:
-            result = result.model_copy(update={"unanswered": list(dict.fromkeys([
-                *missing_explanations(bundle, state.failures), *result.unanswered
-            ]))[:12]})
+            result = result.model_copy(
+                update={
+                    "unanswered": list(
+                        dict.fromkeys(
+                            [*missing_explanations(bundle, state.failures), *result.unanswered]
+                        )
+                    )[:12]
+                }
+            )
         return Command(
             update={"synthesis": result, "degraded_components": list(result.missing_components)},
             goto="format_answer",
