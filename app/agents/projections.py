@@ -93,9 +93,7 @@ def to_data_input(state: AgentState, *, token_counter: SchemaTokenPort) -> DataA
     return inputs
 
 
-def to_knowledge_input(
-    state: AgentState, *, token_counter: SchemaTokenPort
-) -> KnowledgeAgentInput:
+def to_knowledge_input(state: AgentState, *, token_counter: SchemaTokenPort) -> KnowledgeAgentInput:
     """Project only scoped knowledge context, with a bounded optional summary."""
     context = _context(state, token_counter)
     route = state.route

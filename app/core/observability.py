@@ -363,7 +363,10 @@ class GraphTraceCallback(BaseCallbackHandler):
         abstained = (
             isinstance(outputs, Command)
             and isinstance(outputs.update, dict)
-            and outputs.update.get("abstained") is True
+            and (
+                outputs.update.get("abstained") is True
+                or outputs.update.get("knowledge_abstention_reason") is not None
+            )
         )
         self._finish(run_id, failed=failed, abstained=abstained)
 

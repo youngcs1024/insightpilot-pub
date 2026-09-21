@@ -40,9 +40,7 @@ async def answer_data(
                 update={"clarification": output.clarification, "status": "succeeded"}, goto=END
             )
         if output.failure is not None:
-            return Command(
-                update={"failures": [output.failure], "status": "failed"}, goto=END
-            )
+            return Command(update={"failures": [output.failure], "status": "failed"}, goto=END)
         if output.evidence is None:
             raise ConflictError("missing data specialist output")
         return Command(update={"data_evidence": output.evidence}, goto="persist_evidence")

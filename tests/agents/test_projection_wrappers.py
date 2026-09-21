@@ -129,7 +129,10 @@ async def test_knowledge_success_uses_scoped_input_and_runtime() -> None:
     assert retrieval.calls[0].standalone == state.route.knowledge_intent
     assert retrieval.deadlines == [ctx.deadline]
     assert ctx.llm.calls == ctx.mcp.calls == []
-    assert not {"status", "answer", "clarification", "abstained", "data_evidence"} & output.update.keys()
+    assert (
+        not {"status", "answer", "clarification", "abstained", "data_evidence"}
+        & output.update.keys()
+    )
 
 
 async def test_knowledge_below_floor_refuses_without_failure() -> None:
@@ -241,10 +244,13 @@ def wrapper_graph() -> CompiledStateGraph[AgentState, RuntimeContext, AgentState
 
 
 @pytest.mark.parametrize("fail_data", [False, True])
-async def test_compiled_wrappers_preserve_parallel_ownership_and_deltas(fail_data: bool) -> None:
+@pytest.mark.parametrize("fail_knowledge", [False, True])
+async def test_compiled_wrappers_preserve_parallel_ownership_and_deltas(
+    fail_data: bool, fail_knowledge: bool
+) -> None:
     ctx = replace(
         context(mcp_results=[McpUnavailableError()] if fail_data else [result()]),
-        retrieval=FakeRetrieval(ranked()),
+        retrieval=FakeRetrieval(RetrievalUnavailableError() if fail_knowledge else ranked()),
     )
     state = routed_state(ctx)
     prior = failure("prior")
@@ -253,17 +259,37 @@ async def test_compiled_wrappers_preserve_parallel_ownership_and_deltas(fail_dat
     config = {"configurable": {"thread_id": str(ctx.identity.turn_id)}}
     graph = wrapper_graph()
     updates = [
-        update
-        async for update in graph.astream(state, config, context=ctx, stream_mode="updates")
+        update async for update in graph.astream(state, config, context=ctx, stream_mode="updates")
     ]
     writes = {node: command for update in updates for node, command in update.items()}
     shared = writes["answer_data_routed"].keys() & writes["answer_knowledge"].keys()
     assert shared <= {"assumptions", "failures", "degraded_components"}
     restored = AgentState.model_validate((await graph.aget_state(config)).values)
-    assert restored.knowledge_evidence is not None
+    assert (restored.knowledge_evidence is None) is fail_knowledge
     assert (restored.data_evidence is None) is fail_data
     assert restored.failures.count(prior) == 1
-    assert len(restored.failures) == (2 if fail_data else 1)
+    assert len(restored.failures) == 1 + int(fail_data) + int(fail_knowledge)
     assert restored.assumptions.count("prior assumption") == 1
     assert restored.context == state.context
     assert restored.route == state.route
+
+
+@pytest.mark.parametrize(
+    ("wrapper", "target"),
+    [
+        (answer_data_routed, "app.agents.nodes.answer_data.DATA_GRAPH.ainvoke"),
+        (answer_knowledge, "app.agents.nodes.answer_knowledge.KNOWLEDGE_GRAPH.ainvoke"),
+    ],
+)
+async def test_wrapper_does_not_translate_cancellation_into_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    wrapper: Callable[..., Awaitable[Command[str]]],
+    target: str,
+) -> None:
+    ctx = context()
+    state = routed_state(ctx)
+    child = AsyncMock(side_effect=asyncio.CancelledError())
+    monkeypatch.setattr(target, child)
+    with pytest.raises(asyncio.CancelledError):
+        await wrapper(state, Runtime(context=ctx), {})
+    assert state.failures == []

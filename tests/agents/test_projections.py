@@ -61,9 +61,11 @@ def test_metric_override_memories_only_reach_data_agent() -> None:
     data = to_data_input(state, token_counter=ctx.schema_token_counter)
     knowledge = to_knowledge_input(state, token_counter=ctx.schema_token_counter)
     assert data.selected_overrides == state.context.selected_overrides
-    assert data.relevant_memories == knowledge.relevant_memories == [
-        TerminologyProjection(term="营收", means="GMV")
-    ]
+    assert (
+        data.relevant_memories
+        == knowledge.relevant_memories
+        == [TerminologyProjection(term="营收", means="GMV")]
+    )
     assert "o.paid_at" not in knowledge.model_dump_json()
     assert "user_id" not in json.dumps([item.model_dump() for item in data.relevant_memories])
     assert data.region_scope.region_ids == knowledge.region_scope.region_ids == [1]
@@ -123,7 +125,9 @@ def test_prior_sql_capped_at_three() -> None:
     state = routed_state(ctx)
     state.context.prior_sql.extend(["SELECT 43", "SELECT 44"])
     assert to_data_input(state, token_counter=ctx.schema_token_counter).prior_sql == [
-        "SELECT 42", "SELECT 43", "SELECT 44"
+        "SELECT 42",
+        "SELECT 43",
+        "SELECT 44",
     ]
     assert len(state.context.prior_sql) == 4
 
@@ -175,12 +179,14 @@ def test_format_preference_applies_in_formatter_for_all_routes(route: Route) -> 
     assert preference == state.context.format_preference
     preference.decimals = 4
     assert state.context.format_preference.decimals == 2
-    assert "format_preference" not in to_data_input(
-        state, token_counter=ctx.schema_token_counter
-    ).model_dump()
-    assert "format_preference" not in to_knowledge_input(
-        state, token_counter=ctx.schema_token_counter
-    ).model_dump()
+    assert (
+        "format_preference"
+        not in to_data_input(state, token_counter=ctx.schema_token_counter).model_dump()
+    )
+    assert (
+        "format_preference"
+        not in to_knowledge_input(state, token_counter=ctx.schema_token_counter).model_dump()
+    )
 
 
 async def test_formatter_uses_typed_preference_without_changing_snapshot() -> None:

@@ -88,7 +88,9 @@ def routed_state(ctx: RuntimeContext, route: Route = Route.BOTH) -> AgentState:
     return AgentState(
         **ctx.identity.model_dump(),
         question=question,
-        prepared=PreparedContext(question=question, summary="legacy private", messages=[], prior_sql=[]),
+        prepared=PreparedContext(
+            question=question, summary="legacy private", messages=[], prior_sql=[]
+        ),
         route=RouteDecision(
             route=route,
             confidence=1,

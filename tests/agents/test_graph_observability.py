@@ -37,7 +37,7 @@ async def test_business_graph_span_topology_and_parentage() -> None:
         ids = await asyncio.gather(run(), run())
         service.client.flush()
         spans = exporter.get_finished_spans()
-        assert len(spans) == 26  # noqa: PLR2004 -- thirteen spans for each isolated turn.
+        assert len(spans) == 28  # noqa: PLR2004 -- fourteen spans for each isolated turn.
         for trace_id in ids:
             group = [span for span in spans if format(span.context.trace_id, "032x") == trace_id]
             root = next(span for span in group if span.name == "turn")
@@ -46,6 +46,7 @@ async def test_business_graph_span_topology_and_parentage() -> None:
                 "prepare",
                 "rewrite_question",
                 "answer_data",
+                "specialist_projection",
                 "persist_evidence",
                 "format_answer",
                 "select_schema",

@@ -9,9 +9,9 @@ from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.state import AgentState
 from app.core.config_models import DatabaseSettings
 from app.core.errors import LlmStructuredOutputError
+from app.db.session import Database
 from app.schemas.knowledge_query import KnowledgeClarification, KnowledgeClarificationKind
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification
-from app.db.session import Database
 from app.services.graph import GraphService
 from tests.agents.knowledge_support import ranked
 from tests.agents.projection_support import selected_context
