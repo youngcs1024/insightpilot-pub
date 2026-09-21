@@ -185,7 +185,9 @@ async def test_synthesis_claims_are_committed_before_delivery(
     }
     assert answer == (await chat.stored())[-1]["answer"]
     assert [call.schema_name for call in ctx.llm.calls][-1] == "SynthesisOutput"
-    assert not any(call.schema_name in {"DataAnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
+    assert not any(
+        call.schema_name in {"DataAnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls
+    )
     if streaming:
         frames = events(response)
         assert (

@@ -1,6 +1,5 @@
 """Parent v2 round-trips and recovery using the real protected PostgreSQL service."""
 
-from tests.answer_support import data_draft
 from dataclasses import replace
 
 import pytest
@@ -16,6 +15,7 @@ from app.services.graph import GraphService
 from tests.agents.knowledge_support import ranked
 from tests.agents.projection_support import selected_context
 from tests.agents.support import metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.fakes.chat_model import FakeChatModel
 from tests.integration.checkpoint_support import (
     admitted,

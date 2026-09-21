@@ -2,7 +2,6 @@
 
 # ruff: noqa: PLR2004 -- explicit result-shape and call-count acceptance examples.
 
-from tests.answer_support import data_draft
 import json
 from collections.abc import Iterator
 from unittest.mock import Mock
@@ -16,19 +15,20 @@ from app.agents.contracts import (
     DataEvidence,
     EvidenceSnapshot,
 )
-from app.agents.failures import FailureKind
-from app.schemas.synthesis import CellReference, Claim, ClaimKind
 from app.agents.data import sanity
 from app.agents.data.caveats import CAVEATS
 from app.agents.data.nodes.sanity_check import sanity_check
 from app.agents.data.state import DataAgentState
+from app.agents.failures import FailureKind
 from app.agents.runtime import RuntimeContext
 from app.core.config_models import SanitySettings
 from app.core.masking import REDACTED, mask, safe_attributes
 from app.core.observability import GraphTraceCallback, TraceMetadata
 from app.schemas.mcp import QueryResultPayload, SqlValue
 from app.schemas.sanity import SanityFlag
+from app.schemas.synthesis import CellReference, Claim, ClaimKind
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.factories import sanity_payload as payload
 from tests.observability_support import tracing
 
@@ -95,10 +95,17 @@ async def test_check_failure_still_commits_result_and_formats_answer(
 
 
 async def test_full_length_answer_fails_without_dropping_advisories() -> None:
-    draft = DataAnswerDraft(claims=[Claim(
-        text="x" * 4000, kind=ClaimKind.FACT_DATA, confidence=0.5,
-        data_refs=[CellReference(row=0, column=0, value=None)],
-    ) for _ in range(8)])
+    draft = DataAnswerDraft(
+        claims=[
+            Claim(
+                text="x" * 4000,
+                kind=ClaimKind.FACT_DATA,
+                confidence=0.5,
+                data_refs=[CellReference(row=0, column=0, value=None)],
+            )
+            for _ in range(8)
+        ]
+    )
     ctx = context(
         responses=[metric_intent(), sql_candidate("SELECT NULL"), draft],
         mcp_results=[payload([[None]])],
@@ -113,11 +120,16 @@ async def test_full_length_answer_fails_without_dropping_advisories() -> None:
 async def test_replay_uses_committed_flags_despite_configuration_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ctx = context(responses=[metric_intent(), sql_candidate(), data_draft("负金额结果", value=-1)], mcp_results=[payload([[-1]])])
+    ctx = context(
+        responses=[metric_intent(), sql_candidate(), data_draft("负金额结果", value=-1)],
+        mcp_results=[payload([[-1]])],
+    )
     ctx.settings.data_agent.sanity = SanitySettings(money_columns=["amount"])
     first = await invoke(ctx)
     saved = ctx.evidence.snapshot.model_dump_json()
-    replay = context(responses=[data_draft(markdown="历史结果。", confidence=0.5, value=-1)], mcp_results=[])
+    replay = context(
+        responses=[data_draft(markdown="历史结果。", confidence=0.5, value=-1)], mcp_results=[]
+    )
     replay.evidence.snapshot = EvidenceSnapshot.model_validate_json(saved)
     checker = Mock(side_effect=AssertionError("Historical results must not be checked again"))
     monkeypatch.setattr(sanity, "result_flags", checker)

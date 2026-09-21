@@ -1,7 +1,5 @@
 """Real PostgreSQL proves history, immutable snapshots and checkpoint recovery."""
 
-from app.schemas.synthesis import RowCountReference
-from tests.answer_support import data_draft
 import asyncio
 import json
 from dataclasses import replace
@@ -27,11 +25,13 @@ from app.db.session import Database
 from app.schemas.mcp import ColumnSpec, SqlErrorKind
 from app.schemas.sanity import SanityFlag
 from app.schemas.sql_correction import CorrectionStatus
+from app.schemas.synthesis import RowCountReference
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
 from app.services.graph import GraphService
 from tests.agents.correction_support import correction_context
 from tests.agents.support import metric_intent, result, sql_candidate
+from tests.answer_support import data_draft
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
 from tests.integration.checkpoint_support import (
@@ -464,7 +464,13 @@ async def test_exact_budgeted_generation_survives_database_and_restart(
     forbidden = Mock(side_effect=AssertionError("Historical reads must not rebuild evidence"))
     monkeypatch.setattr(summarize, "summarize_result", forbidden)
     monkeypatch.setattr(summarize, "render_block", forbidden)
-    recovered_model = FakeChatModel([data_draft(markdown="Recovered answer", confidence=1, reference=RowCountReference(value=1))])
+    recovered_model = FakeChatModel(
+        [
+            data_draft(
+                markdown="Recovered answer", confidence=1, reference=RowCountReference(value=1)
+            )
+        ]
+    )
     restarted = GraphService(settings)
     await restarted.start()
     try:

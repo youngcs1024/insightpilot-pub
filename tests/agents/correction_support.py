@@ -1,11 +1,11 @@
 """Bounded SQL correction scenarios shared by graph and checkpoint tests."""
 
-from tests.answer_support import data_draft
 from app.agents.runtime import RuntimeContext
 from app.schemas.mcp import QueryResultPayload
 from app.schemas.sql_correction import CorrectionDecision, SqlCorrectionOutput
 from app.services.metric_binding import build_binding
 from tests.agents.support import context, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.metric_resolution_support import request, schema
 
 MAX_EXECUTIONS = 3

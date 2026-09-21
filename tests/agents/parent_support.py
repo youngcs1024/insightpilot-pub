@@ -1,6 +1,5 @@
 """Explicit four-route scripts exercising the production parent and specialists."""
 
-from tests.answer_support import data_draft
 from dataclasses import replace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
@@ -11,6 +10,7 @@ from app.services.knowledge_generation import KnowledgeGenerationService
 from tests.agents.knowledge_support import FakeRetrieval, ranked
 from tests.agents.support import context, metric_intent, sql_candidate
 from tests.agents.synthesis_support import synthesis_draft
+from tests.answer_support import data_draft
 from tests.knowledge_support import draft
 
 if TYPE_CHECKING:

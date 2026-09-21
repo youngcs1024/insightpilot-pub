@@ -18,14 +18,18 @@ __all__ = ["chat"]
 
 @pytest.mark.parametrize("route", list(Route))
 @pytest.mark.parametrize("streamed", [False, True])
-async def test_v3_all_route_format_commit_and_replay(chat: Harness, route: Route, streamed: bool) -> None:
+async def test_v3_all_route_format_commit_and_replay(
+    chat: Harness, route: Route, streamed: bool
+) -> None:
     ctx = parent_context(route, settings=chat.app.state.settings)
     chat.app.state.llm = ctx.llm
     chat.app.state.retrieval = ctx.retrieval
     chat.app.state.knowledge_generation = ctx.knowledge_generation
     question = {"content": "请分析2026年8月的经营情况，请用表格回答，保留两位小数。"}
     headers = {"Idempotency-Key": "v3-formatting"}
-    response = await chat.client.post(chat.url + ("/stream" if streamed else ""), json=question, headers=headers)
+    response = await chat.client.post(
+        chat.url + ("/stream" if streamed else ""), json=question, headers=headers
+    )
     assert response.status_code == OK, response.text
     body = events(response)[-1][1] if streamed else response.json()
     answer = body["answer"]
@@ -35,13 +39,17 @@ async def test_v3_all_route_format_commit_and_replay(chat: Harness, route: Route
     assert "| --- |" in answer["markdown"]
     assert answer == (await chat.stored())[-1]["answer"]
     if route is Route.CLARIFY:
-        assert answer["abstained"] and not answer["claims"]
+        assert answer["abstained"]
+        assert not answer["claims"]
         assert body["clarification"]["message"] in answer["markdown"]
     elif route in {Route.DATA_ONLY, Route.BOTH}:
         assert "**统计口径**" in answer["markdown"]
         assert answer["sql"] in answer["markdown"]
     if streamed:
-        assert "".join(value["delta"] for name, value in events(response) if name == "token") == answer["markdown"]
+        assert (
+            "".join(value["delta"] for name, value in events(response) if name == "token")
+            == answer["markdown"]
+        )
     before = len(ctx.llm.calls), len(chat.app.state.mcp.calls), len(ctx.retrieval.calls)
     replay = await chat.client.post(chat.url, json=question, headers=headers)
     assert replay.json()["answer"] == answer
@@ -50,12 +58,16 @@ async def test_v3_all_route_format_commit_and_replay(chat: Harness, route: Route
 
 
 @pytest.mark.parametrize("field", ["claims", "trace_id", "confidence", "markdown"])
-async def test_data_commit_rejects_envelope_tampering(chat: Harness, monkeypatch: pytest.MonkeyPatch, field: str) -> None:
+async def test_data_commit_rejects_envelope_tampering(
+    chat: Harness, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
     original = chat.graph.invoke
 
     async def tampered(ctx: RuntimeContext, **kwargs: object) -> GraphOutput:
         output = await original(ctx, **kwargs)
-        value = {"claims": [], "trace_id": "wrong-turn", "confidence": 0, "markdown": "forged"}[field]
+        value = {"claims": [], "trace_id": "wrong-turn", "confidence": 0, "markdown": "forged"}[
+            field
+        ]
         output.answer = output.answer.model_copy(update={field: value})
         return output
 

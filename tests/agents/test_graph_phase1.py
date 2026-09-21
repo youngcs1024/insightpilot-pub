@@ -1,6 +1,5 @@
 """Four-node behavior with no network; durability is tested separately on PostgreSQL."""
 
-from tests.answer_support import data_draft
 import ast
 import time
 from dataclasses import replace
@@ -25,6 +24,7 @@ from app.core.llm_config import ModelRole
 from app.schemas.mcp import SqlErrorKind, ValidationStatus
 from tests.agents.correction_support import correction_context
 from tests.agents.support import context, invoke, metric_intent, result, sql_candidate
+from tests.answer_support import data_draft
 
 CORRECTION_CALLS = 2
 SQL_SETUP_CALLS = 2

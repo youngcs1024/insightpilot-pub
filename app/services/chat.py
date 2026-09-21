@@ -12,12 +12,12 @@ from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
+from app.agents.answer_validation import validate_formatted_answer
 from app.agents.contracts import Answer, EvidenceRefs, Route, TurnIdentity
 from app.agents.failures import FailureKind
+from app.agents.nodes.format_answer import attempted_sources
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
-from app.agents.answer_validation import validate_formatted_answer
-from app.agents.nodes.format_answer import attempted_sources
 from app.core.background import spawn
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
@@ -35,8 +35,8 @@ from app.repositories import lifecycle
 from app.repositories.evidence import EvidenceRepository
 from app.repositories.turns import TurnRepository
 from app.schemas.chat import TurnResponse
-from app.schemas.metric_resolution import MetricClarification
 from app.schemas.knowledge import KnowledgeDraft
+from app.schemas.metric_resolution import MetricClarification
 from app.services.conversations import ConversationService
 from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
@@ -274,12 +274,16 @@ class ChatService:
                 raise ConflictError()
             answer = output.answer
             if (
-                answer.trace_id != row.trace_id or answer.evidence_refs != (output.evidence_refs or EvidenceRefs())
-                or answer.attempted_sources or not answer.abstained
+                answer.trace_id != row.trace_id
+                or answer.evidence_refs != (output.evidence_refs or EvidenceRefs())
+                or answer.attempted_sources
+                or not answer.abstained
                 or output.status != "abstained"
             ):
                 raise ConflictError("clarification envelope differs from turn")
-            await self._validate_answer(EvidenceRepository(session, identity), answer, clarification)
+            await self._validate_answer(
+                EvidenceRepository(session, identity), answer, clarification
+            )
             row.clarification = clarification.model_dump(mode="json")
             row.content = answer.markdown
             row.answer = answer.model_dump(mode="json")
@@ -310,12 +314,13 @@ class ChatService:
                 raise ConflictError("BOTH answer requires synthesis")
             if (
                 answer.trace_id != row.trace_id
-                or answer.attempted_sources != attempted_sources(
-                    output.route.route if output.route else None
-                )
+                or answer.attempted_sources
+                != attempted_sources(output.route.route if output.route else None)
                 or (output.status == "abstained") != answer.abstained
-                or (not answer.abstained and (output.status == "degraded")
-                    != bool(answer.degraded_components))
+                or (
+                    not answer.abstained
+                    and (output.status == "degraded") != bool(answer.degraded_components)
+                )
             ):
                 raise ConflictError("answer envelope differs from turn")
             await self._validate_answer(EvidenceRepository(session, identity), answer)
@@ -332,7 +337,9 @@ class ChatService:
         )
 
     async def _validate_answer(
-        self, repo: EvidenceRepository, answer: Answer,
+        self,
+        repo: EvidenceRepository,
+        answer: Answer,
         clarification: MetricClarification | None = None,
     ) -> None:
         bundle = await repo.read_bundle()

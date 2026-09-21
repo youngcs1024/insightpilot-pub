@@ -1,6 +1,5 @@
 """Two committed turns exercise rewriting, region binding and persisted responses."""
 
-from tests.answer_support import data_draft
 import json
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from app.agents.contracts import Route, RouteDecision, SqlGeneratorOutput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
 from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
+from tests.answer_support import data_draft
 from tests.api.chat_support import Harness, chat, events
 from tests.factories import business_schema, query_result
 from tests.fakes.chat_model import FakeChatModel

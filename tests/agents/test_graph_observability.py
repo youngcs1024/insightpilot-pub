@@ -16,6 +16,7 @@ from app.clients.mcp_client import McpClient
 from app.core.errors import McpUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.factories import mcp_success as success
 from tests.llm_support import URL, response
 from tests.llm_support import service as llm_service
@@ -116,13 +117,15 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
             httpx.Response(503),
             response(metric_intent().model_dump_json()),
             response(sql_candidate("SELECT 1").model_dump_json()),
-            response('{"markdown":"private-answer","confidence":0.9}'),
+            response(data_draft("private-answer", value=1).model_dump_json()),
         ]
     )
     try:
         async with llm_service(fallback=True) as llm:
             with service.turn(uuid4().hex, TraceMetadata()) as root:
                 output = await invoke(replace(ctx, llm=llm, mcp=mcp), [GraphTraceCallback()])
+                assert output.status == "succeeded"
+                assert output.answer.claims[0].data_refs[0].value == 1
                 root.update(TraceMetadata(status=output.status))
         service.client.flush()
         spans = exporter.get_finished_spans()

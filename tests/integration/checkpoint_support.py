@@ -1,6 +1,5 @@
 """Explicit checkpoint fixtures preserving real transactions and fixture scope."""
 
-from tests.answer_support import data_draft
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import replace
@@ -19,6 +18,7 @@ from app.services.evidence import EvidenceService
 from scripts.migration_settings import MigrationSettings
 from scripts.setup_checkpointer import setup_checkpointer
 from tests.agents.support import context, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.database_support import DatabaseStack
 from tests.fakes.chat_model import FakeChatModel
 

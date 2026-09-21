@@ -1,10 +1,11 @@
 """Bounded model claims and typed locations in the committed model view."""
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.schemas.mcp import Contract, SqlValue
 
@@ -48,15 +49,25 @@ DataReference = Annotated[
 ]
 
 
+LEGACY_CLAIM_CHARS = 2000
+
+
 class Claim(Contract):
     """Facts carry resolvable evidence; inference and unsupported text stay labelled."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     text: str = Field(min_length=1, max_length=4000)
     kind: ClaimKind
     data_refs: list[DataReference] = Field(default_factory=list, max_length=20)
     chunk_ids: list[UUID] = Field(default_factory=list, max_length=20)
     confidence: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def released_text_bound(self) -> Self:
+        """V2 accepts the existing knowledge-passage bound; V1 stays unchanged."""
+        if self.schema_version == 1 and len(self.text) > LEGACY_CLAIM_CHARS:
+            raise PydanticCustomError("claim_text", "Historical claim exceeds its text bound")
+        return self
 
 
 class Conflict(Contract):

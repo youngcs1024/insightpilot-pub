@@ -50,24 +50,32 @@ def _no_evidence(state: AgentState, ctx: RuntimeContext) -> Command[str]:
     if state.failures:
         return Command(update={"status": "failed"}, goto=END)
     answer = Answer(
-        markdown="pending", confidence=0, sql="", assumptions=[],
-        trace_id=ctx.trace_id, format_preference=format_preference(state),
-        evidence_refs=EvidenceRefs(), abstained=True,
-        attempted_sources=[] if clarification else attempted_sources(
-            state.route.route if state.route else None
-        ),
+        markdown="pending",
+        confidence=0,
+        sql="",
+        assumptions=[],
+        trace_id=ctx.trace_id,
+        format_preference=format_preference(state),
+        evidence_refs=EvidenceRefs(),
+        abstained=True,
+        attempted_sources=[]
+        if clarification
+        else attempted_sources(state.route.route if state.route else None),
         unanswered=[clarification.message if clarification else MISSING_EVIDENCE],
     )
     answer = finalize_answer(answer, EvidenceBundle())
-    return Command(update={
-        "answer": answer, "clarification": clarification,
-        "abstained": True, "status": "abstained",
-    }, goto=END)
+    return Command(
+        update={
+            "answer": answer,
+            "clarification": clarification,
+            "abstained": True,
+            "status": "abstained",
+        },
+        goto=END,
+    )
 
 
-async def _single_answer(
-    state: AgentState, ctx: RuntimeContext, bundle: EvidenceBundle
-) -> Answer:
+async def _single_answer(state: AgentState, ctx: RuntimeContext, bundle: EvidenceBundle) -> Answer:
     claims: list[Claim] = []
     passages: list[KnowledgePassage] = []
     preference = format_preference(state)
@@ -77,25 +85,37 @@ async def _single_answer(
         if ctx.knowledge_generation is None:
             raise ConflictError("missing knowledge generation service")
         generated = await ctx.knowledge_generation.generate(
-            bundle.knowledge.knowledge, deadline=ctx.deadline,
-            format_preference=preference, presentation_request=state.question,
+            bundle.knowledge.knowledge,
+            deadline=ctx.deadline,
+            format_preference=preference,
+            presentation_request=state.question,
         )
         if generated.abstention is None:
-            validate_citations(KnowledgeDraft(passages=generated.passages), bundle.knowledge.knowledge)
+            validate_citations(
+                KnowledgeDraft(passages=generated.passages), bundle.knowledge.knowledge
+            )
             passages = list(generated.passages)
             score = bundle.knowledge.knowledge.top_rerank_score
-            claims = [Claim(
-                text=passage.text,
-                kind=ClaimKind.INFERENCE if CAUSAL_MARKERS.search(passage.text)
-                else ClaimKind.FACT_DOCUMENT,
-                chunk_ids=list(passage.chunk_ids), confidence=score if score is not None else 0.5,
-            ) for passage in passages]
+            claims = [
+                Claim(
+                    text=passage.text,
+                    kind=ClaimKind.INFERENCE
+                    if CAUSAL_MARKERS.search(passage.text)
+                    else ClaimKind.FACT_DOCUMENT,
+                    chunk_ids=list(passage.chunk_ids),
+                    confidence=score if score is not None else 0.5,
+                )
+                for passage in passages
+            ]
     unanswered = [] if claims else [MISSING_EVIDENCE]
     if any(claim.kind is ClaimKind.INFERENCE for claim in claims):
         unanswered.append(INFERENCE_EVIDENCE)
     answer = Answer(
-        markdown="pending", confidence=0, trace_id=ctx.trace_id,
-        format_preference=preference, claims=claims,
+        markdown="pending",
+        confidence=0,
+        trace_id=ctx.trace_id,
+        format_preference=preference,
+        claims=claims,
         attempted_sources=attempted_sources(state.route.route if state.route else Route.DATA_ONLY),
         unanswered=unanswered,
         sql=bundle.data.data.sql if bundle.data else "",
@@ -124,16 +144,26 @@ async def format_answer(state: AgentState, runtime: Runtime[RuntimeContext]) -> 
             if state.synthesis is None:
                 raise ConflictError("BOTH answer requires validated synthesis")
             answer = synthesis_answer(
-                state.synthesis, bundle, state.degraded_components, format_preference(state),
+                state.synthesis,
+                bundle,
+                state.degraded_components,
+                format_preference(state),
                 trace_id=ctx.trace_id,
             )
         else:
             answer = await _single_answer(state, ctx, bundle)
-        status = "abstained" if answer.abstained else (
-            "degraded" if answer.degraded_components else "succeeded"
+        status = (
+            "abstained"
+            if answer.abstained
+            else ("degraded" if answer.degraded_components else "succeeded")
         )
-        return Command(update={
-            "answer": answer, "status": status, "abstained": answer.abstained,
-        }, goto=END)
+        return Command(
+            update={
+                "answer": answer,
+                "status": status,
+                "abstained": answer.abstained,
+            },
+            goto=END,
+        )
     except InsightPilotError as exc:
         return failed("format_answer", state, exc)

@@ -29,7 +29,6 @@ def validate_result(result: SynthesisResult, bundle: EvidenceBundle) -> None:
         raise ConflictError("synthesis was not validated")
 
 
-
 def synthesis_answer(
     result: SynthesisResult,
     bundle: EvidenceBundle,
@@ -70,7 +69,10 @@ def validate_synthesis_answer(answer: Answer, bundle: EvidenceBundle) -> None:
     if answer.synthesis is None or answer.trace_id is None:
         raise ConflictError("missing synthesis provenance")
     expected = synthesis_answer(
-        answer.synthesis, bundle, answer.degraded_components, answer.format_preference,
+        answer.synthesis,
+        bundle,
+        answer.degraded_components,
+        answer.format_preference,
         trace_id=answer.trace_id,
     )
     if answer != expected:

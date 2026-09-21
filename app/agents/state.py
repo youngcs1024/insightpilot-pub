@@ -81,11 +81,17 @@ class GraphOutput(Contract):
     def separate_clarification(self) -> Self:
         """A clarification must never contain a fabricated analytical answer."""
         if self.clarification is not None and (
-            (self.answer is not None and (
-                not self.answer.abstained or self.answer.claims or self.answer.citations
-                or self.answer.sql or self.answer.assumptions
-                or self.answer.evidence_refs != EvidenceRefs()
-            ))
+            (
+                self.answer is not None
+                and (
+                    not self.answer.abstained
+                    or self.answer.claims
+                    or self.answer.citations
+                    or self.answer.sql
+                    or self.answer.assumptions
+                    or self.answer.evidence_refs != EvidenceRefs()
+                )
+            )
             or self.data_evidence is not None
             or (
                 self.evidence_refs is not None

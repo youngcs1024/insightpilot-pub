@@ -4,10 +4,13 @@ from decimal import Decimal, InvalidOperation, localcontext
 
 from app.agents.contracts import MAX_ANSWER_CHARS, Answer, EvidenceBundle
 from app.agents.data.caveats import render_caveats
-from app.agents.synthesis_validation import claim_line
+from app.agents.synthesis_generation import synthesis_input
+from app.agents.synthesis_validation import claim_line, data_view
 from app.core.errors import ContextBudgetExceeded
 from app.schemas.mcp import SqlValue
 from app.schemas.synthesis import Claim, ClaimKind
+
+MAX_DISPLAY_EXPONENT = 1000
 
 _SOURCE_NAMES = {"data": "业务数据", "knowledge": "企业知识库"}
 _IMPACTS = {
@@ -44,7 +47,7 @@ def _display(value: SqlValue, decimals: int | None) -> str:
         return str(value)
     try:
         number = Decimal(str(value))
-        if not number.is_finite() or abs(number.adjusted()) > 1000:
+        if not number.is_finite() or abs(number.adjusted()) > MAX_DISPLAY_EXPONENT:
             return str(value)
         with localcontext() as ctx:
             ctx.prec = max(28, len(number.as_tuple().digits) + abs(number.adjusted()) + 8)
@@ -61,9 +64,13 @@ def _values(claim: Claim, answer: Answer) -> str:
 
 
 def _cell(text: str) -> str:
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(
-        ">", "&gt;"
-    ).replace("|", "\\|").replace("\n", "<br>")
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("|", "\\|")
+        .replace("\n", "<br>")
+    )
 
 
 def _claims(answer: Answer) -> list[str]:
@@ -87,7 +94,7 @@ def _claims(answer: Answer) -> list[str]:
                 continue
             line = claim_line(claim)
             if claim.data_refs:
-                line += "\n\n数值展示：" + _values(claim, answer)
+                line += "\n\n数值展示: " + _values(claim, answer)
             lines.append(line)
         if lines:
             sections.append(f"### {title}\n\n" + "\n\n".join(lines))
@@ -106,7 +113,8 @@ def render_answer(answer: Answer, bundle: EvidenceBundle) -> str:
     pieces = []
     if answer.degraded_components:
         pieces.append(
-            "> 本次为部分回答。" + " ".join(
+            "> 本次为部分回答。"
+            + " ".join(
                 _IMPACTS.get(name, f"组件 {name} 降级，其提供的信息可能不完整。")
                 for name in dict.fromkeys(answer.degraded_components)
             )
@@ -115,46 +123,50 @@ def render_answer(answer: Answer, bundle: EvidenceBundle) -> str:
         sources = "、".join(_SOURCE_NAMES[source] for source in answer.attempted_sources)
         pieces.append(
             f"已尝试核查{sources}，现有证据不足以形成可验证的回答。"
-            if sources else "需要补充问题信息后才能继续分析。"
+            if sources
+            else "需要补充问题信息后才能继续分析。"
         )
     else:
         pieces.extend(_claims(answer))
     if answer.synthesis and answer.synthesis.conflicts:
         conflicts = [
-            claim_line(answer.claims[item.left_claim]) + "\n\n与\n\n"
+            claim_line(answer.claims[item.left_claim])
+            + "\n\n与\n\n"
             + claim_line(answer.claims[item.right_claim])
             for item in answer.synthesis.conflicts
         ]
         pieces.append(
-            "### 证据冲突\n\n" + "\n\n---\n\n".join(conflicts)
+            "### 证据冲突\n\n"
+            + "\n\n---\n\n".join(conflicts)
             + "\n\n现有证据无法裁定，需进一步核实。"
         )
     if answer.synthesis and not answer.abstained:
         pieces.append("相关性不等于因果；以上事实尚未建立因果关系。")
     if answer.unanswered:
-        if answer.abstained and answer.format_preference and answer.format_preference.prefer == "table":
-            pieces.append("| 待补充信息 |\n| --- |\n" + "\n".join(
-                f"| {_cell(text)} |" for text in answer.unanswered
-            ))
+        if (
+            answer.abstained
+            and answer.format_preference
+            and answer.format_preference.prefer == "table"
+        ):
+            pieces.append(
+                "| 待补充信息 |\n| --- |\n"
+                + "\n".join(f"| {_cell(text)} |" for text in answer.unanswered)
+            )
         else:
-            pieces.append("### 缺失信息与待核实问题\n\n" + "\n".join(
-                f"- {text}" for text in answer.unanswered
-            ))
+            pieces.append(
+                "### 缺失信息与待核实问题\n\n"
+                + "\n".join(f"- {text}" for text in answer.unanswered)
+            )
     if answer.citations:
-        pieces.append("### 引用来源\n\n" + "\n".join(
-            f"- [{item.chunk_id}] {_cell(item.document_title)} · {_cell(item.heading_path)}"
-            + (f" · 第 {item.page} 页" if item.page is not None else "")
-            for item in answer.citations
-        ))
-    if bundle.data:
-        caveats = render_caveats(bundle.data.data.sanity_flags)
-        if caveats:
-            pieces.append(caveats.strip())
-    if answer.assumptions or bundle.data:
-        assumptions = answer.assumptions or ["证据快照未记录额外统计口径。"]
-        pieces.append("---\n**统计口径**\n" + "\n".join(f"- {text}" for text in assumptions))
-    if bundle.data:
-        pieces.append("**执行的查询**\n" + _fence(bundle.data.data.sql))
+        pieces.append(
+            "### 引用来源\n\n"
+            + "\n".join(
+                f"- [{item.chunk_id}] {_cell(item.document_title)} · {_cell(item.heading_path)}"
+                + (f" · 第 {item.page} 页" if item.page is not None else "")
+                for item in answer.citations
+            )
+        )
+    pieces.extend(_evidence_appendix(answer, bundle))
     markdown = "\n\n".join(pieces)
     if len(markdown) > MAX_ANSWER_CHARS:
         raise ContextBudgetExceeded()
@@ -163,7 +175,30 @@ def render_answer(answer: Answer, bundle: EvidenceBundle) -> str:
 
 def finalize_answer(answer: Answer, bundle: EvidenceBundle) -> Answer:
     """Return a fully rendered copy without mutating the source or structured claims."""
-    return answer.model_copy(update={
-        "markdown": render_answer(answer, bundle),
-        "confidence": confidence_for(answer, bundle),
-    })
+    return answer.model_copy(
+        update={
+            "markdown": render_answer(answer, bundle),
+            "confidence": confidence_for(answer, bundle),
+        }
+    )
+
+
+def _evidence_appendix(answer: Answer, bundle: EvidenceBundle) -> list[str]:
+    pieces: list[str] = []
+    if bundle.data:
+        view = data_view(synthesis_input("render evidence scope", bundle))
+        pieces.append(
+            f"统计仅覆盖本次查询返回的 {bundle.data.data.row_count} 行，"
+            "不能据此推断未返回的总体；如查询指定 top-N，则仅描述该范围。"
+        )
+        if view is not None and view.sample_truncated:
+            pieces.append("用于本次回答的样本已截断；列统计基于全部返回行，不是从样本重新计算。")
+        caveats = render_caveats(bundle.data.data.sanity_flags)
+        if caveats:
+            pieces.append(caveats.strip())
+    if answer.assumptions or bundle.data:
+        assumptions = answer.assumptions or ["证据快照未记录额外统计口径。"]
+        pieces.append("---\n**统计口径**\n" + "\n".join(f"- {text}" for text in assumptions))
+    if bundle.data:
+        pieces.append("**执行的查询**\n" + _fence(bundle.data.data.sql))
+    return pieces

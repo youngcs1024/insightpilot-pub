@@ -1,6 +1,5 @@
 """Multi-turn interpretation, bounded projection and safe clarification contracts."""
 
-from tests.answer_support import data_draft
 import json
 from dataclasses import replace
 from unittest.mock import AsyncMock
@@ -28,6 +27,7 @@ from app.core.masking import REDACTED, mask, safe_attributes
 from app.schemas.metric_resolution import ClarificationKind
 from tests.agents.sql_support import state as sql_state
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.region_support import FOLLOWUP_QUESTION
 
 AUGUST = 8

@@ -6,7 +6,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.contracts import DataAnswerDraft, EvidenceBundle
-from app.agents.prompts import FORMAT_ANSWER, SYNTHESIS_REPAIR, SYSTEM
+from app.agents.prompts import DATA_ANSWER_REPAIR, FORMAT_ANSWER, SYSTEM
 from app.agents.runtime import RuntimeContext
 from app.agents.synthesis_generation import synthesis_input
 from app.agents.synthesis_validation import validate_output
@@ -29,29 +29,38 @@ async def data_claims(
         return []
     data = bundle.data.data
     if data.row_count == 0:
-        return [Claim(
-            text="查询成功, 但未返回任何行 (no rows returned)。",
-            kind=ClaimKind.FACT_DATA,
-            confidence=1,
-            data_refs=[RowCountReference(value=0)],
-        )]
+        return [
+            Claim(
+                text="查询成功, 但未返回任何行 (no rows returned)。",
+                kind=ClaimKind.FACT_DATA,
+                confidence=1,
+                data_refs=[RowCountReference(value=0)],
+            )
+        ]
     source = synthesis_input(question, bundle)
     for attempt in (1, 2):
         ctx.deadline.check("format_answer")
         draft = await ctx.llm.generate_structured(
             ModelRole.SYNTHESIS,
             [
-                SystemMessage(content=SYSTEM + FORMAT_ANSWER + (
-                    "\n" + SYNTHESIS_REPAIR if attempt > 1 else ""
-                )),
-                HumanMessage(content=json.dumps({
-                    "question": question,
-                    "generation_block": data.generation_block,
-                    "assumptions": data.assumptions,
-                    "sql_scope": data.sql,
-                    "sanity_flags": [flag.value for flag in data.sanity_flags],
-                    "format_preference": preference.model_dump() if preference else None,
-                }, ensure_ascii=False)),
+                SystemMessage(
+                    content=SYSTEM
+                    + FORMAT_ANSWER
+                    + ("\n" + DATA_ANSWER_REPAIR if attempt > 1 else "")
+                ),
+                HumanMessage(
+                    content=json.dumps(
+                        {
+                            "question": question,
+                            "generation_block": data.generation_block,
+                            "assumptions": data.assumptions,
+                            "sql_scope": data.sql,
+                            "sanity_flags": [flag.value for flag in data.sanity_flags],
+                            "format_preference": preference.model_dump() if preference else None,
+                        },
+                        ensure_ascii=False,
+                    )
+                ),
             ],
             DataAnswerDraft,
             deadline=ctx.deadline,
@@ -61,8 +70,9 @@ async def data_claims(
         except (FabricatedCitation, SynthesisValidationError) as exc:
             logger.exception("answer_reference_rejected", attempt=attempt, code=exc.code)
             continue
-        if any(claim.data_refs and claim.kind is not ClaimKind.UNSUPPORTED
-               for claim in checked.claims):
+        if any(
+            claim.data_refs and claim.kind is not ClaimKind.UNSUPPORTED for claim in checked.claims
+        ):
             return checked.claims
         return []
     return []

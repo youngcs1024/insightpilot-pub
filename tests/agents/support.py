@@ -1,6 +1,5 @@
 """Offline graph fixtures never substitute for durable PostgreSQL acceptance."""
 
-from tests.answer_support import data_draft
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +32,7 @@ from app.services.regions import RegionService
 from app.services.schema_tokens import SchemaTokenCounter
 from data.seed.metrics_loader import load_catalog as load_metrics
 from data.seed.schema_metadata_loader import load_catalog as load_schema
+from tests.answer_support import data_draft
 from tests.factories import query_result as result
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient

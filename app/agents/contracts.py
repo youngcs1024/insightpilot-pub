@@ -43,6 +43,7 @@ __all__ = [
 ]
 
 MAX_ANSWER_CHARS = 32_000
+ANSWER_VERSION = 3
 
 
 class PhaseOneSqlGeneratorOutput(Contract):
@@ -231,11 +232,10 @@ class Answer(AnswerDraft):
     abstained: bool = False
     synthesis: SynthesisResult | None = None
 
-
     @model_validator(mode="after")
     def current_trace(self) -> Self:
         """Historical payloads stay readable without inventing missing provenance."""
-        if self.schema_version == 3 and self.trace_id is None:
+        if self.schema_version == ANSWER_VERSION and self.trace_id is None:
             raise PydanticCustomError("answer_trace", "Answer v3 requires a trace ID")
         return self
 

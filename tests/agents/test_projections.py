@@ -2,7 +2,6 @@
 
 # ruff: noqa: PLR2004 -- explicit contract limits and fixture values.
 
-from tests.answer_support import data_draft
 import json
 from collections.abc import Callable
 
@@ -25,6 +24,7 @@ from app.schemas.metric_resolution import SelectedOverrides
 from app.services.graph import serializer
 from tests.agents.projection_support import routed_state
 from tests.agents.support import context, metric_intent, result
+from tests.answer_support import data_draft
 
 
 def test_data_input_excludes_knowledge_evidence() -> None:

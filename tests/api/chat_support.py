@@ -1,6 +1,5 @@
 """Shared chat harness and ASGI stream driver with explicit PostgreSQL fixtures."""
 
-from tests.answer_support import data_draft
 import asyncio
 import json
 from collections.abc import AsyncIterator
@@ -25,6 +24,7 @@ from app.db.session import Database
 from app.schemas.auth import UserResponse
 from app.schemas.schema_catalog import BusinessSchemaResponse
 from tests.agents.support import invoke, metric_intent, sql_candidate
+from tests.answer_support import data_draft
 from tests.factories import business_schema
 from tests.factories import query_result as result
 from tests.fakes.chat_model import FakeChatModel

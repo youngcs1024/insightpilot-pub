@@ -374,8 +374,12 @@ async def test_table_preference_does_not_generate_new_prose() -> None:
     output = await synthesized(ctx, state)
     before = len(ctx.llm.calls)
     answer = synthesis_answer(
-        output, bundle, [], FormatPreferenceContent(prefer="table", decimals=2)
-    , trace_id="test-trace")
+        output,
+        bundle,
+        [],
+        FormatPreferenceContent(prefer="table", decimals=2),
+        trace_id="test-trace",
+    )
     assert "| 经核验的声明 |" in answer.markdown
     assert len(ctx.llm.calls) == before
     assert answer.synthesis == output
