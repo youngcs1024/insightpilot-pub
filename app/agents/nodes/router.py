@@ -18,6 +18,7 @@ from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
+from app.core.routing import RoutingStrategy
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
 from app.services.llm.usage import collect_usage
 
@@ -62,11 +63,17 @@ def _scoped(decision: RouteDecision, question: str) -> RouteDecision:
     return RouteDecision.model_validate(values)
 
 
-async def _classify(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
-    decision = prefilter(inputs.question, inputs.routing_context)
+async def _classify(
+    inputs: RouterInput, ctx: RoutingRuntime, strategy: RoutingStrategy
+) -> RouteDecision | None:
+    decision = (
+        None
+        if strategy is RoutingStrategy.LLM_ONLY
+        else prefilter(inputs.question, inputs.routing_context)
+    )
     hit = decision is not None
     update_current_observation(TraceMetadata(prefilter_hit=hit, router_tokens=0 if hit else None))
-    if decision is not None:
+    if decision is not None or strategy is RoutingStrategy.PREFILTER_ONLY:
         return decision
     with collect_usage() as usage:
         try:
@@ -98,6 +105,16 @@ async def _classify(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
 
 
 async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecision:
+    """Return the configured production decision with the established contract."""
+    decision = await classify_question(inputs, ctx, ctx.settings.strategy)
+    if decision is None:
+        raise ConflictError("Production router cannot abstain without a clarification")
+    return decision
+
+
+async def classify_question(
+    inputs: RouterInput, ctx: RoutingRuntime, strategy: RoutingStrategy
+) -> RouteDecision | None:
     """Use bounded history, a single logical model call and the original deadline."""
     with observe("router", TraceMetadata()):
         try:
@@ -112,8 +129,10 @@ async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecis
                     deep=True,
                 ),
             )
-            original = await _classify(bounded, ctx)
+            original = await _classify(bounded, ctx, strategy)
             ctx.deadline.check("router_complete")
+            if original is None:
+                return None
             decision = (
                 _clarify(original)
                 if original.confidence < ctx.settings.min_confidence

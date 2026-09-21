@@ -241,7 +241,10 @@ def test_secret_repr_is_redacted(deployment_settings: DeploymentSettings) -> Non
 def test_router_threshold_reaches_only_api(deployment_settings: DeploymentSettings) -> None:
     deployment_settings.router = RouterSettings(min_confidence=0.75)
     config = render(deployment_settings)
-    assert json.loads(config.services["api"].environment["IP_ROUTER"]) == {"min_confidence": 0.75}
+    assert json.loads(config.services["api"].environment["IP_ROUTER"]) == {
+        "min_confidence": 0.75,
+        "strategy": "hybrid",
+    }
     assert all(
         "IP_ROUTER" not in service.environment
         for name, service in config.services.items()

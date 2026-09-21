@@ -9,6 +9,7 @@ from urllib.parse import quote_plus, urlsplit
 from pydantic import Field, HttpUrl, model_validator
 
 from app.core.llm_config import ModelRole, ModelRoleSettings
+from app.core.routing import RoutingStrategy
 from app.core.settings_base import (
     ConfigModel,
     Environment,
@@ -250,6 +251,7 @@ class RouterSettings(ConfigModel):
     """Classification acceptance threshold; equality is accepted."""
 
     min_confidence: float = Field(default=0.6, ge=0, le=1, allow_inf_nan=False)
+    strategy: Literal[RoutingStrategy.HYBRID, RoutingStrategy.LLM_ONLY] = RoutingStrategy.HYBRID
 
 
 class Settings(ProcessSettings):

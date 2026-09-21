@@ -29,11 +29,16 @@ _usage: ContextVar[UsageTotal | None] = ContextVar("ip_llm_usage", default=None)
 def collect_usage() -> Iterator[UsageTotal]:
     """Keep retries/repair together and isolate concurrent logical calls."""
     result = UsageTotal()
+    parent = _usage.get()
     token = _usage.set(result)
     try:
         yield result
     finally:
         _usage.reset(token)
+        if parent is not None:
+            parent.attempts += result.attempts
+            parent.reported += result.reported
+            parent.tokens += result.tokens
 
 
 def record_attempt() -> None:
