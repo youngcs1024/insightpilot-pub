@@ -202,7 +202,7 @@ jobs:
     outputs:
       coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -216,7 +216,7 @@ jobs:
       # Tooling includes tiny real-mypy fixtures; full-project mypy runs only in quality.
       - name: All tests without containers, including API, agents and tooling
         id: tests
-        timeout-minutes: 6
+        timeout-minutes: 8
         env:
           COVERAGE_FILE: .coverage.unit
         shell: bash

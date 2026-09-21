@@ -188,7 +188,7 @@ def test_log_pipelines_preserve_command_failure(tmp_path: Path) -> None:
 
 def test_test_timeouts_leave_room_for_diagnostics_without_shortening_execution() -> None:
     jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
-    for name, step_minutes in (("unit", 5), ("integration", 14), ("storage", 12)):
+    for name, step_minutes in (("unit", 8), ("integration", 14), ("storage", 12)):
         job = jobs[name]
         tests = next(step for step in job["steps"] if step.get("id") == "tests")
         assert tests["timeout-minutes"] >= step_minutes
