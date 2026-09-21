@@ -14,7 +14,7 @@ from app.agents.runtime import RuntimeContext
 from app.api.streaming import ChatStreamingResponse
 from app.api.v1.auth import Quota
 from app.api.v1.conversations import User
-from app.core.deadline import Deadline, get_deadline
+from app.core.deadline import Deadline, ResponseBudget, get_deadline
 from app.db.models import TurnStatus
 from app.schemas.chat import MessageRequest, TurnResponse
 from app.services.chat import AdmittedTurn, ChatService
@@ -67,6 +67,8 @@ Claim = Annotated[AdmittedTurn, Depends(admitted, scope="request")]
 
 def runtime(request: Request, claim: AdmittedTurn, deadline: Deadline) -> RuntimeContext:
     """Build ephemeral runtime dependencies without passing request/session objects."""
+    response_budget: ResponseBudget = request.state.response_budget
+    response_budget.allow_finalization()
     return RuntimeContext(
         regions=RegionService(request.app.state.mcp),
         metrics=request.app.state.metrics,

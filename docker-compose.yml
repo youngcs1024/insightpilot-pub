@@ -97,6 +97,7 @@ services:
       IP_OBSERVABILITY: ${IP_OBSERVABILITY:-{}}
       IP_DATA_AGENT: ${IP_DATA_AGENT:-{}}
       IP_ROUTER: ${IP_ROUTER:-{}}
+      IP_HTTP: ${IP_HTTP:-{}}
       IP_RETRIEVAL: ${IP_RETRIEVAL:-{}}
       IP_MODEL_RUNTIME: ${IP_MODEL_RUNTIME:-null}
       IP_OBSERVABILITY__LOG_FORMAT: json

@@ -1,5 +1,6 @@
 """Absolute monotonic request budgets shared by middleware and services."""
 
+import asyncio
 import time
 from dataclasses import dataclass
 
@@ -32,3 +33,15 @@ def get_deadline(request: Request) -> Deadline:
     """Inject the deadline established at the HTTP edge."""
     deadline: Deadline = request.state.deadline
     return deadline
+
+
+@dataclass(frozen=True)
+class ResponseBudget:
+    """Only admitted chat responses may extend transport time for bounded finalization."""
+
+    timer: asyncio.Timeout
+    finalization: Deadline
+
+    def allow_finalization(self) -> None:
+        """Keep the original analysis deadline while allowing its fixed cleanup window."""
+        self.timer.reschedule(self.finalization.at)

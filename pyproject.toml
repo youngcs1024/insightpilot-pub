@@ -115,6 +115,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = ["error"]
 markers = [
+    "e2e: end-to-end behavior through isolated production services",
     "integration: requires containers",
     "storage: requires the isolated Milvus stack (also integration)",
     "slow: long-running checks",

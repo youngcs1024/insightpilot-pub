@@ -11,7 +11,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.exception_handlers import handle_known
-from app.core.deadline import Deadline
+from app.core.deadline import Deadline, ResponseBudget
 from app.core.errors import DeadlineExceededError
 from app.schemas.chat import ErrorEvent
 
@@ -44,9 +44,10 @@ class RequestIdMiddleware(CorrelationIdMiddleware):
 class DeadlineMiddleware:
     """Enforce one request budget without buffering streaming responses."""
 
-    def __init__(self, app: ASGIApp, timeout_s: float) -> None:
+    def __init__(self, app: ASGIApp, timeout_s: float, finalization_grace_s: float = 0) -> None:
         self.app = app
         self.timeout_s = timeout_s
+        self.finalization_grace_s = finalization_grace_s
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -70,6 +71,9 @@ class DeadlineMiddleware:
             await send(message)
 
         timer = asyncio.timeout(deadline.remaining())
+        scope["state"]["response_budget"] = ResponseBudget(
+            timer, Deadline(deadline.at + self.finalization_grace_s)
+        )
         try:
             async with timer:
                 await self.app(scope, receive, track_send)

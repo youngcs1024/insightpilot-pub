@@ -224,7 +224,11 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     app.add_exception_handler(HTTPException, handle_http)
     app.add_exception_handler(Exception, handle_unknown)
     # Starlette prepends each layer: request ID must be added last, outside CORS.
-    app.add_middleware(DeadlineMiddleware, timeout_s=settings.http.request_timeout_s)
+    app.add_middleware(
+        DeadlineMiddleware,
+        timeout_s=settings.http.request_timeout_s,
+        finalization_grace_s=settings.http.finalization_grace_s,
+    )
     app.add_middleware(LoggingContextMiddleware)
     app.add_middleware(
         CORSMiddleware,

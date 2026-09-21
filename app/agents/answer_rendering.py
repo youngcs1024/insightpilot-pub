@@ -15,6 +15,7 @@ MAX_DISPLAY_EXPONENT = 1000
 _SOURCE_NAMES = {"data": "业务数据", "knowledge": "企业知识库"}
 _IMPACTS = {
     "data": "业务数据源不可用或缺少可用证据，未能核对实际订单数据。",
+    "deadline": "分析已超时，仅呈现已完成的证据，尚未完成全部分析。",
     "knowledge": "知识依据不足或不可用，未能核实适用政策和业务规则。",
     "rerank": "重排服务不可用，文档依据使用未重排结果，相关性判断存在限制。",
     "memory": "偏好记忆不可用，本次未应用已保存的偏好。",
@@ -112,8 +113,14 @@ def render_answer(answer: Answer, bundle: EvidenceBundle) -> str:
     """Keep all claims, citations and appendices or fail with a typed size error."""
     pieces = []
     if answer.degraded_components:
+        sources = "、".join(
+            name for present, name in (
+                (bundle.data is not None, "业务数据"),
+                (bundle.knowledge is not None, "企业知识库"),
+            ) if present
+        )
         pieces.append(
-            "> 本次为部分回答。"
+            "> ⚠️ 本次为部分回答。仅基于" + sources + "。"
             + " ".join(
                 _IMPACTS.get(name, f"组件 {name} 降级，其提供的信息可能不完整。")
                 for name in dict.fromkeys(answer.degraded_components)

@@ -130,6 +130,7 @@ class HTTPSettings(ConfigModel):
     """Request budgets and explicit browser origins for the API edge."""
 
     request_timeout_s: float = Field(default=90, ge=1, le=600)
+    finalization_grace_s: float = Field(default=5, ge=0, le=5, allow_inf_nan=False)
     shutdown_timeout_s: float = Field(default=10, ge=0.01, le=60)
     cors_origins: list[str] = Field(default_factory=list)
     cors_allow_credentials: bool = False

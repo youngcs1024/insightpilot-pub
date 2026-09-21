@@ -29,7 +29,7 @@ def frame(event: Literal["token", "heartbeat", "error", "done"], payload: BaseMo
 def error_event(error: InsightPilotError) -> ErrorEvent:
     """Never serialize internal diagnostics."""
     code = error.reason.value if isinstance(error, TurnFailedError) else error.code
-    return ErrorEvent(code=code, message=error.user_message)
+    return ErrorEvent(code=code, message=error.public_message)
 
 
 async def stream(

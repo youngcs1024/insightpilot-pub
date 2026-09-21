@@ -22,6 +22,7 @@ API_ENVIRONMENT_KEYS = frozenset(
         "IP_OBSERVABILITY__LOG_FORMAT",
         "IP_DATA_AGENT",
         "IP_ROUTER",
+        "IP_HTTP",
         "IP_RETRIEVAL",
         "IP_MODEL_RUNTIME",
     }

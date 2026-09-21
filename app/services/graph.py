@@ -50,6 +50,7 @@ from app.schemas import (
     synthesis,
 )
 from app.services import periods
+from app.services.deadline_finalization import finalize_deadline
 
 logger = structlog.get_logger(__name__)
 
@@ -207,12 +208,8 @@ class GraphService:
             "callbacks": callbacks or [],
         }
         try:
-            async with asyncio.timeout(ctx.deadline.remaining()), self._guard(ctx):
-                graph_input = await self._input(ctx, config, resume)
-                output = await self.graph.ainvoke(
-                    graph_input, config, context=ctx, durability="sync"
-                )
-                result = GraphOutput.model_validate(output)
+            async with asyncio.timeout(ctx.finalization_deadline.remaining()), self._guard(ctx):
+                result = await self._run(ctx, config, resume)
                 logger.info(
                     "graph_completed",
                     turn_id=str(ctx.identity.turn_id),
@@ -226,6 +223,48 @@ class GraphService:
             raise DeadlineExceededError() from exc
         except psycopg.Error as exc:
             raise CheckpointError() from exc
+
+    async def _run(
+        self, ctx: RuntimeContext, config: RunnableConfig, resume: bool
+    ) -> GraphOutput:
+        if self.graph is None:
+            raise CheckpointError()
+        timer = asyncio.timeout(ctx.deadline.remaining())
+        try:
+            async with timer:
+                graph_input = await self._input(ctx, config, resume)
+                output = await self.graph.ainvoke(
+                    graph_input, config, context=ctx, durability="sync"
+                )
+                result = GraphOutput.model_validate(output)
+        except TimeoutError:
+            if not timer.expired():
+                raise
+        else:
+            if ctx.deadline.remaining() > 0:
+                return result
+        # The invocation has unwound its tasks and pending checkpoint writes before
+        # this read. Latest-state reads include completed parent-node pending writes.
+        checkpoint = await self.graph.aget_state(config)
+        if not checkpoint.values:
+            raise DeadlineExceededError()
+        prior = self._owned_state(checkpoint.values, ctx)
+        return await finalize_deadline(prior, ctx)
+
+    @staticmethod
+    def _owned_state(values: object, ctx: RuntimeContext) -> AgentState:
+        try:
+            prior = AgentState.model_validate(values)
+        except ValidationError as exc:
+            raise ConflictError("unsupported checkpoint contract") from exc
+        if (
+            prior.graph_version != GRAPH_VERSION
+            or prior.user_id != ctx.identity.user_id
+            or prior.conversation_id != ctx.identity.conversation_id
+            or prior.turn_id != ctx.identity.turn_id
+        ):
+            raise ConflictError("checkpoint identity/version mismatch")
+        return prior
 
     async def _input(
         self, ctx: RuntimeContext, config: RunnableConfig, resume: bool

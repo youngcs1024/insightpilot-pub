@@ -197,12 +197,15 @@ class ChatService:
     async def _execute(self, ctx: RuntimeContext, observation: Observation) -> TurnResponse:
         started = monotonic()
         try:
-            async with asyncio.timeout(ctx.deadline.remaining()):
+            async with asyncio.timeout(ctx.finalization_deadline.remaining()) as timer:
                 callback = GraphTraceCallback()
                 try:
                     output = await self.graph.invoke(ctx, callbacks=[callback])
                 finally:
                     callback.close()
+                if output.answer is None or "deadline" not in output.answer.degraded_components:
+                    ctx.deadline.check("commit_answer")
+                    timer.reschedule(ctx.deadline.at)
                 if output.status == "failed" or (
                     output.answer is None and output.clarification is None
                 ):
@@ -223,7 +226,7 @@ class ChatService:
                         )
                     )
                     error_type = BothSourcesFailedError if both_sources else TurnFailedError
-                    raise error_type(reason)
+                    raise error_type(reason, output.failures)
                 latency_ms = int((monotonic() - started) * 1000)
                 if output.clarification is not None:
                     await self._clarify(ctx.identity, output, latency_ms)

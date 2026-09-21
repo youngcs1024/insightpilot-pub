@@ -159,6 +159,11 @@ class RuntimeContext:
     retrieval: RetrievalPort | None = None
     knowledge_generation: KnowledgeGenerationPort | None = None
 
+    @property
+    def finalization_deadline(self) -> Deadline:
+        """An absolute ceiling, never a renewed analysis or external-call budget."""
+        return Deadline(self.deadline.at + self.settings.http.finalization_grace_s)
+
     def __post_init__(self) -> None:
         """Reject a host-local or otherwise ambiguous reference instant."""
         if self.now.tzinfo is None or self.now.utcoffset() is None:

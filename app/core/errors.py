@@ -21,6 +21,11 @@ class InsightPilotError(Exception):
         self.detail = detail
         self.context = context
 
+    @property
+    def public_message(self) -> str:
+        """Return safe public text, independent of internal exception diagnostics."""
+        return self.user_message
+
 
 class ValidationError(InsightPilotError):
     """The requested operation contains invalid business input."""

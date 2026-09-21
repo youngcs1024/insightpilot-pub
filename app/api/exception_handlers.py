@@ -62,7 +62,7 @@ async def handle_known(request: Request, exc: Exception) -> JSONResponse:
         raise exc
     error_type = type(exc)
     logger.warning("request_failed", code=error_type.code, detail=exc.detail, context=exc.context)
-    message = error_type.user_message
+    message = exc.public_message
     if isinstance(exc, PasswordPolicyError):
         message = "Password requires: " + "; ".join(exc.failures) + "."
     response = _response(error_type.http_status, error_type.code, message)

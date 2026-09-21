@@ -48,6 +48,7 @@ TARGET = "c" * 40
         ("docs/new-area/policy.md", True, ["api", "mcp", "model-runtime", "model-tunnel"]),
         ("tests/unit/test_periods.py", True, []),
         ("tests/conftest.py", True, []),
+        ("tests/e2e/test_chaos.py", True, []),
         ("app/services/periods.py", True, ["api"]),
         ("app/agents/prompts/sql.md", True, ["api"]),
         ("app/services/llm/prompts/repair.md", True, ["api"]),
