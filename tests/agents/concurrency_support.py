@@ -88,4 +88,6 @@ def sleeping_children(
         return knowledge.model_dump()
 
     monkeypatch.setattr("app.agents.nodes.answer_data.DATA_GRAPH.ainvoke", data_child)
-    monkeypatch.setattr("app.agents.nodes.answer_knowledge.KNOWLEDGE_GRAPH.ainvoke", knowledge_child)
+    monkeypatch.setattr(
+        "app.agents.nodes.answer_knowledge.KNOWLEDGE_GRAPH.ainvoke", knowledge_child
+    )
