@@ -35,6 +35,7 @@ class LazyRoutingLlm:
     def __init__(self, settings: LLMSettings | None) -> None:
         self.settings = settings
         self.service: LlmService | None = None
+        self._start_lock = asyncio.Lock()
 
     async def generate_structured[T: BaseModel](
         self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
@@ -43,9 +44,11 @@ class LazyRoutingLlm:
         deadline.check("router_llm_start")
         if self.settings is None:
             raise LlmConfigurationError()
-        if self.service is None:
-            self.service = LlmService(self.settings)
-            await self.service.start()
+        async with self._start_lock:
+            if self.service is None:
+                self.service = LlmService(self.settings)
+                await self.service.start()
+            deadline.check("router_llm_initialized")
         deadline.check("router_llm_started")
         return await self.service.generate_structured(role, messages, schema, deadline=deadline)
 

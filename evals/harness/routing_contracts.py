@@ -3,7 +3,7 @@
 import hashlib
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
@@ -19,6 +19,7 @@ SELECTION = CASES.with_name("selected.yaml")
 ROUTES = tuple(Route)
 MIN_REPEATS = 3
 MAX_BOTH_MISROUTE = 0.05
+CONCURRENCY: Final = 4
 
 
 class Split(StrEnum):
@@ -93,6 +94,7 @@ class Snapshot(Contract):
     min_confidence: float = Field(ge=0, le=1)
     timeout_s: float = Field(gt=0)
     production_strategy: RoutingStrategy
+    concurrency: Literal[4] = CONCURRENCY
 
     def fingerprint(self) -> str:
         """Bind evaluated inputs while allowing a subsequent selection-only commit."""

@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from app.agents.contracts import Route, RouterInput
 from app.agents.nodes.router import classify_question, route_question
+from app.agents.runtime import RoutingRuntime
 from app.core.config_models import LLMSettings, RouterSettings
 from app.core.errors import ConflictError, LlmUnavailableError
 from app.core.routing import RoutingStrategy
@@ -34,6 +35,7 @@ from evals.harness.routing_contracts import (
 )
 from evals.harness.routing_dataset import load_cases
 from evals.harness.routing_runtime import committed_selection, observe
+from scripts import dev_route
 from scripts.dev_route import RouteProcessSettings
 from tests.eval.routing_support import measurements, snapshot
 from tests.llm_support import URL, response, service
@@ -261,12 +263,25 @@ async def test_collection_owns_complete_grid_and_fresh_deadlines(
     snapshots = iter([config, final])
     monkeypatch.setattr(RouteProcessSettings, "load", lambda: RouteProcessSettings(_env_file=None))
     monkeypatch.setattr(routing_runtime, "snapshot", lambda settings: next(snapshots))
-    observed = AsyncMock(return_value=Observation(decision=decision(), latency_ms=1, tokens=20))
+    active, peak = 0, 0
+
+    async def measured(
+        inputs: RouterInput, ctx: RoutingRuntime, arm: RoutingStrategy
+    ) -> Observation:
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return Observation(decision=decision(), latency_ms=1, tokens=20)
+
+    observed = AsyncMock(side_effect=measured)
     monkeypatch.setattr(routing_runtime, "observe", observed)
     raw = await routing_runtime.collect(Options(report=tmp_path))
     assert len(raw.attempts) == 360
     assert len({(a.case_id, a.arm, a.repeat) for a in raw.attempts}) == 360
     assert raw.complete is not drift
+    assert peak == 4
     contexts = [call.args[1] for call in observed.call_args_list]
     assert len({id(ctx.deadline) for ctx in contexts}) == 360
     assert all(
@@ -289,3 +304,41 @@ async def test_interrupted_run_retains_partial_not_latest_evidence(
     partial = next(tmp_path.glob("*.partial.json"))
     assert not Measurements.model_validate_json(partial.read_text()).complete
     assert not (tmp_path / "routing_latest.md").exists()
+
+
+async def test_concurrent_lazy_initialization_waits_until_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered, release = asyncio.Event(), asyncio.Event()
+    llm = AsyncMock()
+
+    async def start() -> None:
+        entered.set()
+        await release.wait()
+
+    llm.start.side_effect = start
+    llm.generate_structured.return_value = decision()
+    factory = AsyncMock()
+    monkeypatch.setattr(dev_route, "LlmService", lambda settings: llm)
+    settings = LLMSettings(base_url="https://example.invalid", model="test", api_key="test")
+    lazy = dev_route.LazyRoutingLlm(settings)
+
+    async def invoke() -> None:
+        await classify_question(
+            RouterInput(question=BOTH_QUESTION),
+            replace(runtime(), llm=lazy),
+            RoutingStrategy.LLM_ONLY,
+        )
+        await factory()
+
+    async with asyncio.TaskGroup() as group:
+        group.create_task(invoke())
+        await entered.wait()
+        group.create_task(invoke())
+        await asyncio.sleep(0)
+        llm.generate_structured.assert_not_awaited()
+        release.set()
+    llm.start.assert_awaited_once()
+    assert llm.generate_structured.await_count == 2
+    assert factory.await_count == 2
+    await lazy.aclose()

@@ -21,6 +21,7 @@ from app.services.llm.usage import collect_usage
 from evals.harness.contracts import EvaluationError
 from evals.harness.routing_contracts import (
     CASES,
+    CONCURRENCY,
     ROOT,
     SELECTION,
     Attempt,
@@ -135,34 +136,39 @@ async def _attempts(
     directory: Path,
 ) -> None:
     """Rotate arm order across repeats; never share model outputs between arms."""
-    arms = list(RoutingStrategy)
-    for repeat in range(1, raw.repeats + 1):
+    async def run_case(case: Case, repeat: int) -> None:
+        arms = list(RoutingStrategy)
         rotated = arms[(repeat - 1) % len(arms) :] + arms[: (repeat - 1) % len(arms)]
-        for case in cases:
-            for arm in rotated:
-                ctx = RoutingRuntime(
-                    llm=llm,
-                    settings=settings.router,
-                    deadline=Deadline(time.monotonic() + settings.timeout_s),
-                )
-                observation = await observe(
-                    RouterInput(
-                        question=case.question,
-                        routing_context=case.routing_context.model_copy(deep=True),
-                    ),
-                    ctx,
-                    arm,
-                )
-                raw.attempts.append(
-                    Attempt(case_id=case.id, arm=arm, repeat=repeat, observation=observation)
-                )
-                logger.info(
-                    "routing_evaluation_attempt",
-                    case_id=case.id,
-                    arm=arm.value,
-                    repeat=repeat,
-                    failure_code=observation.failure_code,
-                )
+        for arm in rotated:
+            ctx = RoutingRuntime(
+                llm=llm,
+                settings=settings.router,
+                deadline=Deadline(time.monotonic() + settings.timeout_s),
+            )
+            observation = await observe(
+                RouterInput(
+                    question=case.question,
+                    routing_context=case.routing_context.model_copy(deep=True),
+                ),
+                ctx,
+                arm,
+            )
+            raw.attempts.append(
+                Attempt(case_id=case.id, arm=arm, repeat=repeat, observation=observation)
+            )
+            logger.info(
+                "routing_evaluation_attempt",
+                case_id=case.id,
+                arm=arm.value,
+                repeat=repeat,
+                failure_code=observation.failure_code,
+            )
+
+    for repeat in range(1, raw.repeats + 1):
+        for offset in range(0, len(cases), CONCURRENCY):
+            async with asyncio.TaskGroup() as group:
+                for case in cases[offset : offset + CONCURRENCY]:
+                    group.create_task(run_case(case, repeat))
             await asyncio.to_thread(save_partial, raw, directory)
 
 
