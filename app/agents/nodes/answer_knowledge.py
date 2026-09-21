@@ -17,9 +17,7 @@ from app.agents.state import AgentState
 KNOWLEDGE_GRAPH = build()
 
 
-async def _invoke(
-    state: AgentState, ctx: RuntimeContext, config: RunnableConfig
-) -> Command[str]:
+async def _invoke(state: AgentState, ctx: RuntimeContext, config: RunnableConfig) -> Command[str]:
     ctx.deadline.check("answer_knowledge")
     if state.knowledge_evidence is not None:
         return Command(update={"knowledge_evidence": state.knowledge_evidence})
@@ -46,13 +44,14 @@ async def answer_knowledge(
     state: AgentState, runtime: Runtime[RuntimeContext], config: RunnableConfig
 ) -> Command[str]:
     """Return owned outputs and new deltas; parent dispatch owns the next step."""
+    budget = asyncio.timeout(runtime.context.deadline.remaining())
     try:
-        async with asyncio.timeout(runtime.context.deadline.remaining()):
+        async with budget:
             output = await _invoke(state, runtime.context, config)
             runtime.context.deadline.check("answer_knowledge_complete")
         return output
     except Exception as exc:
-        return specialist_failed("answer_knowledge", exc)
+        return specialist_failed("answer_knowledge", exc, deadline_expired=budget.expired())
 
 
 async def answer_knowledge_node(

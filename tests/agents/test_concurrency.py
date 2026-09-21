@@ -29,7 +29,7 @@ from app.core.observability import GraphTraceCallback, TraceMetadata
 from app.schemas.model_runtime import EmbedMode
 from app.services.graph import serializer
 from app.services.knowledge_generation import KnowledgeGenerationService
-from tests.agents.concurrency_support import ParallelProbe
+from tests.agents.concurrency_support import ParallelProbe, sleeping_children
 from tests.agents.knowledge_support import FakeRetrieval
 from tests.agents.parent_support import parent_context
 from tests.agents.projection_support import routed_state
@@ -41,10 +41,12 @@ from tests.observability_support import tracing
 
 
 async def test_both_specialists_overlap_in_time(
+    monkeypatch: pytest.MonkeyPatch,
     record_testsuite_property: Callable[..., None],
 ) -> None:
     ctx = parent_context(Route.BOTH)
     probe = ParallelProbe(ctx, delay=1)
+    sleeping_children(ctx, probe, monkeypatch)
     started = time.monotonic()
     async with asyncio.timeout(5):
         output = await invoke(ctx)
@@ -107,6 +109,17 @@ async def test_both_unexpected_failures_are_merged_without_answer() -> None:
     assert "secret" not in output.model_dump_json()
 
 
+async def test_unrelated_timeout_does_not_claim_request_deadline_expired() -> None:
+    ctx = parent_context(Route.BOTH, data_error=TimeoutError("private-service-timeout"))
+    ParallelProbe(ctx)
+    async with asyncio.timeout(5):
+        output = await invoke(ctx)
+    assert output.status == "degraded"
+    assert ctx.deadline.remaining() > 0
+    assert output.failures[0].kind is FailureKind.NODE_OPERATION_FAILED
+    assert "private-service-timeout" not in output.model_dump_json()
+
+
 async def test_shared_deadline_respected_by_both() -> None:
     ctx = parent_context(Route.BOTH)
     probe = ParallelProbe(ctx, delay=0.02)
@@ -165,6 +178,21 @@ async def test_shared_client_saturation_serializes_without_leaking_admission(
 async def test_both_hit_same_deadline_and_stop_without_persisting() -> None:
     ctx = replace(parent_context(Route.BOTH), deadline=Deadline(time.monotonic() + 0.5))
     probe = ParallelProbe(ctx, delay=10)
+
+    async def blocked_data(*args: object, **kwargs: object) -> None:
+        try:
+            await probe.wait("data", ctx.deadline)
+        finally:
+            probe.finish("data")
+
+    async def blocked_knowledge(*args: object, **kwargs: object) -> None:
+        try:
+            await probe.wait("knowledge", ctx.deadline)
+        finally:
+            probe.finish("knowledge")
+
+    ctx.evidence.find = blocked_data
+    ctx.evidence.read_bundle = blocked_knowledge
     async with asyncio.timeout(3):
         output = await invoke(ctx)
     assert output.status == "failed"

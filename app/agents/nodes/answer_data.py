@@ -54,8 +54,9 @@ async def answer_data_routed(
     state: AgentState, runtime: Runtime[RuntimeContext], config: RunnableConfig
 ) -> Command[str]:
     """Write only data-owned fields and append-only deltas, without parent routing."""
+    budget = asyncio.timeout(runtime.context.deadline.remaining())
     try:
-        async with asyncio.timeout(runtime.context.deadline.remaining()):
+        async with budget:
             output = await _invoke(state, runtime.context, config, routed=True)
             runtime.context.deadline.check("answer_data_complete")
         return Command(
@@ -67,7 +68,7 @@ async def answer_data_routed(
             }
         )
     except Exception as exc:
-        return specialist_failed("answer_data_routed", exc)
+        return specialist_failed("answer_data_routed", exc, deadline_expired=budget.expired())
 
 
 async def answer_data_node(state: AgentState, *, runtime: Runtime[RuntimeContext]) -> Command[str]:

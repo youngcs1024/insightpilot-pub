@@ -4,10 +4,17 @@ import asyncio
 import time
 from typing import Literal
 
+import pytest
+
+from app.agents.data.state import DataAgentOutput
+from app.agents.knowledge.nodes.package_evidence import package_evidence
+from app.agents.knowledge.state import KnowledgeAgentOutput
 from app.agents.runtime import RuntimeContext
+from app.agents.summarize import package_result
 from app.core.deadline import Deadline
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
+from tests.agents.support import result
 
 
 class ParallelProbe:
@@ -55,3 +62,30 @@ class ParallelProbe:
             return await self.retrieve(query, deadline=deadline)
         finally:
             self.finish("knowledge")
+
+
+def sleeping_children(
+    ctx: RuntimeContext, probe: ParallelProbe, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The roadmap's one-second child stubs isolate parent scheduling overhead."""
+    data = DataAgentOutput(evidence=package_result(result(), []))
+    knowledge = KnowledgeAgentOutput(evidence=package_evidence(ctx.retrieval.responses[0], ctx))
+    # Stubbed data nodes do not consume MetricIntent or SqlGeneratorOutput.
+    responses = ctx.llm._responses
+    decision = responses.popleft()
+    responses.popleft()
+    responses.popleft()
+    responses.appendleft(decision)
+
+    async def data_child(*args: object, **kwargs: object) -> dict[str, object]:
+        await probe.wait("data", ctx.deadline)
+        probe.finish("data")
+        return data.model_dump()
+
+    async def knowledge_child(*args: object, **kwargs: object) -> dict[str, object]:
+        await probe.wait("knowledge", ctx.deadline)
+        probe.finish("knowledge")
+        return knowledge.model_dump()
+
+    monkeypatch.setattr("app.agents.nodes.answer_data.DATA_GRAPH.ainvoke", data_child)
+    monkeypatch.setattr("app.agents.nodes.answer_knowledge.KNOWLEDGE_GRAPH.ainvoke", knowledge_child)
