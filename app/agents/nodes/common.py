@@ -61,7 +61,17 @@ def failed(node: str, state: AgentState, exc: InsightPilotError) -> Command[str]
     return Command(update={"failures": [failure], "status": "failed"}, goto=END)
 
 
-def specialist_failed(node: str, exc: InsightPilotError) -> Command[str]:
+def specialist_failed(node: str, exc: Exception) -> Command[str]:
     """Record one failure without terminating or overwriting a concurrent sibling."""
-    logger.exception("specialist_node_failed", node=node, code=exc.code, exc_info=False)
-    return Command(update={"failures": [node_failure(node, exc)]})
+    if isinstance(exc, TimeoutError):
+        error = DeadlineExceededError()
+    else:
+        error = exc if isinstance(exc, InsightPilotError) else InsightPilotError()
+    logger.exception(
+        "specialist_node_failed",
+        node=node,
+        code=error.code,
+        error_type=type(exc).__name__,
+        exc_info=False,
+    )
+    return Command(update={"failures": [node_failure(node, error)]})

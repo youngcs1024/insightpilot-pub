@@ -1,5 +1,7 @@
 """Explicit parent/data projection with immutable evidence reuse."""
 
+import asyncio
+
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_config
 from langgraph.graph import END
@@ -53,7 +55,9 @@ async def answer_data_routed(
 ) -> Command[str]:
     """Write only data-owned fields and append-only deltas, without parent routing."""
     try:
-        output = await _invoke(state, runtime.context, config, routed=True)
+        async with asyncio.timeout(runtime.context.deadline.remaining()):
+            output = await _invoke(state, runtime.context, config, routed=True)
+            runtime.context.deadline.check("answer_data_complete")
         return Command(
             update={
                 "data_evidence": output.evidence,
@@ -62,7 +66,7 @@ async def answer_data_routed(
                 "failures": [output.failure] if output.failure else [],
             }
         )
-    except InsightPilotError as exc:
+    except Exception as exc:
         return specialist_failed("answer_data_routed", exc)
 
 

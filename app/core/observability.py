@@ -240,13 +240,14 @@ class Observability:
         *,
         generation: bool = False,
         trace_id: str | None = None,
+        parent: Observation | None = None,
     ) -> Observation:
         """Start from the explicit request-local parent; never export input text."""
         result = Observation(self, metadata=metadata)
         if self.client is None:
             return result
         try:
-            parent = _parent()
+            parent = parent or _parent()
             if trace_id is not None:
                 result.span = self.client.start_observation(
                     name=name,
@@ -335,6 +336,7 @@ class GraphTraceCallback(BaseCallbackHandler):
 
     def __init__(self) -> None:
         self._runs: dict[UUID, Observation] = {}
+        self._parents: dict[UUID, Observation] = {}
         self._root = _current.get()
 
     def on_chain_start(
@@ -343,15 +345,21 @@ class GraphTraceCallback(BaseCallbackHandler):
         inputs: object,
         *,
         run_id: UUID,
+        parent_run_id: UUID | None = None,
         **kwargs: object,
     ) -> None:
         """LangChain's untyped callback boundary is projected to fixed node names."""
         name = kwargs.get("name")
-        parent = self._root
-        if not isinstance(name, str) or name not in _NODES or parent is None:
+        parent = self._parents.get(parent_run_id, self._root) if parent_run_id else self._root
+        if parent is None:
             return
-        observation = parent.owner.begin(name, TraceMetadata())
-        parent.nodes[name] = observation
+        self._parents[run_id] = parent
+        if not isinstance(name, str) or name not in _NODES:
+            return
+        observation = parent.owner.begin(name, TraceMetadata(), parent=parent)
+        self._parents[run_id] = observation
+        if self._root is not None:
+            self._root.nodes[name] = observation
         self._runs[run_id] = observation
 
     def on_chain_end(self, outputs: object, *, run_id: UUID, **kwargs: object) -> None:
@@ -386,6 +394,7 @@ class GraphTraceCallback(BaseCallbackHandler):
         """Close any unfinished node spans after graph cancellation or callback failure."""
         for run_id in tuple(self._runs):
             self._finish(run_id, failed=True)
+        self._parents.clear()
         if self._root is not None:
             self._root.nodes.clear()
 
@@ -396,6 +405,7 @@ class GraphTraceCallback(BaseCallbackHandler):
     def _finish(
         self, run_id: UUID, *, failed: bool = False, abstained: bool = False, degraded: bool = False
     ) -> None:
+        self._parents.pop(run_id, None)
         entry = self._runs.pop(run_id, None)
         if entry is None:
             return
