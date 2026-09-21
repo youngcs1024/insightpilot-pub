@@ -47,6 +47,8 @@ RESOURCE_FILES = frozenset(
         "data/seed/metrics.yaml",
         "data/seed/schema_metadata.yaml",
         "evals/datasets/nl2sql/cases.yaml",
+        "evals/datasets/routing/cases.yaml",
+        "evals/datasets/routing/selected.yaml",
         "evals/datasets/retrieval/queries.yaml",
         "evals/datasets/retrieval/judgments.yaml",
         "evals/datasets/retrieval/development.yaml",

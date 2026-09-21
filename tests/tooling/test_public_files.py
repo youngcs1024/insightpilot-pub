@@ -32,6 +32,8 @@ from scripts.public_files import PublicIssue, allowed_path, content_issues
         "evals/datasets/retrieval/development.yaml",
         "evals/datasets/retrieval/frozen.yaml",
         "evals/datasets/retrieval/selected.yaml",
+        "evals/datasets/routing/cases.yaml",
+        "evals/datasets/routing/selected.yaml",
     ],
 )
 def test_required_source_resources_are_allowed(path: str) -> None:
