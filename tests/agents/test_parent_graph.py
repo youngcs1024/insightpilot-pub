@@ -22,9 +22,11 @@ from app.agents.contracts import (
 )
 from app.agents.graph import topology
 from app.agents.state import AgentState, GraphInput
+from app.core.config_models import RouterSettings
 from app.core.deadline import Deadline
 from app.core.errors import ConflictError, McpUnavailableError, RetrievalUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
+from app.core.routing import RoutingStrategy
 from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
@@ -36,6 +38,29 @@ from tests.fakes.chat_model import FakeChatModel
 from tests.knowledge_query_support import rewrite, topic
 from tests.knowledge_support import draft
 from tests.observability_support import tracing
+
+
+@pytest.mark.parametrize("route", list(Route))
+async def test_selected_production_default_uses_llm_and_preserves_source_isolation(
+    route: Route,
+) -> None:
+    ctx = parent_context(route)
+    ctx.settings.router = RouterSettings()
+    assert ctx.settings.router.strategy is RoutingStrategy.LLM_ONLY
+    questions = {
+        Route.DATA_ONLY: "2026年8月GMV",
+        Route.KNOWLEDGE_ONLY: "退货政策有哪些？",
+        Route.BOTH: "请分析2026年8月的经营情况",
+        Route.CLARIFY: "那个",
+    }
+    ctx.conversations.prepare.return_value = PreparedContext(
+        question=questions[route], summary="", messages=[], prior_sql=[]
+    )
+    result = await invoke(ctx)
+    assert ctx.llm.calls[0].schema_name == "RouteDecision"
+    assert result.status == ("abstained" if route is Route.CLARIFY else "succeeded")
+    assert len(ctx.mcp.calls) == (1 if route in {Route.DATA_ONLY, Route.BOTH} else 0)
+    assert len(ctx.retrieval.calls) == (1 if route in {Route.KNOWLEDGE_ONLY, Route.BOTH} else 0)
 
 
 async def test_data_only_does_not_call_retrieval() -> None:

@@ -243,7 +243,7 @@ def test_router_threshold_reaches_only_api(deployment_settings: DeploymentSettin
     config = render(deployment_settings)
     assert json.loads(config.services["api"].environment["IP_ROUTER"]) == {
         "min_confidence": 0.75,
-        "strategy": "hybrid",
+        "strategy": "llm_only",
     }
     assert all(
         "IP_ROUTER" not in service.environment

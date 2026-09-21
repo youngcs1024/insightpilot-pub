@@ -18,6 +18,7 @@ from evals.harness.routing_contracts import (
 from evals.harness.routing_dataset import load_cases
 from evals.harness.routing_report import exit_code, write_report
 from evals.harness.routing_runtime import collect, digest, snapshot
+from scripts.ci_changes import git_bytes
 from scripts.dev_route import RouteProcessSettings
 
 
@@ -42,9 +43,11 @@ def select(path: Path) -> int:
         or not report.evidence_valid
         or report.identical_arm_accuracy
         or raw.repeats < MIN_REPEATS
-        or raw.config != current
+        or current.source_dirty
+        or raw.config.fingerprint() != current.fingerprint()
     ):
         raise EvaluationError("Selection requires complete current clean development evidence")
+    git_bytes(["merge-base", "--is-ancestor", raw.config.git_sha, current.git_sha])
     arm = choose(report)
     if not passes(report.arms[arm].overall):
         raise EvaluationError("Selected strategy does not meet development quality gates")

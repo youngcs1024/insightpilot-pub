@@ -40,7 +40,8 @@ async def test_simple_demo_constructs_no_llm_client(monkeypatch: pytest.MonkeyPa
     factory = Mock(side_effect=AssertionError("must remain lazy"))
     monkeypatch.setattr(dev_route, "LlmService", factory)
     result = await dev_route.run(
-        RouterInput(question="8月的GMV是多少?"), dev_route.RouteProcessSettings(_env_file=None)
+        RouterInput(question="8月的GMV是多少?"),
+        dev_route.RouteProcessSettings(_env_file=None, router={"strategy": "hybrid"}),
     )
     assert result.route is Route.DATA_ONLY
     assert result.decided_by == "prefilter"
@@ -90,7 +91,10 @@ async def test_missing_model_config_fails_only_when_model_needed() -> None:
         )
 
 
-def test_cli_prints_prefilter_result(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_prints_prefilter_result(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("IP_ROUTER__STRATEGY", "hybrid")
     assert dev_route.main(["8月的GMV是多少?"]) == 0
     printed = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert printed["route"] == "data_only"

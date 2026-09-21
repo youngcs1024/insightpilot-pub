@@ -128,6 +128,7 @@ def context(
         security={"jwt_secret": "test-secret-at-least-32-characters-long"},
         mcp={"auth_token": "test-mcp"},
         llm={"base_url": "https://example.invalid/v1", "model": "test", "api_key": "test-key"},
+        router={"strategy": "hybrid"},  # Legacy scripts explicitly exercise this comparison arm.
     )
     mcp = FakeMcpClient([result()] if mcp_results is None else mcp_results)
     return RuntimeContext(

@@ -80,9 +80,10 @@ async def test_llm_only_preserves_confidence_gate() -> None:
 async def test_production_strategy_selects_same_llm_path() -> None:
     ctx = replace(
         runtime([decision(Route.DATA_ONLY)]),
-        settings=RouterSettings(strategy=RoutingStrategy.LLM_ONLY),
+        settings=RouterSettings(),
     )
     result = await route_question(RouterInput(question="2026年6月GMV"), ctx)
+    assert ctx.settings.strategy is RoutingStrategy.LLM_ONLY
     assert result.route is Route.DATA_ONLY
     assert len(ctx.llm.calls) == 1
     with pytest.raises(ValidationError):
@@ -246,6 +247,7 @@ def test_selection_recomputes_metrics_and_requires_current_development(
     monkeypatch.setattr(routing_cli, "SELECTION", target)
     monkeypatch.setattr(RouteProcessSettings, "load", lambda: RouteProcessSettings(_env_file=None))
     monkeypatch.setattr(routing_cli, "snapshot", lambda settings: raw.config)
+    monkeypatch.setattr(routing_cli, "git_bytes", lambda args: b"")
     assert routing_cli.select(path) == 0
     assert yaml.safe_load(target.read_text())["arm"] == "hybrid"
     raw.split = Split.FROZEN
@@ -342,3 +344,22 @@ async def test_concurrent_lazy_initialization_waits_until_ready(
     assert llm.generate_structured.await_count == 2
     assert factory.await_count == 2
     await lazy.aclose()
+
+
+def test_selection_accepts_only_proven_unchanged_inputs_after_test_only_commit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    raw = measurements()
+    path = tmp_path / "report.json"
+    path.write_text(evaluate(raw, load_cases()).model_dump_json())
+    current = raw.config.model_copy(update={"git_sha": "b" * 40})
+    monkeypatch.setattr(routing_cli, "SELECTION", tmp_path / "selected.yaml")
+    monkeypatch.setattr(RouteProcessSettings, "load", lambda: RouteProcessSettings(_env_file=None))
+    monkeypatch.setattr(routing_cli, "snapshot", lambda settings: current)
+    ancestry = []
+    monkeypatch.setattr(routing_cli, "git_bytes", lambda args: ancestry.append(args) or b"")
+    assert routing_cli.select(path) == 0
+    assert ancestry == [["merge-base", "--is-ancestor", raw.config.git_sha, current.git_sha]]
+    current.source_hash = "different-evaluator"
+    with pytest.raises(EvaluationError):
+        routing_cli.select(path)

@@ -25,6 +25,7 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
         security={"jwt_secret": "test-signing-key-only-32-characters-long", "bcrypt_rounds": 4},
         mcp={"auth_token": "health-test-mcp-token"},
         observability={"log_format": "json"},
+        router={"strategy": "hybrid"},  # Preserve recorded pre-Step-4.11 model call sequences.
     )
 
 

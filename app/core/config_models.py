@@ -251,7 +251,7 @@ class RouterSettings(ConfigModel):
     """Classification acceptance threshold; equality is accepted."""
 
     min_confidence: float = Field(default=0.6, ge=0, le=1, allow_inf_nan=False)
-    strategy: Literal[RoutingStrategy.HYBRID, RoutingStrategy.LLM_ONLY] = RoutingStrategy.HYBRID
+    strategy: Literal[RoutingStrategy.HYBRID, RoutingStrategy.LLM_ONLY] = RoutingStrategy.LLM_ONLY
 
 
 class Settings(ProcessSettings):

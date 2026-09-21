@@ -8,6 +8,7 @@ from app.agents.contracts import Route, RouteDecision
 from app.agents.runtime import RoutingRuntime
 from app.core.config_models import RouterSettings
 from app.core.deadline import Deadline
+from app.core.routing import RoutingStrategy
 from tests.fakes.chat_model import FakeChatModel
 
 BOTH_QUESTION = "为什么华东2026年8月退款率比7月高?"
@@ -30,6 +31,6 @@ def decision(route: Route = Route.BOTH, confidence: float = 0.9) -> RouteDecisio
 def runtime(responses: list[BaseModel | str | Exception] | None = None) -> RoutingRuntime:
     return RoutingRuntime(
         llm=FakeChatModel(responses or []),
-        settings=RouterSettings(),
+        settings=RouterSettings(strategy=RoutingStrategy.HYBRID),
         deadline=Deadline(monotonic() + 30),
     )

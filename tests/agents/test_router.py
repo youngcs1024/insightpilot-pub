@@ -23,6 +23,7 @@ from app.core.errors import (
     LlmUnavailableError,
 )
 from app.core.llm_config import ModelRole
+from app.core.routing import RoutingStrategy
 from tests.agents.support import context
 from tests.router_support import BOTH_QUESTION, decision, runtime
 
@@ -139,14 +140,16 @@ async def test_confidence_equal_to_threshold_is_accepted(
 ) -> None:
     ctx = replace(
         runtime([decision(confidence=confidence)]),
-        settings=RouterSettings(min_confidence=threshold),
+        settings=RouterSettings(min_confidence=threshold, strategy=RoutingStrategy.HYBRID),
     )
     result = await route_question(RouterInput(question=BOTH_QUESTION), ctx)
     assert result.route is Route.BOTH
 
 
 async def test_gate_also_applies_to_prefilter() -> None:
-    ctx = replace(runtime(), settings=RouterSettings(min_confidence=1))
+    ctx = replace(
+        runtime(), settings=RouterSettings(min_confidence=1, strategy=RoutingStrategy.HYBRID)
+    )
     result = await route_question(RouterInput(question="8月GMV"), ctx)
     assert result.route is Route.CLARIFY
     assert result.decided_by == "prefilter"
