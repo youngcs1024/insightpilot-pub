@@ -15,6 +15,7 @@ from app.schemas.memory import FormatPreferenceContent, TerminologyContent
 from app.schemas.metric_resolution import BindingFieldSource, RegionScope
 from app.schemas.metrics import Grain, MetricExample
 from app.schemas.sanity import SanityFlag
+from app.schemas.synthesis import SynthesisAbstention, SynthesisOutput
 
 __all__ = [
     "MAX_ANSWER_CHARS",
@@ -187,10 +188,29 @@ class AnswerDraft(Contract):
     confidence: float = Field(ge=0, le=1)
 
 
+class SynthesisInput(Contract):
+    """No history or runtime context crosses the cross-evidence reasoning boundary."""
+
+    schema_version: Literal[1] = 1
+    question: str = Field(min_length=1, max_length=32_000)
+    data: DataEvidence | None
+    knowledge: KnowledgeEvidence | None
+    assumptions: list[str] = Field(max_length=100)
+
+
+class SynthesisResult(SynthesisOutput):
+    """Only program-validated content plus committed provenance becomes durable."""
+
+    evidence_refs: EvidenceRefs
+    missing_components: list[Literal["data", "knowledge"]] = Field(default_factory=list)
+    abstention: SynthesisAbstention | None = None
+    attempts: int = Field(ge=0, le=2)
+
+
 class Answer(AnswerDraft):
     """Trusted evidence fields are assembled by the formatter."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     assumptions: list[str]
     sql: str
     evidence_refs: EvidenceRefs
@@ -198,6 +218,7 @@ class Answer(AnswerDraft):
     knowledge_passages: list[KnowledgePassage] = Field(default_factory=list)
     degraded_components: list[str] = Field(default_factory=list)
     abstained: bool = False
+    synthesis: SynthesisResult | None = None
 
 
 class TurnIdentity(Contract):

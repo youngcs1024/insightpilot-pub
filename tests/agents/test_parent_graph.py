@@ -74,8 +74,7 @@ async def test_both_calls_both() -> None:
         "RouteDecision",
         "MetricIntent",
         "SqlGeneratorOutput",
-        "AnswerDraft",
-        "KnowledgeDraft",
+        "SynthesisOutput",
     ]
 
 
@@ -154,7 +153,7 @@ async def test_persistence_runs_once_after_both_and_synthesis_waits_for_commit()
         await commit_started.wait()
         assert not ctx.evidence.committed
         assert all(
-            call.schema_name not in {"AnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls
+            call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"} for call in ctx.llm.calls
         )
         release_commit.set()
     assert task.result().status == "succeeded"
@@ -209,7 +208,7 @@ async def test_commit_failure_prevents_both_generations() -> None:
     result = await invoke(ctx)
     assert result.status == "failed"
     assert result.answer is None
-    assert all(call.schema_name not in {"AnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
+    assert all(call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"} for call in ctx.llm.calls)
 
 
 async def test_production_parallel_writes_and_fresh_turn_isolation() -> None:

@@ -149,6 +149,79 @@ async def test_both_failures_name_sources_without_emitting_an_answer(
     stored = (await chat.stored())[-1]
     assert stored["status"] == "failed"
     assert stored["answer"] is None
-    assert all(call.schema_name not in {"AnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
+    assert all(call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"} for call in ctx.llm.calls)
     if streaming:
         assert not any(name == "token" for name, _ in events(response))
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_synthesis_claims_are_committed_before_delivery(chat: Harness, streaming: bool) -> None:
+    ctx = parent_context(Route.BOTH, settings=chat.app.state.settings)
+    chat.app.state.llm = ctx.llm
+    chat.app.state.retrieval = ctx.retrieval
+    response = await chat.client.post(
+        chat.url + ("/stream" if streaming else ""),
+        json={"content": "请分析2026年8月的经营情况"},
+    )
+    assert response.status_code == OK
+    body = events(response)[-1][1] if streaming else response.json()
+    answer = body["answer"]
+    assert answer["schema_version"] == 2  # noqa: PLR2004 -- released Answer v2.
+    assert answer["synthesis"]["evidence_refs"] == body["evidence_refs"]
+    assert {claim["kind"] for claim in answer["synthesis"]["claims"]} == {"fact_data", "fact_document"}
+    assert answer == (await chat.stored())[-1]["answer"]
+    assert [call.schema_name for call in ctx.llm.calls][-1] == "SynthesisOutput"
+    assert not any(call.schema_name in {"AnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
+    if streaming:
+        frames = events(response)
+        assert "".join(str(payload["delta"]) for name, payload in frames if name == "token") == answer["markdown"]
+
+
+@pytest.mark.parametrize("field", ["markdown", "synthesis"])
+async def test_chat_commit_rejects_tampered_synthesis(
+    chat: Harness, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    from app.agents.runtime import RuntimeContext
+    from app.agents.state import GraphOutput
+
+    ctx = parent_context(Route.BOTH, settings=chat.app.state.settings)
+    chat.app.state.llm = ctx.llm
+    chat.app.state.retrieval = ctx.retrieval
+    original = chat.graph.invoke
+
+    async def tampered(runtime: RuntimeContext, **kwargs: object) -> GraphOutput:
+        output = await original(runtime, **kwargs)
+        output.answer = output.answer.model_copy(update={field: "未经核验的断言" if field == "markdown" else None})
+        return output
+
+    monkeypatch.setattr(chat.graph, "invoke", tampered)
+    response = await chat.client.post(chat.url, json={"content": "请分析2026年8月的经营情况"})
+    assert response.status_code == 409  # noqa: PLR2004 -- typed internal consistency conflict.
+    stored = (await chat.stored())[-1]
+    assert stored["status"] == "failed"
+    assert stored["answer"] is None
+    assert "未经核验" not in response.text
+
+
+async def test_legacy_answer_json_replays_without_a_model_call(chat: Harness) -> None:
+    from uuid import UUID
+
+    from sqlalchemy import update
+
+    from app.db.models import Turn
+
+    response = await chat.client.post(chat.url, json={"content": "count"}, headers={"Idempotency-Key": "legacy"})
+    assert response.status_code == OK
+    body = response.json()
+    legacy = dict(body["answer"])
+    legacy["schema_version"] = 1
+    legacy.pop("synthesis")
+    async with chat.database.session() as session, session.begin():
+        await session.execute(update(Turn).where(Turn.id == UUID(body["id"])).values(answer=legacy))
+    calls = len(chat.app.state.llm.calls)
+    replay = await chat.client.post(chat.url, json={"content": "count"}, headers={"Idempotency-Key": "legacy"})
+    assert replay.json()["replayed"]
+    assert replay.json()["answer"]["schema_version"] == 1
+    assert replay.json()["answer"]["synthesis"] is None
+    assert replay.json()["answer"]["markdown"] == body["answer"]["markdown"]
+    assert len(chat.app.state.llm.calls) == calls

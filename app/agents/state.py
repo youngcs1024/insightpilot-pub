@@ -16,7 +16,7 @@ from app.agents.contracts import (
     RewrittenQuestion,
     RouteDecision,
     RoutingContext,
-    SourceSummary,
+    SynthesisResult,
     TurnIdentity,
 )
 from app.agents.failures import NodeFailure
@@ -33,7 +33,7 @@ from app.schemas.metric_resolution import (
 from app.schemas.retrieval import KnowledgeTimeScope
 from app.services.periods import Period
 
-GRAPH_VERSION: Literal["phase4-v2"] = "phase4-v2"
+GRAPH_VERSION: Literal["phase4-v3"] = "phase4-v3"
 
 
 class TurnContext(Contract):
@@ -62,7 +62,7 @@ class TurnContext(Contract):
 class GraphInput(TurnIdentity):
     """A question is loaded from its admitted user message, never caller-overridden."""
 
-    graph_version: Literal["phase4-v2"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v3"] = GRAPH_VERSION
 
 
 class GraphOutput(Contract):
@@ -100,7 +100,7 @@ class GraphOutput(Contract):
 class AgentState(GraphInput):
     """No service, credential, runtime object or checkpoint from another turn."""
 
-    graph_version: Literal["phase4-v2"] = GRAPH_VERSION
+    graph_version: Literal["phase4-v3"] = GRAPH_VERSION
     # prepare owns the loaded question/history. GraphInput cannot supply them.
     question: str = Field(default="", max_length=32_000)
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
@@ -116,7 +116,7 @@ class AgentState(GraphInput):
     assumptions: Annotated[list[str], operator.add] = Field(default_factory=list)
     degraded_components: Annotated[list[str], operator.add] = Field(default_factory=list)
     abstained: bool = False
-    source_summary: SourceSummary | None = None
+    synthesis: SynthesisResult | None = None
     prepared: PreparedContext | None = None
     rewritten: RewrittenQuestion | None = None
     data_evidence: DataEvidence | None = None

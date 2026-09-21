@@ -246,7 +246,7 @@ async def test_sanity_flags_survive_committed_snapshot_reload(
     assert restored.data.sanity_flags == list(SanityFlag)
 
 
-@pytest.mark.parametrize("version", ["phase2-v1", "phase2-v2"])
+@pytest.mark.parametrize("version", ["phase2-v1", "phase2-v2", "phase4-v2"])
 async def test_unknown_checkpoint_version_rejected(
     graph_database: tuple[Database, DatabaseSettings],
     version: str,

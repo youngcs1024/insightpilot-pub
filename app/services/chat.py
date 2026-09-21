@@ -16,6 +16,7 @@ from app.agents.contracts import Answer, Route, TurnIdentity
 from app.agents.failures import FailureKind
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
+from app.agents.synthesis_answer import validate_synthesis_answer
 from app.core.background import spawn
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
@@ -287,6 +288,13 @@ class ChatService:
             answer = output.answer
             if answer is None or output.evidence_refs != answer.evidence_refs:
                 raise ConflictError()
+            if (
+                output.route is not None
+                and output.route.route is Route.BOTH
+                and answer.synthesis is None
+                and (answer.evidence_refs.data_snapshot_id or answer.evidence_refs.knowledge_snapshot_id)
+            ):
+                raise ConflictError("BOTH answer requires synthesis")
             await self._validate_answer(EvidenceRepository(session, identity), answer)
             row.answer = answer.model_dump(mode="json")
             row.content = answer.markdown
@@ -315,6 +323,8 @@ class ChatService:
         )
         if answer.sql != expected_sql or answer.assumptions != expected_assumptions:
             raise ConflictError("answer fields differ from snapshots")
+        if answer.synthesis is not None:
+            validate_synthesis_answer(answer, bundle)
         if answer.knowledge_passages:
             if bundle.knowledge is None:
                 raise ConflictError("knowledge answer without snapshot")

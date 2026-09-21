@@ -20,6 +20,7 @@ from app.agents.nodes.common import failed
 from app.agents.prompts import FORMAT_ANSWER, SYSTEM
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
+from app.agents.synthesis_answer import synthesis_answer
 from app.core.errors import ConflictError, ContextBudgetExceeded, InsightPilotError
 from app.core.llm_config import ModelRole
 from app.schemas.knowledge import KnowledgeGeneration
@@ -124,7 +125,7 @@ def _assemble(
 ) -> Answer:
     both = state.route is not None and state.route.route is Route.BOTH
     valid_knowledge = knowledge is not None and knowledge.abstention is None
-    missing = list(state.source_summary.missing_components) if state.source_summary else []
+    missing: list[str] = []
     if both and data is None and "data" not in missing:
         missing.append("data")
     if both and not valid_knowledge and "knowledge" not in missing:
@@ -199,14 +200,19 @@ async def format_answer(state: AgentState, runtime: Runtime[RuntimeContext]) -> 
         refs = state.evidence_refs
         if refs is None or (refs.data_snapshot_id is None and refs.knowledge_snapshot_id is None):
             return _no_evidence(state)
-        if state.source_summary is not None and state.source_summary.evidence_refs != refs:
-            raise ConflictError("source summary references differ from committed evidence")
         bundle = await ctx.evidence.read_bundle(ctx.identity)
         if bundle.refs != refs:
             raise ConflictError("committed evidence missing")
-        data = await _data_draft(state, ctx, bundle)
-        knowledge = await _knowledge_draft(state, ctx, bundle)
-        answer = _assemble(state, bundle, data, knowledge)
+        if state.route is not None and state.route.route is Route.BOTH:
+            if state.synthesis is None:
+                raise ConflictError("BOTH answer requires validated synthesis")
+            answer = synthesis_answer(
+                state.synthesis, bundle, state.degraded_components, format_preference(state)
+            )
+        else:
+            data = await _data_draft(state, ctx, bundle)
+            knowledge = await _knowledge_draft(state, ctx, bundle)
+            answer = _assemble(state, bundle, data, knowledge)
         status = (
             "abstained"
             if answer.abstained

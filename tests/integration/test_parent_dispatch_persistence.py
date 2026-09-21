@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import update
 
-from app.agents.contracts import AnswerDraft, Route
+from app.agents.contracts import Route
 from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.state import AgentState
 from app.agents.summarize import package_result
@@ -23,7 +23,7 @@ from tests.agents.parent_support import parent_context
 from tests.agents.support import context, result
 from tests.fakes.chat_model import FakeChatModel
 from tests.integration.checkpoint_support import admitted, checkpoint_setup, graph_database
-from tests.knowledge_support import draft
+from tests.agents.synthesis_support import synthesis_draft
 
 pytestmark = pytest.mark.integration
 __all__ = ["checkpoint_setup", "graph_database"]
@@ -90,9 +90,9 @@ async def test_both_parent_restart_reuses_committed_sources_without_external_cal
             .values(content="请分析2026年8月的经营情况")
         )
     base = parent_context(Route.BOTH)
-    # Fail only the data prose generation, after both snapshots have committed.
+    # Fail synthesis generation after both snapshots have committed.
     scripted = list(base.llm._responses)
-    scripted[-2] = LlmStructuredOutputError()
+    scripted[-1] = LlmStructuredOutputError()
     llm = FakeChatModel(scripted)
     ctx = replace(
         base,
@@ -114,14 +114,13 @@ async def test_both_parent_restart_reuses_committed_sources_without_external_cal
             {"configurable": {"thread_id": str(identity.turn_id)}}
         )
         assert (
-            AgentState.model_validate(checkpoint.values).source_summary.evidence_refs == bundle.refs
+            AgentState.model_validate(checkpoint.values).evidence_refs == bundle.refs
         )
     finally:
         await first.aclose()
     llm = FakeChatModel(
         [
-            AnswerDraft(markdown="42", confidence=1),
-            draft(bundle.knowledge.knowledge.chunks[0].chunk_id),
+            synthesis_draft(knowledge_id=bundle.knowledge.knowledge.chunks[0].chunk_id),
         ]
     )
     resumed = replace(

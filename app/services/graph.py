@@ -46,6 +46,7 @@ from app.schemas import (
     sanity,
     schema_catalog,
     sql_correction,
+    synthesis,
 )
 from app.services import periods
 
@@ -87,6 +88,7 @@ def serializer() -> JsonPlusSerializer:
             sanity,
             schema_catalog,
             sql_correction,
+            synthesis,
             periods,
         )
         for name, value in vars(module).items()

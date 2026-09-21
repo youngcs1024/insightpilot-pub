@@ -416,3 +416,17 @@ class IngestionRegistryError(InsightPilotError):
 
     code = "INGESTION_REGISTRY_ERROR"
     user_message = "Knowledge registry validation failed."
+
+
+class SynthesisValidationError(InsightPilotError):
+    """Generated claims do not resolve to the committed evidence view."""
+
+    code = "SYNTHESIS_REFERENCE_INVALID"
+    user_message = "The generated claims could not be verified."
+
+
+class SynthesisEvidenceError(InsightPilotError):
+    """A stored generation block cannot be safely interpreted."""
+
+    code = "SYNTHESIS_EVIDENCE_INVALID"
+    user_message = "The stored analysis evidence could not be verified."
