@@ -32,7 +32,13 @@ def _messages(
         [METRIC_INTENT, build_date_context(now=ctx.now), render_catalog_block(definitions)]
     )
     payload = json.dumps(
-        {"question": state.question, "data_intent": state.data_intent}, ensure_ascii=False
+        {
+            "question": state.question,
+            "data_intent": state.data_intent,
+            "metric_hints": state.metric_hints,
+            "terminology": [item.model_dump() for item in state.relevant_memories],
+        },
+        ensure_ascii=False,
     )
     return [SystemMessage(content=system), HumanMessage(content=payload)]
 

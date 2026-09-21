@@ -41,6 +41,8 @@ _NODES = frozenset(
         "prepare",
         "rewrite_question",
         "answer_data",
+        "answer_data_routed",
+        "answer_knowledge",
         "persist_evidence",
         "format_answer",
         "select_schema",
@@ -83,6 +85,9 @@ class TraceMetadata(BaseModel):
     decided_by: Literal["prefilter", "llm"] | None = None
     prefilter_hit: bool | None = None
     router_tokens: int | None = Field(default=None, ge=0)
+    projection_specialist: Literal["data", "knowledge"] | None = None
+    projection_tokens: int | None = Field(default=None, ge=0)
+    projection_tokenizer: Literal["cl100k_base"] | None = None
     status: str | None = None
     degraded_components: list[str] = Field(default_factory=list)
     role: str | None = None

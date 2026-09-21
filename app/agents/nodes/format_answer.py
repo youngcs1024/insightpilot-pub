@@ -15,6 +15,14 @@ from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError
 from app.core.llm_config import ModelRole
+from app.schemas.memory import FormatPreferenceContent
+
+
+def format_preference(state: AgentState) -> FormatPreferenceContent | None:
+    """Use only finalized presentation context, identically for every route."""
+    if state.context is None or state.context.format_preference is None:
+        return None
+    return state.context.format_preference.model_copy(deep=True)
 
 
 async def format_answer(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
@@ -32,6 +40,7 @@ async def format_answer(state: AgentState, runtime: Runtime[RuntimeContext]) -> 
         if snapshot is None:
             raise ConflictError("committed evidence missing")
         data = snapshot.data
+        preference = format_preference(state)
         # This block was budgeted (including JSON escaping) before commit. Audit
         # rows/statistics can be more complete; never render those into the prompt.
         draft = AnswerDraft(markdown="查询成功, 但未返回任何行 (no rows returned)。", confidence=1)
@@ -52,6 +61,9 @@ async def format_answer(state: AgentState, runtime: Runtime[RuntimeContext]) -> 
                                 "assumptions": data.assumptions,
                                 "sql_scope": data.sql,
                                 "sanity_flags": [flag.value for flag in data.sanity_flags],
+                                "format_preference": preference.model_dump()
+                                if preference
+                                else None,
                             },
                             ensure_ascii=False,
                         )

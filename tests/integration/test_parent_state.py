@@ -9,10 +9,12 @@ from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.state import AgentState
 from app.core.config_models import DatabaseSettings
 from app.core.errors import LlmStructuredOutputError
+from app.schemas.knowledge_query import KnowledgeClarification, KnowledgeClarificationKind
+from app.schemas.metric_resolution import ClarificationKind, MetricClarification
 from app.db.session import Database
 from app.services.graph import GraphService
 from tests.agents.knowledge_support import ranked
-from tests.agents.state_support import finalized, memory
+from tests.agents.projection_support import selected_context
 from tests.agents.support import metric_intent, sql_candidate
 from tests.fakes.chat_model import FakeChatModel
 from tests.integration.checkpoint_support import (
@@ -41,7 +43,15 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
         await first.graph.aupdate_state(
             config,
             {
-                "context": finalized().model_copy(update={"memories": [memory()]}),
+                "context": selected_context(ctx),
+                "data_clarification": MetricClarification(
+                    kind=ClarificationKind.PERIOD_UNRESOLVED, message="data period?"
+                ),
+                "knowledge_clarification": KnowledgeClarification(
+                    kind=KnowledgeClarificationKind.REFERENCE_UNRESOLVED,
+                    message="which policy?",
+                ),
+                "knowledge_abstention_reason": "no matching policy",
                 "route": decision(),
                 "knowledge_evidence": package_evidence(ranked(), ctx),
                 "assumptions": ["old turn"],
@@ -58,7 +68,13 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
     try:
         restored = AgentState.model_validate((await restarted.graph.aget_state(config)).values)
         assert restored == saved
-        assert restored.context.memories[0].content.term == "大促"
+        assert restored.context.memories[0].content.term == "营收"
+        assert restored.context.reference_period == saved.context.reference_period
+        assert restored.context.explicit_patch == saved.context.explicit_patch
+        assert restored.context.knowledge_history == saved.context.knowledge_history
+        assert restored.knowledge_clarification == saved.knowledge_clarification
+        assert restored.knowledge_abstention_reason == "no matching policy"
+        assert restored.data_clarification == saved.data_clarification
         assert restored.knowledge_evidence.chunks[0].original_text
         replay = await restarted.invoke(replace(ctx, llm=FakeChatModel([])), resume=True)
         assert replay == original
@@ -75,6 +91,8 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
         )
         assert fresh.context is fresh.route is fresh.knowledge_evidence is None
         assert fresh.assumptions == fresh.failures == fresh.degraded_components == []
+        assert fresh.knowledge_clarification is fresh.data_clarification is None
+        assert fresh.knowledge_abstention_reason is None
         assert not fresh.abstained
         assert fresh.answer != restored.answer
         assert fresh.evidence_refs != restored.evidence_refs

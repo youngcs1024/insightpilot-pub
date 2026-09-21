@@ -40,6 +40,13 @@ class TerminologyContent(Contract):
     means: str = Field(min_length=1, max_length=200)
 
 
+class TerminologyProjection(TerminologyContent):
+    """Finalized terminology only; no user identity or unrelated preference payload."""
+
+    schema_version: Literal[1] = 1
+    type: Literal["terminology"] = "terminology"
+
+
 class FormatPreferenceContent(Contract):
     """Presentation is applied by the formatter, never by a specialist."""
 

@@ -14,18 +14,10 @@ from app.schemas.knowledge_query import (
     KnowledgeTimeResolution,
 )
 from app.schemas.mcp import Contract
+from app.schemas.memory import TerminologyProjection as TerminologyProjection
 from app.schemas.metric_resolution import RegionScope
 from app.schemas.model_runtime import Text
 from app.schemas.retrieval import KnowledgeTimeScope, RetrievalQuery, RetrievalResult
-
-
-class TerminologyProjection(Contract):
-    """Already-finalized terminology, without storage access or other memory types."""
-
-    schema_version: Literal[1] = 1
-    type: Literal["terminology"] = "terminology"
-    term: str = Field(min_length=1, max_length=50)
-    means: str = Field(min_length=1, max_length=200)
 
 
 class KnowledgeAgentInput(Contract):

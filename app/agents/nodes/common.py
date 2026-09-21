@@ -59,3 +59,9 @@ def failed(node: str, state: AgentState, exc: InsightPilotError) -> Command[str]
     logger.exception("graph_node_failed", node=node, code=exc.code, exc_info=False)
     failure = node_failure(node, exc)
     return Command(update={"failures": [failure], "status": "failed"}, goto=END)
+
+
+def specialist_failed(node: str, exc: InsightPilotError) -> Command[str]:
+    """Record one failure without terminating or overwriting a concurrent sibling."""
+    logger.exception("specialist_node_failed", node=node, code=exc.code, exc_info=False)
+    return Command(update={"failures": [node_failure(node, exc)]})

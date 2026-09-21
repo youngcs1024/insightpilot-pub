@@ -94,6 +94,8 @@ def serializer() -> JsonPlusSerializer:
     ]
     # Historical checkpoints encoded the enum before it moved to the shared schema.
     allowed.append((contracts.__name__, "SanityFlag"))
+    # Step 3 knowledge checkpoints used the specialist-local terminology class.
+    allowed.append((knowledge_state.__name__, "TerminologyProjection"))
     return JsonPlusSerializer(pickle_fallback=False, allowed_msgpack_modules=allowed)
 
 

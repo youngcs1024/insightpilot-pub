@@ -20,10 +20,17 @@ from app.agents.contracts import (
 )
 from app.agents.failures import NodeFailure
 from app.schemas.knowledge import KnowledgeEvidence
+from app.schemas.knowledge_query import KnowledgeClarification, KnowledgeHistoryTurn
 from app.schemas.mcp import Contract
 from app.schemas.memory import FormatPreferenceContent, Memory
-from app.schemas.metric_resolution import MetricClarification, RegionScope, SelectedOverrides
+from app.schemas.metric_resolution import (
+    MetricClarification,
+    MetricPatches,
+    RegionScope,
+    SelectedOverrides,
+)
 from app.schemas.retrieval import KnowledgeTimeScope
+from app.services.periods import Period
 
 GRAPH_VERSION: Literal["phase4-v1"] = "phase4-v1"
 
@@ -45,6 +52,9 @@ class TurnContext(Contract):
     selected_overrides: SelectedOverrides = Field(default_factory=SelectedOverrides)
     format_preference: FormatPreferenceContent | None = None
     prior_sql: list[str] = Field(default_factory=list, max_length=3)
+    explicit_patch: MetricPatches = Field(default_factory=MetricPatches)
+    reference_period: Period | None = None
+    knowledge_history: list[KnowledgeHistoryTurn] = Field(default_factory=list, max_length=3)
     token_accounting: dict[str, Annotated[int, Field(ge=0)]] = Field(default_factory=dict)
 
 
@@ -91,6 +101,9 @@ class AgentState(GraphInput):
     context: TurnContext | None = None
     route: RouteDecision | None = None
     knowledge_evidence: KnowledgeEvidence | None = None
+    knowledge_clarification: KnowledgeClarification | None = None
+    knowledge_abstention_reason: str | None = Field(default=None, min_length=1, max_length=1000)
+    data_clarification: MetricClarification | None = None
     assumptions: Annotated[list[str], operator.add] = Field(default_factory=list)
     degraded_components: Annotated[list[str], operator.add] = Field(default_factory=list)
     abstained: bool = False

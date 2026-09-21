@@ -21,6 +21,7 @@ REDACTED = "<redacted>"
 _ROUTING = frozenset(
     {"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"}
 )
+_PROJECTION = frozenset({"projection_specialist", "projection_tokens", "projection_tokenizer"})
 _SAFE = frozenset(
     {
         "referenced_prior_turn",
@@ -35,6 +36,9 @@ _SAFE = frozenset(
         "decided_by",
         "prefilter_hit",
         "router_tokens",
+        "projection_specialist",
+        "projection_tokens",
+        "projection_tokenizer",
         "status",
         "degraded_components",
         "role",
@@ -130,12 +134,19 @@ def _token_diagnostic(key: str, value: object) -> object:
     return value if isinstance(value, int) else REDACTED
 
 
+def _projection_diagnostic(key: str, value: object) -> object:
+    if key == "projection_tokens":
+        return value if type(value) is int and value >= 0 else REDACTED
+    allowed = {"data", "knowledge"} if key == "projection_specialist" else {"cl100k_base"}
+    return value if isinstance(value, str) and value in allowed else REDACTED
+
+
 def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key in _ROUTING:
+        if key in _ROUTING | _PROJECTION:
             result[key] = _routing_diagnostic(key, value)
         elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)
@@ -155,6 +166,8 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
 
 
 def _routing_diagnostic(key: str, value: object) -> object:
+    if key in _PROJECTION:
+        return _projection_diagnostic(key, value)
     if value is None:
         return None
     if key in {"route", "original_route"}:
@@ -277,7 +290,7 @@ def safe_attributes(attributes: Mapping[str, object]) -> dict[str, str | bool]:
             replacements[key] = value
             continue
         metadata_key = key.removeprefix("langfuse.observation.metadata.")
-        if metadata_key != key and metadata_key in _ROUTING:
+        if metadata_key != key and metadata_key in _ROUTING | _PROJECTION:
             replacements[key] = _routing_attribute(metadata_key, value)
             continue
         if metadata_key != key and metadata_key in {

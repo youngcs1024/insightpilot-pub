@@ -9,8 +9,10 @@ from pydantic_core import PydanticCustomError
 from app.agents.contracts import DataEvidence, MetricExamplesSnapshot, ResolvedMetricBinding
 from app.agents.failures import NodeFailure
 from app.schemas.mcp import Contract, QueryResultPayload
+from app.schemas.memory import TerminologyProjection
 from app.schemas.metric_resolution import (
     MetricClarification,
+    MetricKey,
     MetricPatches,
     RegionScope,
     SelectedOverrides,
@@ -27,6 +29,8 @@ class DataAgentInput(Contract):
     schema_version: Literal[1, 2] = 2
     question: str = Field(min_length=1, max_length=32_000)
     data_intent: str = Field(default="", max_length=32_000)
+    metric_hints: list[MetricKey] = Field(default_factory=list, max_length=6)
+    relevant_memories: list[TerminologyProjection] = Field(default_factory=list, max_length=5)
     selected_overrides: SelectedOverrides = Field(default_factory=SelectedOverrides)
     region_scope: RegionScope | None = None
     explicit_patch: MetricPatches = Field(default_factory=MetricPatches)
