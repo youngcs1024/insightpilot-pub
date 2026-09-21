@@ -156,7 +156,7 @@ async def test_both_failures_name_sources_without_emitting_an_answer(
     assert stored["status"] == "failed"
     assert stored["answer"] is None
     assert all(
-        call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
+        call.schema_name not in {"DataAnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
         for call in ctx.llm.calls
     )
     if streaming:
@@ -177,7 +177,7 @@ async def test_synthesis_claims_are_committed_before_delivery(
     assert response.status_code == OK
     body = events(response)[-1][1] if streaming else response.json()
     answer = body["answer"]
-    assert answer["schema_version"] == 2  # noqa: PLR2004 -- released Answer v2.
+    assert answer["schema_version"] == 3  # noqa: PLR2004 -- released Answer v3.
     assert answer["synthesis"]["evidence_refs"] == body["evidence_refs"]
     assert {claim["kind"] for claim in answer["synthesis"]["claims"]} == {
         "fact_data",
@@ -185,7 +185,7 @@ async def test_synthesis_claims_are_committed_before_delivery(
     }
     assert answer == (await chat.stored())[-1]["answer"]
     assert [call.schema_name for call in ctx.llm.calls][-1] == "SynthesisOutput"
-    assert not any(call.schema_name in {"AnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
+    assert not any(call.schema_name in {"DataAnswerDraft", "KnowledgeDraft"} for call in ctx.llm.calls)
     if streaming:
         frames = events(response)
         assert (

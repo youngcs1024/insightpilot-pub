@@ -1,5 +1,6 @@
 """Two committed turns exercise rewriting, region binding and persisted responses."""
 
+from tests.answer_support import data_draft
 import json
 from uuid import UUID
 
@@ -7,7 +8,7 @@ import pytest
 import sqlglot
 from sqlglot import exp
 
-from app.agents.contracts import AnswerDraft, Route, RouteDecision, SqlGeneratorOutput
+from app.agents.contracts import Route, RouteDecision, SqlGeneratorOutput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
 from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
@@ -70,7 +71,7 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
             SqlGeneratorOutput(
                 thinking="GMV in East China", sql=east, tables_used=["biz.orders", "biz.customers"]
             ),
-            AnswerDraft(markdown="2026年8月华东GMV为42。", confidence=1),
+            data_draft(markdown="华东GMV为42。", confidence=1),
             RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月华南的GMV"),
             MetricIntent(
                 metric_keys=["gmv"],
@@ -83,7 +84,7 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
                 sql=south,
                 tables_used=["biz.orders", "biz.customers"],
             ),
-            AnswerDraft(markdown="2026年8月华南GMV为42。", confidence=1),
+            data_draft(markdown="华南GMV为42。", confidence=1),
         ]
     )
     chat.app.state.llm = llm
@@ -137,7 +138,8 @@ async def test_reference_clarification_persists_and_replays(chat: Harness, strea
     body = events(response)[-1][1] if streamed else response.json()
     assert body["clarification"]["kind"] == "reference_unresolved"
     assert body["status"] == "abstained"
-    assert body["answer"] is None
+    assert body["answer"]["abstained"]
+    assert body["answer"]["claims"] == []
     assert body["evidence_refs"]["data_snapshot_id"] is None
     assert body["content"] == (await chat.stored())[-1]["content"]
     replay = await chat.client.post(

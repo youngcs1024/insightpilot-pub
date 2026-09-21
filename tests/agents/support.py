@@ -1,5 +1,6 @@
 """Offline graph fixtures never substitute for durable PostgreSQL acceptance."""
 
+from tests.answer_support import data_draft
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,7 +10,6 @@ from langchain_core.callbacks import BaseCallbackHandler
 from pydantic import BaseModel
 
 from app.agents.contracts import (
-    AnswerDraft,
     DataEvidence,
     EvidenceBundle,
     EvidenceSnapshot,
@@ -133,7 +133,7 @@ def context(
             else [
                 metric_intent(),
                 sql_candidate(),
-                AnswerDraft(markdown="42 orders", confidence=0.9),
+                data_draft(markdown="42 orders", confidence=0.9),
             ]
         ),
         mcp=mcp,

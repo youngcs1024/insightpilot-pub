@@ -2,6 +2,7 @@
 
 # ruff: noqa: PLR2004 -- explicit contract limits and fixture values.
 
+from tests.answer_support import data_draft
 import json
 from collections.abc import Callable
 
@@ -10,7 +11,7 @@ from langgraph.runtime import Runtime
 from pydantic import ValidationError
 
 from app.agents.budget import SUMMARY_TOKENS, token_bound
-from app.agents.contracts import AnswerDraft, EvidenceRefs, Route
+from app.agents.contracts import EvidenceRefs, Route
 from app.agents.data.nodes.resolve_metrics import resolve_metrics
 from app.agents.data.state import DataAgentInput, DataAgentState
 from app.agents.knowledge.state import KnowledgeAgentInput
@@ -190,7 +191,7 @@ def test_format_preference_applies_in_formatter_for_all_routes(route: Route) -> 
 
 
 async def test_formatter_uses_typed_preference_without_changing_snapshot() -> None:
-    ctx = context(responses=[AnswerDraft(markdown="| GMV |\n| --- |\n| 42.00 |", confidence=1)])
+    ctx = context(responses=[data_draft(markdown="| GMV |\n| --- |\n| 42.00 |", confidence=1)])
     state = routed_state(ctx, Route.DATA_ONLY)
     snapshot = await ctx.evidence.commit(ctx.identity, package_result(result(), []))
     state.evidence_refs = EvidenceRefs(data_snapshot_id=snapshot.id)

@@ -52,7 +52,7 @@ class Claim(Contract):
     """Facts carry resolvable evidence; inference and unsupported text stay labelled."""
 
     schema_version: Literal[1] = 1
-    text: str = Field(min_length=1, max_length=2000)
+    text: str = Field(min_length=1, max_length=4000)
     kind: ClaimKind
     data_refs: list[DataReference] = Field(default_factory=list, max_length=20)
     chunk_ids: list[UUID] = Field(default_factory=list, max_length=20)

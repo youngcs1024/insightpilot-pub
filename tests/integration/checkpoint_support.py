@@ -1,5 +1,6 @@
 """Explicit checkpoint fixtures preserving real transactions and fixture scope."""
 
+from tests.answer_support import data_draft
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import replace
@@ -7,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.agents.contracts import AnswerDraft, TurnIdentity
+from app.agents.contracts import TurnIdentity
 from app.agents.runtime import RuntimeContext
 from app.core.config_models import DatabaseSettings
 from app.db.models import Conversation, TurnStatus, User
@@ -82,7 +83,7 @@ def connected_context(
                 [
                     metric_intent(),
                     sql_candidate(),
-                    AnswerDraft(markdown="42 orders", confidence=1),
+                    data_draft(markdown="42 orders", confidence=1),
                 ]
             ),
         )

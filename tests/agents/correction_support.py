@@ -1,6 +1,6 @@
 """Bounded SQL correction scenarios shared by graph and checkpoint tests."""
 
-from app.agents.contracts import AnswerDraft
+from tests.answer_support import data_draft
 from app.agents.runtime import RuntimeContext
 from app.schemas.mcp import QueryResultPayload
 from app.schemas.sql_correction import CorrectionDecision, SqlCorrectionOutput
@@ -22,14 +22,14 @@ def correction_context(results: list[QueryResultPayload | Exception]) -> Runtime
             sql_candidate(unqualified),
             SqlCorrectionOutput(decision=CorrectionDecision.CORRECTED, sql=canonical),
             SqlCorrectionOutput(decision=CorrectionDecision.CORRECTED, sql=renamed),
-            AnswerDraft(markdown="42", confidence=1),
+            data_draft(markdown="42", confidence=1),
         ]
         if len(results) == MAX_EXECUTIONS
         else [
             metric_intent(),
             sql_candidate(unqualified),
             SqlCorrectionOutput(decision=CorrectionDecision.CORRECTED, sql=canonical),
-            AnswerDraft(markdown="42", confidence=1),
+            data_draft(markdown="42", confidence=1),
         ],
         mcp_results=results,
     )

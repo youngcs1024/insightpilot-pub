@@ -73,7 +73,11 @@ class TurnResponse(ChatResponse):
     def separate_clarification(self) -> Self:
         """Clarification responses have prose but no analytical evidence."""
         if self.clarification is not None and (
-            self.answer is not None
+            (self.answer is not None and (
+                not self.answer.abstained or self.answer.claims or self.answer.citations
+                or self.answer.sql or self.answer.assumptions
+                or self.answer.evidence_refs != EvidenceRefs()
+            ))
             or self.evidence_refs.data_snapshot_id is not None
             or self.evidence_refs.knowledge_snapshot_id is not None
         ):

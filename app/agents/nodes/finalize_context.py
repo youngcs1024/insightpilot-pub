@@ -5,6 +5,7 @@ from langgraph.types import Command
 
 from app.agents.contracts import Route
 from app.agents.nodes.common import failed
+from app.agents.presentation import resolve_preference
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState, TurnContext
 from app.core.errors import ConflictError, InsightPilotError
@@ -33,7 +34,9 @@ async def finalize_context(state: AgentState, runtime: Runtime[RuntimeContext]) 
             knowledge_history=[
                 turn.model_copy(deep=True) for turn in state.prepared.knowledge_history
             ],
-            format_preference=state.routing_context.format_preference,
+            format_preference=resolve_preference(
+                state.question, state.routing_context.format_preference
+            ),
         )
         return Command(update={"context": context})
     except InsightPilotError as exc:

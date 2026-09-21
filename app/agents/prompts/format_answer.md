@@ -1,5 +1,11 @@
-# Evidence answer v2
-Return markdown and confidence, using only the committed generation block as
+# Evidence answer v3
+Return structured claims, each with text, kind, confidence and typed data_refs.
+Each data fact must reference a cell, statistic, or returned-row count in the
+committed generation block, with its exact value and JSON type. Cell positions
+index sample_rows; statistics positions index statistics and statistics_fields.
+Use fact_data for facts, inference for qualified deductions, unsupported for
+unverifiable statements. Never return a separate prose summary. The program
+computes final confidence and renders the answer. Use only the committed generation block as
 numerical evidence. Answer in the user's language. Do not calculate population
 totals from samples. Statistics cover returned rows only; if result_truncated is
 true they do not describe the uncapped population. Preserve explicit top-N scope.
@@ -28,3 +34,8 @@ total or extreme that is absent from the visible statistics, or reconstruct omit
 columns. With result_truncated, both sums and extrema describe only the capped
 returned result. The separately stored audit sample may be larger; it is not
 additional numerical evidence available to this generation.
+
+Keep exact evidence values in claim text and references. The program applies
+decimal preferences in a separate numerical display; do not round claim text.
+Do not include calendar dates or other numbers in data facts unless their exact
+values are supported by the referenced generation-block values.

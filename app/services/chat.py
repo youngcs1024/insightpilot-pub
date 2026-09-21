@@ -12,11 +12,12 @@ from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
-from app.agents.contracts import Answer, Route, TurnIdentity
+from app.agents.contracts import Answer, EvidenceRefs, Route, TurnIdentity
 from app.agents.failures import FailureKind
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
-from app.agents.synthesis_answer import validate_synthesis_answer
+from app.agents.answer_validation import validate_formatted_answer
+from app.agents.nodes.format_answer import attempted_sources
 from app.core.background import spawn
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
@@ -34,6 +35,7 @@ from app.repositories import lifecycle
 from app.repositories.evidence import EvidenceRepository
 from app.repositories.turns import TurnRepository
 from app.schemas.chat import TurnResponse
+from app.schemas.metric_resolution import MetricClarification
 from app.schemas.knowledge import KnowledgeDraft
 from app.services.conversations import ConversationService
 from app.services.graph import GraphService
@@ -254,7 +256,7 @@ class ChatService:
     async def _clarify(self, identity: TurnIdentity, output: GraphOutput, latency_ms: int) -> None:
         """Commit a typed request for information without inventing analysis evidence."""
         clarification = output.clarification
-        if clarification is None or output.answer is not None or output.data_evidence is not None:
+        if clarification is None or output.answer is None or output.data_evidence is not None:
             raise ConflictError("inconsistent clarification result")
         if (
             output.evidence_refs is not None
@@ -270,9 +272,17 @@ class ChatService:
             row = await repo.get(identity.conversation_id, identity.turn_id)
             if row is None or row.status != TurnStatus.RUNNING:
                 raise ConflictError()
+            answer = output.answer
+            if (
+                answer.trace_id != row.trace_id or answer.evidence_refs != (output.evidence_refs or EvidenceRefs())
+                or answer.attempted_sources or not answer.abstained
+                or output.status != "abstained"
+            ):
+                raise ConflictError("clarification envelope differs from turn")
+            await self._validate_answer(EvidenceRepository(session, identity), answer, clarification)
             row.clarification = clarification.model_dump(mode="json")
-            row.content = clarification.message
-            row.answer = None
+            row.content = answer.markdown
+            row.answer = answer.model_dump(mode="json")
             row.status = TurnStatus(output.status)
             row.failure_reason = None
             row.latency_ms = latency_ms
@@ -298,6 +308,16 @@ class ChatService:
                 )
             ):
                 raise ConflictError("BOTH answer requires synthesis")
+            if (
+                answer.trace_id != row.trace_id
+                or answer.attempted_sources != attempted_sources(
+                    output.route.route if output.route else None
+                )
+                or (output.status == "abstained") != answer.abstained
+                or (not answer.abstained and (output.status == "degraded")
+                    != bool(answer.degraded_components))
+            ):
+                raise ConflictError("answer envelope differs from turn")
             await self._validate_answer(EvidenceRepository(session, identity), answer)
             row.answer = answer.model_dump(mode="json")
             row.content = answer.markdown
@@ -311,7 +331,10 @@ class ChatService:
             latency_ms=latency_ms,
         )
 
-    async def _validate_answer(self, repo: EvidenceRepository, answer: Answer) -> None:
+    async def _validate_answer(
+        self, repo: EvidenceRepository, answer: Answer,
+        clarification: MetricClarification | None = None,
+    ) -> None:
         bundle = await repo.read_bundle()
         if bundle.refs != answer.evidence_refs:
             raise ConflictError("answer references differ from snapshots")
@@ -326,8 +349,7 @@ class ChatService:
         )
         if answer.sql != expected_sql or answer.assumptions != expected_assumptions:
             raise ConflictError("answer fields differ from snapshots")
-        if answer.synthesis is not None:
-            validate_synthesis_answer(answer, bundle)
+        validate_formatted_answer(answer, bundle, clarification)
         if answer.knowledge_passages:
             if bundle.knowledge is None:
                 raise ConflictError("knowledge answer without snapshot")

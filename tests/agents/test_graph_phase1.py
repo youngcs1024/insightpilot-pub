@@ -1,5 +1,6 @@
 """Four-node behavior with no network; durability is tested separately on PostgreSQL."""
 
+from tests.answer_support import data_draft
 import ast
 import time
 from dataclasses import replace
@@ -9,7 +10,6 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from app.agents.contracts import AnswerDraft
 from app.agents.failures import FailureKind
 from app.core.deadline import Deadline
 from app.core.errors import (
@@ -36,7 +36,7 @@ async def test_happy_path_produces_evidence_and_answer() -> None:
     assert output.status == "succeeded"
     assert output.answer.sql == "SELECT 42 LIMIT 1001"
     assert output.evidence_refs.data_snapshot_id == ctx.evidence.snapshot.id
-    assert output.answer.markdown == "42 orders"
+    assert "42 orders" in output.answer.markdown
     assert len(ctx.mcp.calls) == 1
 
 
@@ -170,7 +170,7 @@ def test_nodes_perform_no_io_directly() -> None:
 
 
 async def test_evidence_reuse_does_not_execute_sql_again() -> None:
-    answer = AnswerDraft(markdown="42 orders", confidence=0.9)
+    answer = data_draft(markdown="42 orders", confidence=0.9)
     ctx = context(responses=[metric_intent(), sql_candidate(), answer, answer])
     first = await invoke(ctx)
     assert first.status == "succeeded"

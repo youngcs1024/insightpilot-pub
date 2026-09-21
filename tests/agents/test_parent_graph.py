@@ -153,7 +153,7 @@ async def test_persistence_runs_once_after_both_and_synthesis_waits_for_commit()
         await commit_started.wait()
         assert not ctx.evidence.committed
         assert all(
-            call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
+            call.schema_name not in {"DataAnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
             for call in ctx.llm.calls
         )
         release_commit.set()
@@ -210,7 +210,7 @@ async def test_commit_failure_prevents_both_generations() -> None:
     assert result.status == "failed"
     assert result.answer is None
     assert all(
-        call.schema_name not in {"AnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
+        call.schema_name not in {"DataAnswerDraft", "KnowledgeDraft", "SynthesisOutput"}
         for call in ctx.llm.calls
     )
 

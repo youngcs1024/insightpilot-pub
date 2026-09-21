@@ -1,5 +1,6 @@
 """Multi-turn interpretation, bounded projection and safe clarification contracts."""
 
+from tests.answer_support import data_draft
 import json
 from dataclasses import replace
 from unittest.mock import AsyncMock
@@ -10,7 +11,6 @@ from pydantic import ValidationError
 
 from app.agents.budget import HISTORY_TOKENS, token_bound
 from app.agents.contracts import (
-    AnswerDraft,
     HistoryMessage,
     PreparedContext,
     RewrittenQuestion,
@@ -74,7 +74,7 @@ async def test_followup_grain_change_reuses_metric() -> None:
             RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent=standalone),
             metric_intent().model_copy(update={"grain": "month"}),
             sql_candidate(),
-            AnswerDraft(markdown="Monthly GMV", confidence=1),
+            data_draft(markdown="Monthly GMV", confidence=1),
         ]
     )
     ctx = replace(
@@ -110,7 +110,7 @@ async def test_unresolvable_reference_requests_clarification(empty_history: bool
     output = await invoke(ctx)
     assert output.clarification.kind is ClarificationKind.REFERENCE_UNRESOLVED
     assert output.status == "abstained"
-    assert output.answer is None
+    assert output.answer.abstained
     assert output.data_evidence is None
     assert not ctx.mcp.calls
     assert len(ctx.llm.calls) == (0 if empty_history else 1)
@@ -208,7 +208,7 @@ async def test_prior_turn_evidence_reuse_skips_rewrite() -> None:
     before = len(ctx.llm.calls)
     ctx.llm.enqueue(
         RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"),
-        AnswerDraft(markdown="Reused evidence", confidence=1),
+        data_draft(markdown="Reused evidence", confidence=1),
     )
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=prepared())))
     assert (await invoke(ctx)).status == "succeeded"

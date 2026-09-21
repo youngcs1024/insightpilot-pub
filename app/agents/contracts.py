@@ -15,7 +15,7 @@ from app.schemas.memory import FormatPreferenceContent, TerminologyContent
 from app.schemas.metric_resolution import BindingFieldSource, RegionScope
 from app.schemas.metrics import Grain, MetricExample
 from app.schemas.sanity import SanityFlag
-from app.schemas.synthesis import SynthesisAbstention, SynthesisOutput
+from app.schemas.synthesis import Claim, SynthesisAbstention, SynthesisOutput
 
 __all__ = [
     "MAX_ANSWER_CHARS",
@@ -207,10 +207,21 @@ class SynthesisResult(SynthesisOutput):
     attempts: int = Field(ge=0, le=2)
 
 
+class DataAnswerDraft(Contract):
+    """Single-source generation emits references, never final presentation fields."""
+
+    claims: list[Claim] = Field(max_length=16)
+
+
 class Answer(AnswerDraft):
     """Trusted evidence fields are assembled by the formatter."""
 
-    schema_version: Literal[1, 2] = 2
+    schema_version: Literal[1, 2, 3] = 3
+    claims: list[Claim] = Field(default_factory=list, max_length=16)
+    trace_id: str | None = Field(default=None, min_length=1, max_length=128)
+    format_preference: FormatPreferenceContent | None = None
+    attempted_sources: list[Literal["data", "knowledge"]] = Field(default_factory=list)
+    unanswered: list[str] = Field(default_factory=list, max_length=12)
     assumptions: list[str]
     sql: str
     evidence_refs: EvidenceRefs
@@ -219,6 +230,14 @@ class Answer(AnswerDraft):
     degraded_components: list[str] = Field(default_factory=list)
     abstained: bool = False
     synthesis: SynthesisResult | None = None
+
+
+    @model_validator(mode="after")
+    def current_trace(self) -> Self:
+        """Historical payloads stay readable without inventing missing provenance."""
+        if self.schema_version == 3 and self.trace_id is None:
+            raise PydanticCustomError("answer_trace", "Answer v3 requires a trace ID")
+        return self
 
 
 class TurnIdentity(Contract):

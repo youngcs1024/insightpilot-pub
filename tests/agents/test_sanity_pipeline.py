@@ -2,6 +2,7 @@
 
 # ruff: noqa: PLR2004 -- explicit result-shape and call-count acceptance examples.
 
+from tests.answer_support import data_draft
 import json
 from collections.abc import Iterator
 from unittest.mock import Mock
@@ -11,11 +12,12 @@ import pytest
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.contracts import (
-    MAX_ANSWER_CHARS,
-    AnswerDraft,
+    DataAnswerDraft,
     DataEvidence,
     EvidenceSnapshot,
 )
+from app.agents.failures import FailureKind
+from app.schemas.synthesis import CellReference, Claim, ClaimKind
 from app.agents.data import sanity
 from app.agents.data.caveats import CAVEATS
 from app.agents.data.nodes.sanity_check import sanity_check
@@ -52,7 +54,7 @@ async def test_every_flag_is_committed_rendered_and_never_retried(
         responses=[
             metric_intent(),
             sql_candidate("SELECT gross_amount FROM biz.orders"),
-            AnswerDraft(markdown="结果见证据。", confidence=0.5),
+            data_draft(markdown="结果见证据。", confidence=0.5, value=rows[0][0] if rows else None),
         ],
         mcp_results=[result],
     )
@@ -92,30 +94,30 @@ async def test_check_failure_still_commits_result_and_formats_answer(
     assert len(ctx.llm.calls) == 3
 
 
-async def test_full_length_answer_reserves_room_for_advisories() -> None:
+async def test_full_length_answer_fails_without_dropping_advisories() -> None:
+    draft = DataAnswerDraft(claims=[Claim(
+        text="x" * 4000, kind=ClaimKind.FACT_DATA, confidence=0.5,
+        data_refs=[CellReference(row=0, column=0, value=None)],
+    ) for _ in range(8)])
     ctx = context(
-        responses=[
-            metric_intent(),
-            sql_candidate("SELECT NULL"),
-            AnswerDraft(markdown="x" * MAX_ANSWER_CHARS, confidence=0.5),
-        ],
+        responses=[metric_intent(), sql_candidate("SELECT NULL"), draft],
         mcp_results=[payload([[None]])],
     )
     output = await invoke(ctx)
-    assert output.status == "succeeded"
-    assert len(output.answer.markdown) == MAX_ANSWER_CHARS
-    assert CAVEATS[SanityFlag.SINGLE_NULL_SCALAR] in output.answer.markdown
-    assert "回答正文已截短" in output.answer.markdown
+    assert output.status == "failed"
+    assert output.answer is None
+    assert output.failures[-1].kind is FailureKind.CONTEXT_BUDGET_EXCEEDED
+    assert ctx.evidence.committed
 
 
 async def test_replay_uses_committed_flags_despite_configuration_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ctx = context(mcp_results=[payload([[-1]])])
+    ctx = context(responses=[metric_intent(), sql_candidate(), data_draft("负金额结果", value=-1)], mcp_results=[payload([[-1]])])
     ctx.settings.data_agent.sanity = SanitySettings(money_columns=["amount"])
     first = await invoke(ctx)
     saved = ctx.evidence.snapshot.model_dump_json()
-    replay = context(responses=[AnswerDraft(markdown="历史结果。", confidence=0.5)], mcp_results=[])
+    replay = context(responses=[data_draft(markdown="历史结果。", confidence=0.5, value=-1)], mcp_results=[])
     replay.evidence.snapshot = EvidenceSnapshot.model_validate_json(saved)
     checker = Mock(side_effect=AssertionError("Historical results must not be checked again"))
     monkeypatch.setattr(sanity, "result_flags", checker)

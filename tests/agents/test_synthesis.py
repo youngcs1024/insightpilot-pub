@@ -68,7 +68,7 @@ async def test_data_only_claims_labelled_fact_data() -> None:
 async def test_document_claims_carry_chunk_ids() -> None:
     ctx, state, bundle = await synthesis_context(data=False)
     output = await synthesized(ctx, state)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert output.claims[0].kind is ClaimKind.FACT_DOCUMENT
     assert answer.citations[0].chunk_id == bundle.knowledge.knowledge.chunks[0].chunk_id
     assert answer.citations[0].document_title == bundle.knowledge.knowledge.chunks[0].document_title
@@ -82,7 +82,7 @@ async def test_conflict_surfaced_not_resolved() -> None:
     draft.conflicts = [Conflict(left_claim=0, right_claim=1)]
     draft.summary = "因此确定政策变化导致退款增加。"
     output = await synthesized(replace(ctx, llm=FakeChatModel([draft])), state)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert output.conflicts
     assert "查询显示退款率上升" in output.summary
     assert "文档说明政策未改变" in output.summary
@@ -97,7 +97,7 @@ async def test_no_causal_claim_without_document_support() -> None:
     draft.summary = "政策必然导致退款增加。"
     output = await synthesized(replace(ctx, llm=FakeChatModel([draft])), state)
     assert output.claims[0].kind is ClaimKind.INFERENCE
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert "尚未证实因果关系" in answer.markdown
     assert draft.summary not in answer.markdown
     assert answer.confidence <= 0.9
@@ -136,7 +136,7 @@ async def test_causal_marker_on_fact_claim_downgraded_to_inference(
 async def test_unanswered_lists_missing_information() -> None:
     ctx, state, bundle = await synthesis_context()
     output = await synthesized(ctx, state)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert "实际使用记录" in " ".join(output.unanswered)
     assert "实际使用记录" in answer.markdown
 
@@ -148,7 +148,7 @@ async def test_single_evidence_set_degrades_with_flag(missing: str) -> None:
     )
     command = await synthesize(state, Runtime(context=ctx))
     assert command.update["degraded_components"] == [missing]
-    answer = synthesis_answer(command.update["synthesis"], bundle, [])
+    answer = synthesis_answer(command.update["synthesis"], bundle, [], trace_id="test-trace")
     assert not answer.abstained
     assert answer.confidence <= 0.5
     assert missing in answer.degraded_components
@@ -166,7 +166,7 @@ async def test_fabricated_chunk_id_rejected() -> None:
     assert output.claims == output.conflicts == []
     assert output.summary == ""
     assert str(invalid.claims[1].chunk_ids[0]) not in str(logs)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert answer.abstained
     assert answer.citations == []
     assert "GMV" not in answer.markdown
@@ -357,7 +357,7 @@ async def test_empty_or_unsupported_output_abstains_without_retry() -> None:
     output = await synthesized(replace(ctx, llm=model), state)
     assert output.abstention is SynthesisAbstention.UNSUPPORTED
     assert len(model.calls) == 1
-    assert synthesis_answer(output, bundle, []).abstained
+    assert synthesis_answer(output, bundle, [], trace_id="test-trace").abstained
 
 
 async def test_final_commit_rejects_modified_summary_or_refs() -> None:
@@ -375,7 +375,7 @@ async def test_table_preference_does_not_generate_new_prose() -> None:
     before = len(ctx.llm.calls)
     answer = synthesis_answer(
         output, bundle, [], FormatPreferenceContent(prefer="table", decimals=2)
-    )
+    , trace_id="test-trace")
     assert "| 经核验的声明 |" in answer.markdown
     assert len(ctx.llm.calls) == before
     assert answer.synthesis == output
@@ -383,7 +383,7 @@ async def test_table_preference_does_not_generate_new_prose() -> None:
 
 async def test_legacy_answer_remains_readable_without_synthesis() -> None:
     ctx, state, bundle = await synthesis_context()
-    answer = synthesis_answer(await synthesized(ctx, state), bundle, [])
+    answer = synthesis_answer(await synthesized(ctx, state), bundle, [], trace_id="test-trace")
     legacy = json.loads(answer.model_dump_json())
     legacy.pop("synthesis")
     legacy["schema_version"] = 1
@@ -423,7 +423,7 @@ async def test_t7_frozen_policy_exposes_missing_payment_and_usage_evidence() -> 
         "需要品类、退款原因和一致观察截止。",
     ]
     output = await synthesized(replace(ctx, llm=FakeChatModel([draft])), state)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     assert output.claims[-1].kind is ClaimKind.INFERENCE
     assert "尚未证实因果关系" in answer.markdown
     assert "支付方式" in answer.markdown
@@ -447,25 +447,25 @@ async def test_cross_period_policy_validity_and_injected_text_are_only_evidence(
     assert '"end":"2026-09-01"' in text
     assert "&lt;/retrieved_document&gt;" in text
     assert "August-only" in messages[0].content
-    assert injection not in synthesis_answer(output, bundle, []).markdown
+    assert injection not in synthesis_answer(output, bundle, [], trace_id="test-trace").markdown
 
 
 async def test_changed_corpus_cannot_replace_snapshot_citations() -> None:
     ctx, state, bundle = await synthesis_context()
     output = await synthesized(ctx, state)
-    answer = synthesis_answer(output, bundle, [])
+    answer = synthesis_answer(output, bundle, [], trace_id="test-trace")
     # Re-render uses only the saved bundle, even if all live dependencies are inaccessible.
     ctx = replace(
         ctx, retrieval=AsyncMock(side_effect=AssertionError("live lookup")), mcp=AsyncMock()
     )
-    assert synthesis_answer(output, bundle, []) == answer
+    assert synthesis_answer(output, bundle, [], trace_id="test-trace") == answer
     ctx.retrieval.assert_not_called()
     ctx.mcp.assert_not_called()
 
 
 async def test_modified_answer_prose_or_confidence_cannot_bypass_commit_guard() -> None:
     ctx, state, bundle = await synthesis_context()
-    answer = synthesis_answer(await synthesized(ctx, state), bundle, [])
+    answer = synthesis_answer(await synthesized(ctx, state), bundle, [], trace_id="test-trace")
     for update in ({"markdown": "政策确定导致变化。"}, {"confidence": 1}, {"citations": []}):
         with pytest.raises(ConflictError):
             validate_synthesis_answer(answer.model_copy(update=update), bundle)

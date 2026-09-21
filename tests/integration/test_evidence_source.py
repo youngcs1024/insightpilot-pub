@@ -1,12 +1,13 @@
 """Historical evidence survives actual business-table changes without another MCP call."""
 
+from app.schemas.synthesis import RowCountReference
+from tests.answer_support import data_draft
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import psycopg
 import pytest
 
-from app.agents.contracts import AnswerDraft
 from app.clients.mcp_client import McpClient
 from app.core.config_models import DatabaseSettings
 from app.db.session import Database
@@ -51,7 +52,7 @@ async def test_business_mutation_does_not_change_historical_evidence(
             [
                 metric_intent(),
                 sql_candidate("SELECT count(*) AS n FROM biz.regions"),
-                AnswerDraft(markdown="Query completed", confidence=1),
+                data_draft(markdown="Query completed", confidence=1, reference=RowCountReference(value=1)),
             ]
         ),
     )

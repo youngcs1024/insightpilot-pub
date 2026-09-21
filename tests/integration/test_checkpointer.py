@@ -1,5 +1,7 @@
 """Real PostgreSQL proves history, immutable snapshots and checkpoint recovery."""
 
+from app.schemas.synthesis import RowCountReference
+from tests.answer_support import data_draft
 import asyncio
 import json
 from dataclasses import replace
@@ -9,7 +11,6 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
-from app.agents.contracts import AnswerDraft
 from app.agents.data import summarize
 from app.agents.data.graph import topology as data_topology
 from app.agents.data.state import DataAgentInput, DataAgentOutput, DataAgentState
@@ -108,7 +109,7 @@ async def test_resume_same_turn_reuses_evidence(
     snapshot = await ctx.evidence.find(identity)
     restarted = GraphService(settings)
     await restarted.start()
-    ctx = replace(ctx, llm=FakeChatModel([AnswerDraft(markdown="Recovered 42", confidence=1)]))
+    ctx = replace(ctx, llm=FakeChatModel([data_draft(markdown="Recovered 42", confidence=1)]))
     try:
         output = await restarted.invoke(ctx, resume=True)
         assert output.status == "succeeded"
@@ -246,7 +247,7 @@ async def test_sanity_flags_survive_committed_snapshot_reload(
     assert restored.data.sanity_flags == list(SanityFlag)
 
 
-@pytest.mark.parametrize("version", ["phase2-v1", "phase2-v2", "phase4-v2"])
+@pytest.mark.parametrize("version", ["phase2-v1", "phase2-v2", "phase4-v2", "phase4-v3"])
 async def test_unknown_checkpoint_version_rejected(
     graph_database: tuple[Database, DatabaseSettings],
     version: str,
@@ -428,7 +429,8 @@ async def test_completed_clarification_resumes_without_models(
     try:
         resumed = await second.invoke(replace(ctx, llm=FakeChatModel([])), resume=True)
         assert resumed.clarification == original.clarification
-        assert resumed.answer is None
+        assert resumed.answer == original.answer
+        assert resumed.answer.abstained
         assert not ctx.mcp.calls
     finally:
         await second.aclose()
@@ -462,7 +464,7 @@ async def test_exact_budgeted_generation_survives_database_and_restart(
     forbidden = Mock(side_effect=AssertionError("Historical reads must not rebuild evidence"))
     monkeypatch.setattr(summarize, "summarize_result", forbidden)
     monkeypatch.setattr(summarize, "render_block", forbidden)
-    recovered_model = FakeChatModel([AnswerDraft(markdown="Recovered answer", confidence=1)])
+    recovered_model = FakeChatModel([data_draft(markdown="Recovered answer", confidence=1, reference=RowCountReference(value=1))])
     restarted = GraphService(settings)
     await restarted.start()
     try:

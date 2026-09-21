@@ -537,9 +537,11 @@ async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: 
     body = events(response)[-1][1] if streamed else response.json()
     assert body["status"] == "abstained"
     assert body["failure_reason"] is None
-    assert body["answer"] is None
+    assert body["answer"]["abstained"]
+    assert body["answer"]["claims"] == []
     assert body["clarification"]["kind"] == "metric_not_identified"
-    assert body["content"] == body["clarification"]["message"]
+    assert body["clarification"]["message"] in body["content"]
+    assert body["content"] == body["answer"]["markdown"]
     assert body["evidence_refs"]["data_snapshot_id"] is None
     if streamed:
         assert all(name != "error" for name, _ in events(response))

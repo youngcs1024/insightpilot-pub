@@ -1,10 +1,11 @@
 """Explicit four-route scripts exercising the production parent and specialists."""
 
+from tests.answer_support import data_draft
 from dataclasses import replace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
-from app.agents.contracts import AnswerDraft, PreparedContext, Route, RouteDecision
+from app.agents.contracts import PreparedContext, Route, RouteDecision
 from app.agents.runtime import RuntimeContext
 from app.services.knowledge_generation import KnowledgeGenerationService
 from tests.agents.knowledge_support import FakeRetrieval, ranked
@@ -39,7 +40,7 @@ def parent_context(
     if route in {Route.DATA_ONLY, Route.BOTH}:
         responses.extend([metric_intent(), sql_candidate()])
         if data_error is None and route is Route.DATA_ONLY:
-            responses.append(AnswerDraft(markdown="GMV 为 42。", confidence=0.9))
+            responses.append(data_draft(markdown="GMV 为 42。", confidence=0.9))
     if route is Route.KNOWLEDGE_ONLY and not knowledge_error and not empty:
         responses.append(draft(retrieval.candidates[0].chunk_uuid))
     if route is Route.BOTH and (data_error is None or (not knowledge_error and not empty)):

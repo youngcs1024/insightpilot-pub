@@ -1,10 +1,10 @@
 """Parent v2 round-trips and recovery using the real protected PostgreSQL service."""
 
+from tests.answer_support import data_draft
 from dataclasses import replace
 
 import pytest
 
-from app.agents.contracts import AnswerDraft
 from app.agents.knowledge.nodes.package_evidence import package_evidence
 from app.agents.state import AgentState
 from app.core.config_models import DatabaseSettings
@@ -122,7 +122,7 @@ async def test_checkpoint_key_is_assistant_turn(
             {"configurable": {"thread_id": str(identity.conversation_id)}}
         )
         assert actual.values["turn_id"] == identity.turn_id
-        assert actual.values["graph_version"] == "phase4-v3"
+        assert actual.values["graph_version"] == "phase4-v4"
         assert not wrong.values
         assert actual.values["messages"][-1].content == actual.values["prepared"].question
     finally:
@@ -160,7 +160,7 @@ async def test_same_turn_recovery_failure_then_success_resets_only_current_failu
         assert second.status == "failed"
         assert len(second.failures) == 1
         third = await service.invoke(
-            replace(ctx, llm=FakeChatModel([AnswerDraft(markdown="Recovered", confidence=1)])),
+            replace(ctx, llm=FakeChatModel([data_draft(markdown="Recovered", confidence=1)])),
             resume=True,
         )
         assert third.status == "succeeded"
