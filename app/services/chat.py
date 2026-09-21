@@ -292,7 +292,10 @@ class ChatService:
                 output.route is not None
                 and output.route.route is Route.BOTH
                 and answer.synthesis is None
-                and (answer.evidence_refs.data_snapshot_id or answer.evidence_refs.knowledge_snapshot_id)
+                and (
+                    answer.evidence_refs.data_snapshot_id
+                    or answer.evidence_refs.knowledge_snapshot_id
+                )
             ):
                 raise ConflictError("BOTH answer requires synthesis")
             await self._validate_answer(EvidenceRepository(session, identity), answer)

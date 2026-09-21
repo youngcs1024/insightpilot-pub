@@ -191,7 +191,7 @@ def test_format_preference_applies_in_formatter_for_all_routes(route: Route) -> 
 
 async def test_formatter_uses_typed_preference_without_changing_snapshot() -> None:
     ctx = context(responses=[AnswerDraft(markdown="| GMV |\n| --- |\n| 42.00 |", confidence=1)])
-    state = routed_state(ctx)
+    state = routed_state(ctx, Route.DATA_ONLY)
     snapshot = await ctx.evidence.commit(ctx.identity, package_result(result(), []))
     state.evidence_refs = EvidenceRefs(data_snapshot_id=snapshot.id)
     before = snapshot.model_dump_json()

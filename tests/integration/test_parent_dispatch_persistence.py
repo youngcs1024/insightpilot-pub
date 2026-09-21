@@ -21,9 +21,9 @@ from app.services.knowledge_generation import KnowledgeGenerationService
 from tests.agents.knowledge_support import ranked
 from tests.agents.parent_support import parent_context
 from tests.agents.support import context, result
+from tests.agents.synthesis_support import synthesis_draft
 from tests.fakes.chat_model import FakeChatModel
 from tests.integration.checkpoint_support import admitted, checkpoint_setup, graph_database
-from tests.agents.synthesis_support import synthesis_draft
 
 pytestmark = pytest.mark.integration
 __all__ = ["checkpoint_setup", "graph_database"]
@@ -113,9 +113,7 @@ async def test_both_parent_restart_reuses_committed_sources_without_external_cal
         checkpoint = await first.graph.aget_state(
             {"configurable": {"thread_id": str(identity.turn_id)}}
         )
-        assert (
-            AgentState.model_validate(checkpoint.values).evidence_refs == bundle.refs
-        )
+        assert AgentState.model_validate(checkpoint.values).evidence_refs == bundle.refs
     finally:
         await first.aclose()
     llm = FakeChatModel(

@@ -33,7 +33,9 @@ def _claim_sections(
     result: SynthesisResult, preference: FormatPreferenceContent | None
 ) -> list[str]:
     if preference is not None and preference.prefer == "table":
-        rows = [line.replace("|", "\\|").replace("\n", "<br>") for line in result.summary.split("\n\n")]
+        rows = [
+            line.replace("|", "\\|").replace("\n", "<br>") for line in result.summary.split("\n\n")
+        ]
         return ["| 经核验的声明 |\n| --- |\n" + "\n".join(f"| {line} |" for line in rows)]
     groups = (
         (ClaimKind.FACT_DATA, "数据结论"),
@@ -42,7 +44,8 @@ def _claim_sections(
         (ClaimKind.UNSUPPORTED, "无法证实"),
     )
     return [
-        f"### {title}\n\n" + "\n\n".join(claim_line(claim) for claim in result.claims if claim.kind is kind)
+        f"### {title}\n\n"
+        + "\n\n".join(claim_line(claim) for claim in result.claims if claim.kind is kind)
         for kind, title in groups
         if any(claim.kind is kind for claim in result.claims)
     ]
@@ -57,11 +60,16 @@ def _markdown(
         pieces = _claim_sections(result, preference)
         if result.conflicts:
             pairs = [
-                claim_line(result.claims[item.left_claim]) + "\n\n与\n\n"
+                claim_line(result.claims[item.left_claim])
+                + "\n\n与\n\n"
                 + claim_line(result.claims[item.right_claim])
                 for item in result.conflicts
             ]
-            pieces.append("### 证据冲突\n\n" + "\n\n---\n\n".join(pairs) + "\n\n现有证据无法裁定，需进一步核实。")
+            pieces.append(
+                "### 证据冲突\n\n"
+                + "\n\n---\n\n".join(pairs)
+                + "\n\n现有证据无法裁定，需进一步核实。"
+            )
         pieces.append("相关性不等于因果；以上事实尚未建立因果关系。")
     missing = [
         "业务数据未能核实" if name == "data" else "知识依据不足或不可用"
@@ -69,10 +77,17 @@ def _markdown(
     ]
     unanswered = [*missing, *result.unanswered]
     if unanswered:
-        pieces.append("### 缺失信息与待核实问题\n\n" + "\n".join(f"- {text}" for text in unanswered))
+        pieces.append(
+            "### 缺失信息与待核实问题\n\n" + "\n".join(f"- {text}" for text in unanswered)
+        )
     if degraded:
         names = {"data": "业务数据", "knowledge": "知识依据", "rerank": "重排服务"}
-        pieces.insert(0, "> 本次为部分回答，以下组件缺失或降级: " + "、".join(names.get(name, name) for name in degraded) + "。")
+        pieces.insert(
+            0,
+            "> 本次为部分回答，以下组件缺失或降级: "
+            + "、".join(names.get(name, name) for name in degraded)
+            + "。",
+        )
     return "\n\n".join(pieces)
 
 
@@ -107,7 +122,8 @@ def synthesis_answer(
         citations=citations_for(result, bundle),
         knowledge_passages=[
             KnowledgePassage(text=claim_line(claim), chunk_ids=tuple(claim.chunk_ids))
-            for claim in result.claims if claim.chunk_ids
+            for claim in result.claims
+            if claim.chunk_ids
         ],
         degraded_components=degraded,
         abstained=result.abstention is not None,
@@ -120,7 +136,9 @@ def validate_synthesis_answer(answer: Answer, bundle: EvidenceBundle) -> None:
     if answer.synthesis is None:
         raise ConflictError("missing synthesis")
     for preference in (None, FormatPreferenceContent(prefer="table", decimals=2)):
-        expected = synthesis_answer(answer.synthesis, bundle, answer.degraded_components, preference)
+        expected = synthesis_answer(
+            answer.synthesis, bundle, answer.degraded_components, preference
+        )
         if answer == expected:
             return
     raise ConflictError("answer differs from validated synthesis")

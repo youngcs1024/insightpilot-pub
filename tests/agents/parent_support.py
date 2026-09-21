@@ -9,8 +9,8 @@ from app.agents.runtime import RuntimeContext
 from app.services.knowledge_generation import KnowledgeGenerationService
 from tests.agents.knowledge_support import FakeRetrieval, ranked
 from tests.agents.support import context, metric_intent, sql_candidate
-from tests.knowledge_support import draft
 from tests.agents.synthesis_support import synthesis_draft
+from tests.knowledge_support import draft
 
 if TYPE_CHECKING:
     from app.core.config_models import Settings
@@ -43,11 +43,14 @@ def parent_context(
     if route is Route.KNOWLEDGE_ONLY and not knowledge_error and not empty:
         responses.append(draft(retrieval.candidates[0].chunk_uuid))
     if route is Route.BOTH and (data_error is None or (not knowledge_error and not empty)):
-        responses.append(synthesis_draft(
-            data=data_error is None,
-            knowledge_id=retrieval.candidates[0].chunk_uuid
-            if not knowledge_error and not empty else None,
-        ))
+        responses.append(
+            synthesis_draft(
+                data=data_error is None,
+                knowledge_id=retrieval.candidates[0].chunk_uuid
+                if not knowledge_error and not empty
+                else None,
+            )
+        )
     ctx = context(
         responses=responses, mcp_results=[data_error] if data_error else None, settings=settings
     )

@@ -13,8 +13,8 @@ from app.agents.prompts import SYNTHESIS, SYNTHESIS_REPAIR
 from app.agents.synthesis_validation import data_view, validate_output
 from app.core.errors import FabricatedCitation, SynthesisValidationError
 from app.core.llm_config import ModelRole
-from app.schemas.synthesis import ClaimKind, SynthesisAbstention, SynthesisOutput
 from app.schemas.mcp import Contract
+from app.schemas.synthesis import ClaimKind, SynthesisAbstention, SynthesisOutput
 
 if TYPE_CHECKING:
     from app.agents.runtime import RuntimeContext
@@ -120,7 +120,9 @@ async def generate_synthesis(
         try:
             validated = validate_output(draft, source)
         except (FabricatedCitation, SynthesisValidationError) as exc:
-            logger.exception("synthesis_reference_rejected", attempt=attempt, code=exc.code, exc_info=False)
+            logger.exception(
+                "synthesis_reference_rejected", attempt=attempt, code=exc.code, exc_info=False
+            )
             continue
         downgraded = sum(
             original.kind != checked.kind
@@ -134,11 +136,16 @@ async def generate_synthesis(
         ):
             return _abstention(bundle, SynthesisAbstention.UNSUPPORTED, attempt)
         logger.info(
-            "synthesis_validated", claims=len(validated.claims), conflicts=len(validated.conflicts),
-            attempt=attempt, missing=len(missing),
+            "synthesis_validated",
+            claims=len(validated.claims),
+            conflicts=len(validated.conflicts),
+            attempt=attempt,
+            missing=len(missing),
         )
         return SynthesisResult(
-            **validated.model_dump(), evidence_refs=bundle.refs,
-            missing_components=missing, attempts=attempt,
+            **validated.model_dump(),
+            evidence_refs=bundle.refs,
+            missing_components=missing,
+            attempts=attempt,
         )
     return _abstention(bundle, SynthesisAbstention.INVALID_REFERENCES, 2)

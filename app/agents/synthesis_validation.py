@@ -82,7 +82,9 @@ def _numbers(text: str) -> set[Decimal]:
 
 
 def _validate_claim(claim: Claim, source: SynthesisInput, view: DataGenerationView | None) -> None:
-    allowed = {chunk.chunk_id: chunk for chunk in source.knowledge.chunks} if source.knowledge else {}
+    allowed = (
+        {chunk.chunk_id: chunk for chunk in source.knowledge.chunks} if source.knowledge else {}
+    )
     if any(identifier not in allowed for identifier in claim.chunk_ids):
         raise FabricatedCitation()
     if not claim.text.strip():
@@ -94,7 +96,14 @@ def _validate_claim(claim: Claim, source: SynthesisInput, view: DataGenerationVi
     values = [reference_value(reference, view) for reference in claim.data_refs]
     if claim.kind is not ClaimKind.UNSUPPORTED:
         support = " ".join(
-            [*(str(value) for value in values), *(allowed[key].generation_text for key in claim.chunk_ids)]
+            [
+                *(str(value) for value in values),
+                *(
+                    allowed[key].generation_text
+                    for key in claim.chunk_ids
+                    if claim.kind is not ClaimKind.FACT_DATA
+                ),
+            ]
         )
         if not _numbers(claim.text).issubset(_numbers(support)):
             raise SynthesisValidationError()
