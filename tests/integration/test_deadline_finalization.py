@@ -51,7 +51,9 @@ async def running_context(database: Database) -> RuntimeContext:
         row = await session.get(Turn, identity.turn_id)
         row.trace_id = identity.turn_id.hex
         question = await session.scalar(
-            TurnRepository(session, identity.user_id).recent_topics(identity.conversation_id, row.seq)
+            TurnRepository(session, identity.user_id).recent_topics(
+                identity.conversation_id, row.seq
+            )
         )
         question.content = "请分析2026年8月的经营情况"
     return replace(
