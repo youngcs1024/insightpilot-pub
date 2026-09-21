@@ -30,7 +30,7 @@ from tests.agents.support import result
 from tests.api.chat_support import Harness, chat, events
 from tests.corpus_support import entry, write_inventory
 from tests.database_support import DatabaseStack
-from tests.evidence_support import committed_knowledge
+from tests.evidence_support import committed_knowledge, rebuild_index
 from tests.integration.checkpoint_support import (
     admitted,
     checkpoint_setup,
@@ -253,7 +253,7 @@ async def test_milvus_rebuild_does_not_affect_history(
     await store.ensure_collection()
     for chunk in value.chunks:
         assert await store.identities(chunk.document_id) == []
-    await harness.ingest()
+    assert await rebuild_index(harness) == value.corpus_version
     for chunk in value.chunks:
         assert await store.identities(chunk.document_id)
     await history.assert_unchanged(monkeypatch)
