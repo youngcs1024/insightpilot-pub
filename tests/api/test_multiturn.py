@@ -11,6 +11,7 @@ from app.agents.contracts import Route, RouteDecision, SqlGeneratorOutput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
 from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
+from tests.agents.support import metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.api.chat_support import Harness, chat, events
 from tests.factories import business_schema, query_result
@@ -116,6 +117,15 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
 
 @pytest.mark.parametrize("streamed", [False, True])
 async def test_reference_clarification_persists_and_replays(chat: Harness, streamed: bool) -> None:
+    # Keep the antecedent inside the history budget, independently of the long SSE fixture.
+    chat.app.state.llm = FakeChatModel(
+        [
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"),
+            metric_intent(),
+            sql_candidate(),
+            data_draft(markdown="订单总数为 42。"),
+        ]
+    )
     first = await chat.client.post(chat.url, json={"content": "count"})
     assert first.status_code == OK
     llm = FakeChatModel(
@@ -149,4 +159,6 @@ async def test_reference_clarification_persists_and_replays(chat: Harness, strea
     assert replayed["clarification"] == body["clarification"]
     assert UUID(replayed["id"]) == UUID(body["id"])
     assert len(llm.calls) == 1
+    routing_input = json.loads(llm.calls[0].messages[1].content)
+    assert routing_input["routing_context"]["recent_messages"][0]["content"] == "count"
     assert len(chat.app.state.mcp.calls) == calls

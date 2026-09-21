@@ -201,9 +201,15 @@ async def measure_scalar(client: AsyncMilvusClient, name: str, *, indexed: bool)
     await client.release_collection(name, timeout=30)
     await client.load_collection(name, timeout=30)
     if indexed:
-        index = await client.describe_index(name, "document_id", timeout=10)
-        assert index["index_type"] == "INVERTED"
-        assert index["state"] == "Finished"
+        # Loading does not guarantee that background scalar indexing has finished.
+        async with asyncio.timeout(60):
+            while True:
+                index = await client.describe_index(name, "document_id", timeout=10)
+                assert index["index_type"] == "INVERTED"
+                if index["state"] == "Finished":
+                    break
+                assert index["state"] in {"Unissued", "InProgress"}, index
+                await asyncio.sleep(0.5)
     elapsed = []
     for iteration in range(warmup + 30):
         target = (iteration * 1423) % count
