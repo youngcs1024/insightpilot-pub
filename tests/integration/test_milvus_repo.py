@@ -179,6 +179,18 @@ async def test_idempotency_and_restart_persist_schema(
         assert "SKU-A1023" in hits[0].entity.content
 
 
+async def wait_scalar_index(client: AsyncMilvusClient, name: str) -> None:
+    """Wait for background indexing, which may outlive collection loading."""
+    async with asyncio.timeout(60):
+        while True:
+            index = await client.describe_index(name, "document_id", timeout=10)
+            assert index["index_type"] == "INVERTED"
+            if index["state"] == "Finished":
+                return
+            assert index["state"] in {"Unissued", "InProgress"}, index
+            await asyncio.sleep(0.5)
+
+
 async def measure_scalar(client: AsyncMilvusClient, name: str, *, indexed: bool) -> list[float]:
     """Create one sealed 50k-row cohort and retain its post-warmup RPC timings."""
     count, batch_size, warmup = 50000, 5000, 5
@@ -201,15 +213,7 @@ async def measure_scalar(client: AsyncMilvusClient, name: str, *, indexed: bool)
     await client.release_collection(name, timeout=30)
     await client.load_collection(name, timeout=30)
     if indexed:
-        # Loading does not guarantee that background scalar indexing has finished.
-        async with asyncio.timeout(60):
-            while True:
-                index = await client.describe_index(name, "document_id", timeout=10)
-                assert index["index_type"] == "INVERTED"
-                if index["state"] == "Finished":
-                    break
-                assert index["state"] in {"Unissued", "InProgress"}, index
-                await asyncio.sleep(0.5)
+        await wait_scalar_index(client, name)
     elapsed = []
     for iteration in range(warmup + 30):
         target = (iteration * 1423) % count
