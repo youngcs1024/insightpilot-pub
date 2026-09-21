@@ -38,7 +38,12 @@ from app.services.conversations import ConversationService
 from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
 from app.services.knowledge_generation import validate_citations
-from app.services.turn_results import TurnFailedError, failure_reason, turn_response
+from app.services.turn_results import (
+    BothSourcesFailedError,
+    TurnFailedError,
+    failure_reason,
+    turn_response,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -203,20 +208,20 @@ class ChatService:
                         if output.failures
                         else FailureKind.NODE_OPERATION_FAILED
                     )
-                    raise TurnFailedError(
-                        reason,
-                        both_sources=(
-                            output.route is not None
-                            and output.route.route is Route.BOTH
-                            and (
-                                output.evidence_refs is None
-                                or (
-                                    output.evidence_refs.data_snapshot_id is None
-                                    and output.evidence_refs.knowledge_snapshot_id is None
-                                )
+                    both_sources = (
+                        output.route is not None
+                        and output.route.route is Route.BOTH
+                        and (
+                            output.evidence_refs is None
+                            or (
+                                output.evidence_refs.data_snapshot_id is None
+                                and output.evidence_refs.knowledge_snapshot_id is None
                             )
-                        ),
+                        )
                     )
+                    if both_sources:
+                        raise BothSourcesFailedError(reason)
+                    raise TurnFailedError(reason)
                 latency_ms = int((monotonic() - started) * 1000)
                 if output.clarification is not None:
                     await self._clarify(ctx.identity, output, latency_ms)

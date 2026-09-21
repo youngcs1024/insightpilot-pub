@@ -12,11 +12,15 @@ class TurnFailedError(InsightPilotError):
 
     user_message = "The analysis could not be completed."
 
-    def __init__(self, reason: FailureKind, *, both_sources: bool = False) -> None:
+    def __init__(self, reason: FailureKind) -> None:
         super().__init__()
         self.reason = reason
-        if both_sources:
-            self.user_message = "业务数据与知识来源均未能提供可用证据，本次分析失败。"
+
+
+class BothSourcesFailedError(TurnFailedError):
+    """Name both unavailable sources while preserving the typed safe failure reason."""
+
+    user_message = "业务数据与知识来源均未能提供可用证据，本次分析失败。"
 
 
 def turn_response(turn: Turn, *, replayed: bool = False) -> TurnResponse:

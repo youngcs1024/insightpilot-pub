@@ -317,5 +317,7 @@ async def test_yearless_knowledge_followup_preserves_selected_historical_year() 
     assert ctx.retrieval.calls[0].time_scope.periods[0].start == date(2024, 8, 1)
     assert ctx.mcp.calls == []
     assert [call.schema_name for call in model.calls] == [
-        "RouteDecision", "KnowledgeRewrite", "KnowledgeDraft"
+        "RouteDecision",
+        "KnowledgeRewrite",
+        "KnowledgeDraft",
     ]

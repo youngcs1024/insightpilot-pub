@@ -158,4 +158,8 @@ def topology() -> StateGraph[
 
 def build() -> KnowledgeGraph:
     """Inherit the parent's durable saver and retain a bounded default invocation."""
-    return topology().compile(name="knowledge_specialist_graph").with_config(recursion_limit=RECURSION_LIMIT)
+    return (
+        topology()
+        .compile(name="knowledge_specialist_graph")
+        .with_config(recursion_limit=RECURSION_LIMIT)
+    )

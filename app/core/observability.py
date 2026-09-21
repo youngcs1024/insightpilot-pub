@@ -400,7 +400,13 @@ class GraphTraceCallback(BaseCallbackHandler):
         if entry is None:
             return
         status = (
-            "failed" if failed else "abstained" if abstained else "degraded" if degraded else "succeeded"
+            "failed"
+            if failed
+            else "abstained"
+            if abstained
+            else "degraded"
+            if degraded
+            else "succeeded"
         )
         entry.update(TraceMetadata(status=status))
         entry.end()

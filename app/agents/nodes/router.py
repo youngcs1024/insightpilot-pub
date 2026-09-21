@@ -123,7 +123,6 @@ async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecis
                 confidence=original.confidence,
                 decided_by=decision.decided_by,
             )
-            record_route(decision.route.value)
             return decision
         except InsightPilotError as exc:
             update_current_observation(TraceMetadata(code=exc.code))
@@ -137,6 +136,7 @@ async def router(state: RouterInput, runtime: Runtime[RuntimeContext]) -> Comman
     decision = await route_question(
         state, RoutingRuntime(llm=ctx.llm, settings=ctx.settings.router, deadline=ctx.deadline)
     )
+    record_route(decision.route.value)
     return Command(update={"route": decision})
 
 
@@ -150,6 +150,7 @@ async def parent_router(state: AgentState, runtime: Runtime[RuntimeContext]) -> 
             RouterInput(question=state.question, routing_context=state.routing_context),
             RoutingRuntime(llm=ctx.llm, settings=ctx.settings.router, deadline=ctx.deadline),
         )
+        record_route(decision.route.value)
         return Command(update={"route": decision}, goto="finalize_context")
     except InsightPilotError as exc:
         return failed("route", state, exc)
