@@ -6,13 +6,16 @@ import json
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import BaseModel
 from sqlalchemy import update
 
 from app.agents.contracts import Route, RouteDecision, TurnIdentity
-from app.db.models import Turn, TurnStatus
+from app.agents.state import GraphOutput
 from app.core.errors import NotFoundError
+from app.db.models import Turn, TurnStatus
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
 from app.schemas.metric_resolution import MetricIntent
+from app.services import chat_stream
 from app.services.conversations import ConversationService
 from tests.agents.support import metric_intent, sql_candidate
 from tests.answer_support import data_draft
@@ -25,10 +28,12 @@ __all__ = ["chat"]
 
 def scope_decision() -> RouteDecision:
     return RouteDecision(
-        route=Route.CLARIFY, confidence=1,
+        route=Route.CLARIFY,
+        confidence=1,
         clarification_intent=ClarificationIntent(
             category=ClarificationCategory.AMBIGUOUS_SCOPE,
-            missing_dimensions=[MissingDimension.PERIOD], metric_keys=["gmv"],
+            missing_dimensions=[MissingDimension.PERIOD],
+            metric_keys=["gmv"],
             subject="查询GMV",
         ),
     )
@@ -38,18 +43,23 @@ def scope_decision() -> RouteDecision:
 async def test_mixed_clarifications_third_and_fourth_turn_stop_asking(
     chat: Harness, streamed: bool
 ) -> None:
-    model = FakeChatModel([
-        RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询GMV"),
-        MetricIntent(metric_keys=["gmv"], period_expression=""),
-        RouteDecision(route=Route.KNOWLEDGE_ONLY, confidence=1, knowledge_intent="2026年13月退货政策"),
-        RouteDecision(route=Route.CLARIFY, confidence=1),
-    ])
+    model = FakeChatModel(
+        [
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询GMV"),
+            MetricIntent(metric_keys=["gmv"], period_expression=""),
+            RouteDecision(
+                route=Route.KNOWLEDGE_ONLY, confidence=1, knowledge_intent="2026年13月退货政策"
+            ),
+            RouteDecision(route=Route.CLARIFY, confidence=1),
+        ]
+    )
     chat.app.state.llm = model
-    questions = ["那个", "查一下GMV", "2026年13月退货政策", "那个问题"]
+    questions = ["那个", "查一下GMV", "2026年13月的退货条款", "那个问题"]
     bodies = []
     for index, question in enumerate(questions):
         response = await chat.client.post(
-            chat.url + ("/stream" if streamed else ""), json={"content": question},
+            chat.url + ("/stream" if streamed else ""),
+            json={"content": question},
             headers={"Idempotency-Key": f"clarify-{index}"},
         )
         assert response.status_code == OK, response.text
@@ -62,6 +72,7 @@ async def test_mixed_clarifications_third_and_fourth_turn_stop_asking(
     assert bodies[1]["clarification"]["kind"] == "period_unresolved"
     assert bodies[2]["clarification"]["category"] == "ambiguous_scope"
     assert chat.app.state.mcp.calls == []
+    assert len(model.calls) == 4
     before = len(model.calls), chat.graph.calls, len(await chat.stored())
     replay = await chat.client.post(
         chat.url, json={"content": questions[-1]}, headers={"Idempotency-Key": "clarify-3"}
@@ -80,25 +91,35 @@ async def test_accepting_suggestion_is_a_fresh_analysis_with_owned_history(chat:
     assert not chat.app.state.mcp.calls
     model.enqueue(
         RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询2026年8月GMV"),
-        metric_intent(), sql_candidate(), data_draft(markdown="GMV 为42。"),
+        metric_intent(),
+        sql_candidate(),
+        data_draft(markdown="GMV 为42。"),
     )
     second = (await chat.client.post(chat.url, json={"content": "就按你建议的"})).json()
     assert second["status"] == "succeeded", second
     assert second["id"] != first["id"]
     routing = json.loads(model.calls[1].messages[1].content)
-    assert any(suggestion in item["content"] for item in routing["routing_context"]["recent_messages"])
+    assert any(
+        suggestion in item["content"] for item in routing["routing_context"]["recent_messages"]
+    )
     assert len(chat.app.state.mcp.calls) == 1
 
 
-@pytest.mark.parametrize("prior_status", [TurnStatus.SUCCEEDED, TurnStatus.FAILED, TurnStatus.ABSTAINED])
-async def test_nonclarification_outcome_breaks_sequence(chat: Harness, prior_status: TurnStatus) -> None:
+@pytest.mark.parametrize(
+    "prior_status", [TurnStatus.SUCCEEDED, TurnStatus.FAILED, TurnStatus.ABSTAINED]
+)
+async def test_nonclarification_outcome_breaks_sequence(
+    chat: Harness, prior_status: TurnStatus
+) -> None:
     chat.app.state.llm = FakeChatModel([scope_decision(), scope_decision(), scope_decision()])
     await chat.client.post(chat.url, json={"content": "查GMV"})
     second = (await chat.client.post(chat.url, json={"content": "查GMV"})).json()
     async with chat.database.session() as session, session.begin():
-        await session.execute(update(Turn).where(Turn.id == UUID(second["id"])).values(
-            status=prior_status, clarification=None
-        ))
+        await session.execute(
+            update(Turn)
+            .where(Turn.id == UUID(second["id"]))
+            .values(status=prior_status, clarification=None)
+        )
     third = (await chat.client.post(chat.url, json={"content": "查GMV"})).json()
     assert not third["clarification"]["loop_prevented"]
 
@@ -106,21 +127,22 @@ async def test_nonclarification_outcome_breaks_sequence(chat: Harness, prior_sta
 async def test_counter_survives_trimming_and_new_service_instance(chat: Harness) -> None:
     chat.app.state.llm = FakeChatModel([scope_decision(), scope_decision(), scope_decision()])
     bodies = [
-        (await chat.client.post(chat.url, json={"content": "查GMV"})).json()
-        for _ in range(2)
+        (await chat.client.post(chat.url, json={"content": "查GMV"})).json() for _ in range(2)
     ]
     async with chat.database.session() as session, session.begin():
         for body in bodies:
-            await session.execute(update(Turn).where(Turn.id == UUID(body["id"])).values(content="长" * 5000))
+            await session.execute(
+                update(Turn).where(Turn.id == UUID(body["id"])).values(content="长" * 5000)
+            )
     chat.app.state.conversations = ConversationService(chat.database)
     third = (await chat.client.post(chat.url, json={"content": "查GMV"})).json()
     assert third["clarification"]["loop_prevented"]
     created = await chat.client.post("/api/v1/conversations", json={})
     other = created.json()["id"]
     chat.app.state.llm = FakeChatModel([scope_decision()])
-    fresh = (await chat.client.post(
-        f"/api/v1/conversations/{other}/messages", json={"content": "查GMV"}
-    )).json()
+    fresh = (
+        await chat.client.post(f"/api/v1/conversations/{other}/messages", json={"content": "查GMV"})
+    ).json()
     assert not fresh["clarification"]["loop_prevented"]
     assert fresh["clarification"]["recent_topics"] == []
 
@@ -129,12 +151,24 @@ async def test_legacy_clarification_replays_without_upgrade(chat: Harness) -> No
     chat.app.state.llm = FakeChatModel([])
     headers = {"Idempotency-Key": "legacy-clarification"}
     body = (await chat.client.post(chat.url, json={"content": "那个"}, headers=headers)).json()
-    legacy = {key: value for key, value in body["clarification"].items() if key in {
-        "schema_version", "kind", "message", "metric_key", "available_metrics", "supported_grains"
-    }}
+    legacy = {
+        key: value
+        for key, value in body["clarification"].items()
+        if key
+        in {
+            "schema_version",
+            "kind",
+            "message",
+            "metric_key",
+            "available_metrics",
+            "supported_grains",
+        }
+    }
     legacy["schema_version"] = 1
     async with chat.database.session() as session, session.begin():
-        await session.execute(update(Turn).where(Turn.id == UUID(body["id"])).values(clarification=legacy))
+        await session.execute(
+            update(Turn).where(Turn.id == UUID(body["id"])).values(clarification=legacy)
+        )
     replay = (await chat.client.post(chat.url, json={"content": "那个"}, headers=headers)).json()
     assert replay["clarification"] == legacy
     assert replay["answer"] == body["answer"]
@@ -154,11 +188,6 @@ async def test_clarification_history_repository_rejects_foreign_identity(chat: H
 async def test_sse_clarification_tokens_follow_database_commit(
     chat: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from pydantic import BaseModel
-
-    from app.agents.state import GraphOutput
-    from app.services import chat_stream
-
     committed = False
     original_commit = chat.app.state.chat._clarify
     original_frame = chat_stream.frame

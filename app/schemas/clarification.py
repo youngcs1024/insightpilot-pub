@@ -46,6 +46,10 @@ class ClarificationHistory(Contract):
 
     schema_version: Literal[1] = 1
     consecutive: int = Field(default=0, ge=0, le=2)
+    previous_suggestion: str = Field(default="", max_length=2000)
+    previous_metric_keys: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
+        default_factory=list, max_length=64
+    )
     recent_topics: list[Annotated[str, Field(min_length=1, max_length=240)]] = Field(
         default_factory=list, max_length=3
     )

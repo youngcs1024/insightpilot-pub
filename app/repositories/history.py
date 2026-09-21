@@ -56,9 +56,7 @@ class HistoryRepository:
         turns = (
             await session.scalars(repository.history(identity.conversation_id, user.seq))
         ).all()
-        messages = trim_history(
-            [history_message(turn) for turn in reversed(turns)]
-        )
+        messages = trim_history([history_message(turn) for turn in reversed(turns)])
         has_prior_turns = (
             await session.scalar(
                 select(Turn.id)
@@ -113,7 +111,9 @@ class HistoryRepository:
                 )
             )
         return PreparedContext(
-            clarification_history=await load_clarification_history(repository, identity.conversation_id, user.seq),
+            clarification_history=await load_clarification_history(
+                repository, identity.conversation_id, user.seq
+            ),
             has_prior_turns=has_prior_turns,
             question=user.content,
             summary=bounded_text(conversation.summary or "", SUMMARY_TOKENS),

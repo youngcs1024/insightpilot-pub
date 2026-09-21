@@ -4,7 +4,13 @@ from enum import StrEnum
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
+from pydantic import (
+    AwareDatetime,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent
@@ -158,7 +164,9 @@ class MetricClarification(Contract):
     def versioned_policy(self) -> Self:
         """New terminal responses require structured policy; old payloads stay old."""
         if self.schema_version == CLARIFICATION_VERSION and (
-            self.category is None or self.intent is None or not self.suggested_question.strip()
+            self.category is None
+            or self.intent is None
+            or not self.suggested_question.strip()
             or self.category is not self.intent.category
         ):
             raise PydanticCustomError("clarification_policy", "Missing clarification policy")
@@ -169,7 +177,13 @@ class MetricClarification(Contract):
         """Do not add v2 defaults when replaying persisted v1 clarification JSON."""
         result: dict[str, object] = handler(self)
         if self.schema_version == 1:
-            for key in ("category", "intent", "suggested_question", "recent_topics", "loop_prevented"):
+            for key in (
+                "category",
+                "intent",
+                "suggested_question",
+                "recent_topics",
+                "loop_prevented",
+            ):
                 result.pop(key, None)
         return result
 

@@ -61,7 +61,8 @@ def _specialist_intent(state: AgentState, source: MetricClarification) -> Clarif
         kind = ClarificationKind(state.knowledge_clarification.kind.value)
         dimensions = list(dict.fromkeys([*dimensions, _KIND_DIMENSIONS[kind]]))
     return ClarificationIntent(
-        category=_category(source.kind), missing_dimensions=dimensions,
+        category=_category(source.kind),
+        missing_dimensions=dimensions,
         metric_keys=[source.metric_key] if source.metric_key else [],
         subject=bounded_text(state.question, 1000),
     )
@@ -125,7 +126,11 @@ def _scope_suggestion(
     }
     dimensions = intent.missing_dimensions or [MissingDimension.METRIC, MissingDimension.PERIOD]
     changes = [additions[item] for item in dimensions if item in additions]
-    if not intent.subject.strip() or not _metric(intent, capabilities):
+    if not changes or not intent.subject.strip():
+        return _example(intent, capabilities, period)
+    if not (capabilities.metrics or capabilities.document_categories):
+        return _example(intent, capabilities, period)
+    if MissingDimension.METRIC in dimensions and not capabilities.metrics:
         return _example(intent, capabilities, period)
     return intent.subject + "；其余明确条件保留，建议" + "，".join(changes) + "。"
 
@@ -150,31 +155,59 @@ def _suggestion(
     if intent.category is ClarificationCategory.AMBIGUOUS_SCOPE:
         return _scope_suggestion(intent, capabilities, period)
     if intent.category is ClarificationCategory.AMBIGUOUS_REFERENCE:
+        previous = _previous_suggestion(history, capabilities)
+        if previous:
+            return previous
         for topic in history.recent_topics:
             if _supported_topic(topic, capabilities, period):
                 return topic
+    return _unsupported_suggestion(intent, capabilities, period)
+
+
+def _previous_suggestion(
+    history: ClarificationHistory, capabilities: ClarificationCapabilities
+) -> str:
+    available = {item.key for item in capabilities.metrics}
+    if history.previous_metric_keys and set(history.previous_metric_keys) <= available:
+        return history.previous_suggestion
+    return ""
+
+
+def _unsupported_suggestion(
+    intent: ClarificationIntent, capabilities: ClarificationCapabilities, period: Period
+) -> str:
+    if (
+        intent.category is ClarificationCategory.OUT_OF_SCOPE
+        and MissingDimension.METRIC in intent.missing_dimensions
+        and intent.subject
+        and capabilities.metrics
+    ):
+        return (
+            intent.subject
+            + "；其余明确条件保留，建议将不支持的指标替换为"
+            + _metric(intent, capabilities)
+            + "。"
+        )
     return _example(intent, capabilities, period)
 
 
 def _capabilities(capabilities: ClarificationCapabilities) -> str:
     metrics = "、".join(item.display_name for item in capabilities.metrics) or "暂无已发布指标"
     documents = "、".join(_DOCUMENT_NAMES[item] for item in capabilities.document_categories)
-    return f"可选指标：{metrics}。文档类别：{documents or '暂无已发布知识文档'}。"
+    return f"可选指标: {metrics}。文档类别: {documents or '暂无已发布知识文档'}。"
 
 
-def _question(
-    intent: ClarificationIntent, history: ClarificationHistory, period: Period
-) -> str:
+def _question(intent: ClarificationIntent, history: ClarificationHistory, period: Period) -> str:
     if intent.category is ClarificationCategory.OUT_OF_SCOPE:
         return "这个请求超出业务数据与企业知识库的只读分析范围。"
     if intent.category is ClarificationCategory.AMBIGUOUS_REFERENCE:
         topics = "；".join(f"「{item}」" for item in history.recent_topics)
-        context = f"本会话最近的问题有：{topics}。" if topics else "本会话没有可用的近期话题。"
-        return f"你说的“那个”具体指哪个问题？{context}"
+        context = f"本会话最近的问题有: {topics}。" if topics else "本会话没有可用的近期话题。"
+        return f"你说的“那个”具体指哪个问题?{context}"
     dimensions = intent.missing_dimensions or [MissingDimension.METRIC, MissingDimension.PERIOD]
-    question = "请明确：" + "；".join(_SCOPE_QUESTIONS[item] for item in dimensions) + "？"
+    question = "请明确: " + "；".join(_SCOPE_QUESTIONS[item] for item in dimensions) + "?"
     if MissingDimension.PERIOD in dimensions:
-        question += "时间建议采用上一个完整自然月：" + period.as_assumption() + "。"
+        question += "时间建议采用上一个完整自然月: " + period.as_assumption() + "。"
     return question
 
 
@@ -191,15 +224,24 @@ def render_clarification(
     loop = history.consecutive >= _LOOP_THRESHOLD
     opening = (
         "已连续澄清两轮，下面提供一个支持范围内的替代解释，供你确认。"
-        if loop else _question(intent, history, period)
+        if loop
+        else _question(intent, history, period)
     )
+    if loop and MissingDimension.PERIOD in intent.missing_dimensions:
+        opening += " 时间建议: " + period.as_assumption() + "。"
     message = opening + " " + _capabilities(capabilities)
-    message += " 下一步建议（尚未执行）：" + suggestion
+    message += " 下一步建议（尚未执行）: " + suggestion
     message += " 如接受，请在下一条消息确认；也可直接提交完整的新问题。"
     return MetricClarification(
-        schema_version=2, kind=source.kind, message=message,
-        category=intent.category, intent=intent, suggested_question=suggestion,
-        recent_topics=list(history.recent_topics), loop_prevented=loop,
-        metric_key=source.metric_key, available_metrics=[item.key for item in capabilities.metrics],
+        schema_version=2,
+        kind=source.kind,
+        message=message,
+        category=intent.category,
+        intent=intent,
+        suggested_question=suggestion,
+        recent_topics=list(history.recent_topics),
+        loop_prevented=loop,
+        metric_key=source.metric_key,
+        available_metrics=[item.key for item in capabilities.metrics],
         supported_grains=list(source.supported_grains),
     )

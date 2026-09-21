@@ -19,25 +19,33 @@ class ClarificationCapabilityService:
 
     async def read(self, *, deadline: Deadline) -> ClarificationCapabilities:
         """Read within the caller deadline and the existing typed DB retry policy."""
+
         async def read() -> ClarificationCapabilities:
             async with self._database.session() as session, session.begin():
                 metrics = await MetricRepository(session).list_active()
                 documents = DocumentRepository(session)
                 manifest = await documents.manifest()
-                members = {
-                    (item.document_id, item.document_version, item.chunking_version)
-                    for item in manifest.members
-                } if manifest else set()
+                members = (
+                    {
+                        (item.document_id, item.document_version, item.chunking_version)
+                        for item in manifest.members
+                    }
+                    if manifest
+                    else set()
+                )
                 registered = await documents.list_documents() if members else []
                 categories = {
                     item.metadata.doc_type
                     for item in registered
-                    if item.status is DocumentStatus.ACTIVE and item.chunk_count > 0
+                    if item.status is DocumentStatus.ACTIVE
+                    and item.chunk_count > 0
                     and (item.document_id, item.document_version, item.chunking_version) in members
                 }
                 return ClarificationCapabilities(
-                    metrics=[AvailableMetric(key=item.key, display_name=item.display_name)
-                             for item in metrics],
+                    metrics=[
+                        AvailableMetric(key=item.key, display_name=item.display_name)
+                        for item in metrics
+                    ],
                     document_categories=sorted(categories),
                 )
 

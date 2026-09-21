@@ -114,7 +114,7 @@ class TurnRepository:
                 or_(
                     Turn.status.in_([TurnStatus.SUCCEEDED, TurnStatus.DEGRADED]),
                     and_(Turn.status == TurnStatus.ABSTAINED, Turn.clarification.is_not(None)),
-                )
+                ),
             )
             .order_by(Turn.seq.desc())
             .limit(100)
@@ -125,7 +125,8 @@ class TurnRepository:
         return (
             self._scoped(conversation_id)
             .where(Turn.seq < before_seq, Turn.role == TurnRole.ASSISTANT)
-            .order_by(Turn.seq.desc()).limit(2)
+            .order_by(Turn.seq.desc())
+            .limit(2)
         )
 
     def recent_topics(self, conversation_id: UUID, before_seq: int) -> Select[tuple[Turn]]:
@@ -133,7 +134,8 @@ class TurnRepository:
         return (
             self._scoped(conversation_id)
             .where(Turn.seq < before_seq, Turn.role == TurnRole.USER)
-            .order_by(Turn.seq.desc()).limit(3)
+            .order_by(Turn.seq.desc())
+            .limit(3)
         )
 
     async def page(self, conversation_id: UUID, limit: int, offset: int) -> list[Turn]:

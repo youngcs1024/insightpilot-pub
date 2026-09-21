@@ -100,8 +100,10 @@ class FakeMetrics:
 class FakeClarificationCapabilities:
     async def read(self, *, deadline: Deadline) -> ClarificationCapabilities:
         return ClarificationCapabilities(
-            metrics=[AvailableMetric(key=item.key, display_name=item.display_name)
-                     for item in await FakeMetrics().list_active(deadline=deadline)],
+            metrics=[
+                AvailableMetric(key=item.key, display_name=item.display_name)
+                for item in await FakeMetrics().list_active(deadline=deadline)
+            ],
             document_categories=list(DocumentType),
         )
 

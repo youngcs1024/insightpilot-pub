@@ -26,7 +26,8 @@ async def clarify(state: AgentState, runtime: Runtime[RuntimeContext]) -> Comman
         ctx.deadline.check("clarify_complete")
         result = render_clarification(state, capabilities, now=ctx.now)
         logger.info(
-            "clarification_prepared", category=result.category.value if result.category else None,
+            "clarification_prepared",
+            category=result.category.value if result.category else None,
             loop_prevented=result.loop_prevented,
         )
         return Command(update={"route_clarification": result}, goto="format_answer")

@@ -18,8 +18,8 @@ from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
-from app.services.llm.usage import collect_usage
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
+from app.services.llm.usage import collect_usage
 
 logger = structlog.get_logger(__name__)
 _SPECIALIST_COUNT = 2

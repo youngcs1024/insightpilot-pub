@@ -21,7 +21,9 @@ from tests.clarification_support import published_document, published_manifest
 from tests.metric_resolution_support import definition
 
 
-@pytest.mark.parametrize("publication", ["active", "deleted", "different_version", "empty", "unpublished"])
+@pytest.mark.parametrize(
+    "publication", ["active", "deleted", "different_version", "empty", "unpublished"]
+)
 async def test_only_committed_active_capabilities_are_listed(
     settings: Settings, monkeypatch: pytest.MonkeyPatch, publication: str
 ) -> None:
@@ -41,9 +43,15 @@ async def test_only_committed_active_capabilities_are_listed(
     documents = AsyncMock()
     documents.manifest.return_value = None if publication == "unpublished" else manifest
     documents.list_documents.return_value = [item]
-    monkeypatch.setattr("app.services.clarification_capabilities.MetricRepository", lambda _: metrics)
-    monkeypatch.setattr("app.services.clarification_capabilities.DocumentRepository", lambda _: documents)
-    output = await ClarificationCapabilityService(database, settings.database).read(deadline=context().deadline)
+    monkeypatch.setattr(
+        "app.services.clarification_capabilities.MetricRepository", lambda _: metrics
+    )
+    monkeypatch.setattr(
+        "app.services.clarification_capabilities.DocumentRepository", lambda _: documents
+    )
+    output = await ClarificationCapabilityService(database, settings.database).read(
+        deadline=context().deadline
+    )
     assert [item.key for item in output.metrics] == ["gmv"]
     assert output.document_categories == ([DocumentType.POLICY] if publication == "active" else [])
     if publication == "unpublished":
@@ -57,9 +65,13 @@ async def test_catalog_error_is_not_relabelled_as_empty(
     database.session.return_value.__aenter__.return_value = AsyncMock(spec=AsyncSession)
     metrics = AsyncMock()
     metrics.list_active.side_effect = MetricCatalogError()
-    monkeypatch.setattr("app.services.clarification_capabilities.MetricRepository", lambda _: metrics)
+    monkeypatch.setattr(
+        "app.services.clarification_capabilities.MetricRepository", lambda _: metrics
+    )
     with pytest.raises(MetricCatalogError):
-        await ClarificationCapabilityService(database, settings.database).read(deadline=context().deadline)
+        await ClarificationCapabilityService(database, settings.database).read(
+            deadline=context().deadline
+        )
     metrics.list_active.assert_awaited_once()
 
 
@@ -84,4 +96,5 @@ async def test_capability_deadline_closes_session(settings: Settings) -> None:
             deadline=Deadline(time.monotonic() + 0.01)
         )
     assert closed
-    assert not ctx.mcp.calls and not ctx.llm.calls
+    assert not ctx.mcp.calls
+    assert not ctx.llm.calls
