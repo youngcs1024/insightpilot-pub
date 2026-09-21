@@ -20,6 +20,7 @@ from app.schemas.memory import Memory, MemoryType, TerminologyContent
 from app.schemas.retrieval import PointTimeScope
 from tests.agents.knowledge_support import ranked
 from tests.agents.support import result
+from tests.router_support import BOTH_QUESTION
 
 
 def memory() -> Memory:
@@ -46,7 +47,11 @@ def finalized() -> TurnContext:
 
 async def _prepared(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
     command = await prepare(state, runtime)
-    return Command(update=command.update, goto="router")
+    # Keep the reducer contract graph's scripted classification independent of
+    # the production smoke fixture's high-precision DATA_ONLY question.
+    update = dict(command.update)
+    update["question"] = BOTH_QUESTION
+    return Command(update=update, goto="router")
 
 
 def _finalize(state: AgentState) -> dict[str, TurnContext]:

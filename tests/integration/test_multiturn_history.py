@@ -74,12 +74,14 @@ async def test_clarification_rewrite_survives_checkpoint_restart(
     database, settings = graph_database
     prior = await admitted(database)
     identity = await admitted(database, identity=prior)
-    rewritten = RouteDecision(route=Route.CLARIFY, confidence=1,
-                              clarification_question="请说明昨天所指的问题。")
+    rewritten = RouteDecision(
+        route=Route.CLARIFY, confidence=1, clarification_question="请说明昨天所指的问题。"
+    )
     async with database.session() as session, session.begin():
         row = await session.get(Turn, identity.turn_id)
-        await session.execute(update(Turn).where(Turn.id == row.reply_to_turn_id)
-                              .values(content="昨天那个"))
+        await session.execute(
+            update(Turn).where(Turn.id == row.reply_to_turn_id).values(content="昨天那个")
+        )
     ctx = replace(connected_context(database, identity), llm=FakeChatModel([rewritten]))
     graph = GraphService(settings)
     await graph.start()

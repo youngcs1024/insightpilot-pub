@@ -5,12 +5,12 @@ from uuid import UUID
 import structlog
 
 from app.agents.contracts import DataEvidence, EvidenceBundle, EvidenceSnapshot, TurnIdentity
-from app.schemas.knowledge import KnowledgeEvidence
 from app.core.observability import record_evidence
 from app.db.session import Database
 from app.repositories.evidence import EvidenceRepository
 from app.repositories.history import validate_turn
 from app.repositories.turns import TurnRepository
+from app.schemas.knowledge import KnowledgeEvidence
 
 logger = structlog.get_logger(__name__)
 
@@ -41,7 +41,6 @@ class EvidenceService:
         record_evidence(data)
         return snapshot
 
-
     async def read_bundle(self, identity: TurnIdentity) -> EvidenceBundle:
         """Read only committed snapshots for an owned turn."""
         async with self.database.session() as session:
@@ -62,6 +61,10 @@ class EvidenceService:
             )
         if data is not None:
             record_evidence(data)
-        logger.info("evidence_bundle_committed", turn_id=str(identity.turn_id),
-                    has_data=bundle.data is not None, has_knowledge=bundle.knowledge is not None)
+        logger.info(
+            "evidence_bundle_committed",
+            turn_id=str(identity.turn_id),
+            has_data=bundle.data is not None,
+            has_knowledge=bundle.knowledge is not None,
+        )
         return bundle

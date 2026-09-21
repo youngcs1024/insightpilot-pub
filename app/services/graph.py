@@ -259,6 +259,7 @@ class GraphService:
         # Historical auditing reads the saver's original channel_values instead.
         return Command(
             update={"failures": Overwrite([])},
-            goto="synthesize" if prior.route and prior.route.route is contracts.Route.BOTH
+            goto="synthesize"
+            if prior.route and prior.route.route is contracts.Route.BOTH
             else "format_answer",
         )

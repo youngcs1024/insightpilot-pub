@@ -25,8 +25,13 @@ async def synthesize(state: AgentState, runtime: Runtime[RuntimeContext]) -> Com
             missing.append("data")
         if bundle.knowledge is None:
             missing.append("knowledge")
-        return Command(update={"source_summary": SourceSummary(
-            evidence_refs=bundle.refs, missing_components=missing
-        )}, goto="format_answer")
+        return Command(
+            update={
+                "source_summary": SourceSummary(
+                    evidence_refs=bundle.refs, missing_components=missing
+                )
+            },
+            goto="format_answer",
+        )
     except InsightPilotError as exc:
         return failed("synthesize", state, exc)

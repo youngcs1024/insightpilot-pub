@@ -23,11 +23,11 @@ async def answer_knowledge(
     ctx = runtime.context
     try:
         ctx.deadline.check("answer_knowledge")
+        if state.knowledge_evidence is not None:
+            return Command(update={"knowledge_evidence": state.knowledge_evidence})
         bundle = await ctx.evidence.read_bundle(ctx.identity)
         if bundle.knowledge is not None:
             return Command(update={"knowledge_evidence": bundle.knowledge.knowledge})
-        if state.knowledge_evidence is not None:
-            return Command(update={"knowledge_evidence": state.knowledge_evidence})
         inputs = to_knowledge_input(state, token_counter=ctx.schema_token_counter)
         output = KnowledgeAgentOutput.model_validate(
             await KNOWLEDGE_GRAPH.ainvoke(inputs, config, context=ctx)

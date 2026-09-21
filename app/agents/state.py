@@ -69,6 +69,7 @@ class GraphOutput(Contract):
     """Typed success/failure projection for the future ChatService."""
 
     schema_version: Literal[1] = 1
+    route: RouteDecision | None = None
     data_evidence: DataEvidence | None = None
     answer: Answer | None = None
     clarification: MetricClarification | None = None
@@ -82,10 +83,13 @@ class GraphOutput(Contract):
         if self.clarification is not None and (
             self.answer is not None
             or self.data_evidence is not None
-            or (self.evidence_refs is not None and (
-                self.evidence_refs.data_snapshot_id is not None
-                or self.evidence_refs.knowledge_snapshot_id is not None
-            ))
+            or (
+                self.evidence_refs is not None
+                and (
+                    self.evidence_refs.data_snapshot_id is not None
+                    or self.evidence_refs.knowledge_snapshot_id is not None
+                )
+            )
         ):
             raise PydanticCustomError(
                 "graph_clarification", "Clarification cannot contain analysis"
@@ -107,6 +111,7 @@ class AgentState(GraphInput):
     knowledge_evidence: KnowledgeEvidence | None = None
     knowledge_clarification: KnowledgeClarification | None = None
     knowledge_abstention_reason: str | None = Field(default=None, min_length=1, max_length=1000)
+    route_clarification: MetricClarification | None = None
     data_clarification: MetricClarification | None = None
     assumptions: Annotated[list[str], operator.add] = Field(default_factory=list)
     degraded_components: Annotated[list[str], operator.add] = Field(default_factory=list)

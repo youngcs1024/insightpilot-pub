@@ -38,21 +38,31 @@ def dispatch(state: AgentState) -> list[str] | str:
 
 def topology() -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput]:
     """Use static edges only for update-only nodes; Commands own terminal routing."""
-    graph = StateGraph(AgentState, context_schema=RuntimeContext,
-                       input_schema=GraphInput, output_schema=GraphOutput)
+    graph = StateGraph(
+        AgentState,
+        context_schema=RuntimeContext,
+        input_schema=GraphInput,
+        output_schema=GraphOutput,
+    )
     graph.add_node("prepare_context", prepare, destinations=("route", "__end__"))
     graph.add_node("route", parent_router, destinations=("finalize_context", "__end__"))
     graph.add_node("finalize_context", finalize_context)
     graph.add_node("data_agent", answer_data_routed_node)
     graph.add_node("knowledge_agent", answer_knowledge_node)
     graph.add_node("clarify", clarify)
-    graph.add_node("persist_evidence", persist_evidence,
-                   destinations=("synthesize", "format_answer", "__end__"))
+    graph.add_node(
+        "persist_evidence",
+        persist_evidence,
+        destinations=("synthesize", "format_answer", "__end__"),
+    )
     graph.add_node("synthesize", synthesize, destinations=("format_answer", "__end__"))
     graph.add_node("format_answer", format_answer, destinations=("__end__",))
     graph.add_edge(START, "prepare_context")
-    graph.add_conditional_edges("finalize_context", dispatch,
-                                path_map=["data_agent", "knowledge_agent", "clarify", "__end__"])
+    graph.add_conditional_edges(
+        "finalize_context",
+        dispatch,
+        path_map=["data_agent", "knowledge_agent", "clarify", "__end__"],
+    )
     graph.add_edge("data_agent", "persist_evidence")
     graph.add_edge("knowledge_agent", "persist_evidence")
     graph.add_edge("clarify", "format_answer")

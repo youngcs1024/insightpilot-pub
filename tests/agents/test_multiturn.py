@@ -9,7 +9,14 @@ from langgraph.runtime import Runtime
 from pydantic import ValidationError
 
 from app.agents.budget import HISTORY_TOKENS, token_bound
-from app.agents.contracts import AnswerDraft, HistoryMessage, PreparedContext, RewrittenQuestion, Route, RouteDecision
+from app.agents.contracts import (
+    AnswerDraft,
+    HistoryMessage,
+    PreparedContext,
+    RewrittenQuestion,
+    Route,
+    RouteDecision,
+)
 from app.agents.data.nodes.generate_sql import build_messages
 from app.agents.data.state import DataAgentInput
 from app.agents.multiturn import PRIOR_SQL_TOKENS, prior_queries, trim_history
@@ -92,8 +99,11 @@ async def test_unresolvable_reference_requests_clarification(empty_history: bool
         inputs.messages = []
     ctx = context(
         responses=[
-            RouteDecision(route=Route.CLARIFY, confidence=1,
-                          clarification_question="请明确昨天所指的指标或政策。")
+            RouteDecision(
+                route=Route.CLARIFY,
+                confidence=1,
+                clarification_question="请明确昨天所指的指标或政策。",
+            )
         ]
     )
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=inputs)))
@@ -196,7 +206,10 @@ async def test_prior_turn_evidence_reuse_skips_rewrite() -> None:
     ctx = context()
     assert (await invoke(ctx)).status == "succeeded"
     before = len(ctx.llm.calls)
-    ctx.llm.enqueue(RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"), AnswerDraft(markdown="Reused evidence", confidence=1))
+    ctx.llm.enqueue(
+        RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"),
+        AnswerDraft(markdown="Reused evidence", confidence=1),
+    )
     ctx = replace(ctx, conversations=AsyncMock(prepare=AsyncMock(return_value=prepared())))
     assert (await invoke(ctx)).status == "succeeded"
     assert len(ctx.llm.calls) == before + 2

@@ -521,7 +521,12 @@ async def test_create_conversation_without_body(chat: Harness) -> None:
 
 @pytest.mark.parametrize("streamed", [False, True])
 async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: bool) -> None:
-    chat.app.state.llm = FakeChatModel([RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"), metric_intent().model_copy(update={"metric_keys": []})])
+    chat.app.state.llm = FakeChatModel(
+        [
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"),
+            metric_intent().model_copy(update={"metric_keys": []}),
+        ]
+    )
     chat.app.state.mcp = FakeMcpClient([])
     suffix = "/stream" if streamed else ""
     headers = {"Idempotency-Key": "clarification"}
@@ -562,7 +567,12 @@ async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: 
 
 
 async def test_clarification_cannot_be_read_by_another_user(chat: Harness) -> None:
-    chat.app.state.llm = FakeChatModel([RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"), metric_intent().model_copy(update={"metric_keys": []})])
+    chat.app.state.llm = FakeChatModel(
+        [
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="查询指标"),
+            metric_intent().model_copy(update={"metric_keys": []}),
+        ]
+    )
     response = await chat.client.post(chat.url, json={"content": "算一下"})
     assert response.status_code == OK
     other = chat.user.model_copy(update={"id": uuid4()})

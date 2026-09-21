@@ -160,4 +160,4 @@ def topology() -> StateGraph[DataAgentState, RuntimeContext, DataAgentInput, Dat
 
 def build() -> DataGraph:
     """Inherit parent checkpoint context; never allocate an in-memory saver."""
-    return topology().compile(name="data_agent")
+    return topology().compile(name="data_specialist_graph")

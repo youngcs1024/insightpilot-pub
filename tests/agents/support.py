@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from app.agents.contracts import (
     AnswerDraft,
     DataEvidence,
-    EvidenceSnapshot,
     EvidenceBundle,
+    EvidenceSnapshot,
     KnowledgeSnapshot,
     PreparedContext,
     SqlGeneratorOutput,
@@ -55,7 +55,6 @@ class FakeEvidence:
         self.snapshot = self.snapshot or EvidenceSnapshot(id=uuid4(), data=data)
         self.committed = True
         return self.snapshot
-
 
     async def read_bundle(self, identity: TurnIdentity) -> EvidenceBundle:
         return EvidenceBundle(data=self.snapshot, knowledge=self.knowledge)
@@ -108,8 +107,9 @@ def context(
     *,
     responses: list[BaseModel | Exception] | None = None,
     mcp_results: list[QueryResultPayload | Exception] | None = None,
+    settings: Settings | None = None,
 ) -> RuntimeContext:
-    settings = Settings(
+    settings = settings or Settings(
         _env_file=None,
         database={"app_password": "test-password"},
         security={"jwt_secret": "test-secret-at-least-32-characters-long"},

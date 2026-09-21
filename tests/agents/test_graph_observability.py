@@ -70,8 +70,13 @@ async def test_business_graph_span_topology_and_parentage() -> None:
                 "format_answer",
             }
             for span in children:
-                parent = (next(item for item in children if item.name == "route")
-                          if span.name == "router" else root if span.name in parent_nodes else data)
+                parent = (
+                    next(item for item in children if item.name == "route")
+                    if span.name == "router"
+                    else root
+                    if span.name in parent_nodes
+                    else data
+                )
                 assert span.parent is not None
                 assert span.parent.span_id == parent.context.span_id
                 assert span.parent.trace_id == root.context.trace_id
@@ -152,8 +157,11 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
 async def test_rewrite_trace_has_diagnostics_without_question_prose() -> None:
     ctx = context(
         responses=[
-            RouteDecision(route=Route.CLARIFY, confidence=0.9,
-                          clarification_question="private-reference-marker")
+            RouteDecision(
+                route=Route.CLARIFY,
+                confidence=0.9,
+                clarification_question="private-reference-marker",
+            )
         ]
     )
     ctx = replace(

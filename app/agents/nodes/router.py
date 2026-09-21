@@ -11,13 +11,13 @@ from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.contracts import Route, RouteDecision, RouterInput
 from app.agents.multiturn import trim_history
 from app.agents.nodes.common import failed
-from app.agents.state import AgentState
 from app.agents.nodes.prefilter import CLARIFICATION_QUESTION, prefilter
 from app.agents.prompts import ROUTER
 from app.agents.runtime import RoutingRuntime, RuntimeContext
+from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
-from app.core.observability import TraceMetadata, observe, update_current_observation
+from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
 from app.services.llm.usage import collect_usage
 
 logger = structlog.get_logger(__name__)
@@ -123,6 +123,7 @@ async def route_question(inputs: RouterInput, ctx: RoutingRuntime) -> RouteDecis
                 confidence=original.confidence,
                 decided_by=decision.decided_by,
             )
+            record_route(decision.route.value)
             return decision
         except InsightPilotError as exc:
             update_current_observation(TraceMetadata(code=exc.code))

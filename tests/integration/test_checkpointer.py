@@ -72,7 +72,11 @@ async def test_conversation_resumes_after_restart(
         )
         assert checkpoint.values["turn_id"] == new_identity.turn_id
         assert AgentState.model_validate(checkpoint.values).failures == []
-        assert AgentState.model_validate(checkpoint.values).rewritten is not None
+        saved = AgentState.model_validate(checkpoint.values)
+        assert saved.rewritten is None
+        assert saved.context is not None
+        assert saved.route is not None
+        assert saved.route.data_intent == "2026年8月GMV"
         assert output2.evidence_refs != output.evidence_refs
     finally:
         await second.aclose()

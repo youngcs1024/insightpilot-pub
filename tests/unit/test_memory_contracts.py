@@ -48,15 +48,24 @@ def test_memory_rejects_invalid_content_or_missing_provenance(update: dict[str, 
 @pytest.mark.parametrize(
     "update",
     [
-        {"time_scope": None},
+        {"time_scope": {}},
         {"time_scope": {"kind": "unknown"}},
         {"prior_sql": ["SELECT 1"] * 4},
         {"memories": [memory()] * 6},
         {"token_accounting": {"history": -1}},
     ],
 )
-def test_finalized_context_rejects_missing_scope_or_exceeded_bounds(
+def test_finalized_context_rejects_invalid_scope_or_exceeded_bounds(
     update: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError):
         TurnContext.model_validate({**finalized().model_dump(), **update})
+
+
+def test_unresolved_scope_is_explicit_and_missing_field_is_rejected() -> None:
+    payload = finalized().model_dump()
+    payload["time_scope"] = None
+    assert TurnContext.model_validate(payload).time_scope is None
+    payload.pop("time_scope")
+    with pytest.raises(ValidationError):
+        TurnContext.model_validate(payload)

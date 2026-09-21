@@ -4,12 +4,20 @@ import hashlib
 import json
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.contracts import DataEvidence, EvidenceBundle, EvidenceSnapshot, KnowledgeSnapshot, TurnIdentity
+from app.agents.contracts import (
+    DataEvidence,
+    EvidenceBundle,
+    EvidenceSnapshot,
+    KnowledgeSnapshot,
+    TurnIdentity,
+)
 from app.core.errors import ConflictError, NotFoundError
+from app.db.models.conversation import Conversation
 from app.db.models.evidence import DataEvidenceRecord, KnowledgeEvidenceRecord
+from app.db.models.turn import Turn
 from app.repositories.turns import TurnRepository
 from app.schemas.knowledge import KnowledgeEvidence
 
@@ -70,13 +78,15 @@ class EvidenceRepository:
         await self.session.flush()
         return EvidenceSnapshot(id=record.id, data=data)
 
-
     async def find_knowledge(self, snapshot_id: UUID | None = None) -> KnowledgeSnapshot | None:
         """Validate turn ownership even when it has no knowledge snapshot."""
         identity = self.identity
-        if await TurnRepository(self.session, identity.user_id).get(
-            identity.conversation_id, identity.turn_id
-        ) is None:
+        if (
+            await TurnRepository(self.session, identity.user_id).get(
+                identity.conversation_id, identity.turn_id
+            )
+            is None
+        ):
             raise NotFoundError()
         query = select(KnowledgeEvidenceRecord).where(
             KnowledgeEvidenceRecord.user_id == identity.user_id,
@@ -85,8 +95,12 @@ class EvidenceRepository:
         if snapshot_id is not None:
             query = query.where(KnowledgeEvidenceRecord.id == snapshot_id)
         record = await self.session.scalar(query)
-        return None if record is None else KnowledgeSnapshot(
-            id=record.id, knowledge=KnowledgeEvidence.model_validate(record.payload)
+        return (
+            None
+            if record is None
+            else KnowledgeSnapshot(
+                id=record.id, knowledge=KnowledgeEvidence.model_validate(record.payload)
+            )
         )
 
     async def insert_knowledge(self, knowledge: KnowledgeEvidence) -> KnowledgeSnapshot:
@@ -108,4 +122,43 @@ class EvidenceRepository:
 
     async def read_bundle(self) -> EvidenceBundle:
         """Read both kinds without consulting either external evidence source."""
-        return EvidenceBundle(data=await self.find(), knowledge=await self.find_knowledge())
+        identity = self.identity
+        result = await self.session.execute(
+            select(DataEvidenceRecord, KnowledgeEvidenceRecord)
+            .select_from(Turn)
+            .join(Conversation, Turn.conversation_id == Conversation.id)
+            .outerjoin(
+                DataEvidenceRecord,
+                and_(
+                    DataEvidenceRecord.assistant_turn_id == Turn.id,
+                    DataEvidenceRecord.user_id == identity.user_id,
+                ),
+            )
+            .outerjoin(
+                KnowledgeEvidenceRecord,
+                and_(
+                    KnowledgeEvidenceRecord.assistant_turn_id == Turn.id,
+                    KnowledgeEvidenceRecord.user_id == identity.user_id,
+                ),
+            )
+            .where(
+                Turn.id == identity.turn_id,
+                Conversation.id == identity.conversation_id,
+                Conversation.user_id == identity.user_id,
+                Conversation.archived_at.is_(None),
+            )
+        )
+        row = result.one_or_none()
+        if row is None:
+            raise NotFoundError()
+        data, knowledge = row
+        return EvidenceBundle(
+            data=EvidenceSnapshot(id=data.id, data=DataEvidence.model_validate(data.payload))
+            if data is not None
+            else None,
+            knowledge=KnowledgeSnapshot(
+                id=knowledge.id, knowledge=KnowledgeEvidence.model_validate(knowledge.payload)
+            )
+            if knowledge is not None
+            else None,
+        )

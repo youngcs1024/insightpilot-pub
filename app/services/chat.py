@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
-from app.agents.contracts import Answer, TurnIdentity
+from app.agents.contracts import Answer, Route, TurnIdentity
 from app.agents.failures import FailureKind
 from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
@@ -33,11 +33,11 @@ from app.repositories import lifecycle
 from app.repositories.evidence import EvidenceRepository
 from app.repositories.turns import TurnRepository
 from app.schemas.chat import TurnResponse
+from app.schemas.knowledge import KnowledgeDraft
 from app.services.conversations import ConversationService
 from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
 from app.services.knowledge_generation import validate_citations
-from app.schemas.knowledge import KnowledgeDraft
 from app.services.turn_results import TurnFailedError, failure_reason, turn_response
 
 logger = structlog.get_logger(__name__)
@@ -203,7 +203,20 @@ class ChatService:
                         if output.failures
                         else FailureKind.NODE_OPERATION_FAILED
                     )
-                    raise TurnFailedError(reason)
+                    raise TurnFailedError(
+                        reason,
+                        both_sources=(
+                            output.route is not None
+                            and output.route.route is Route.BOTH
+                            and (
+                                output.evidence_refs is None
+                                or (
+                                    output.evidence_refs.data_snapshot_id is None
+                                    and output.evidence_refs.knowledge_snapshot_id is None
+                                )
+                            )
+                        ),
+                    )
                 latency_ms = int((monotonic() - started) * 1000)
                 if output.clarification is not None:
                     await self._clarify(ctx.identity, output, latency_ms)
@@ -238,10 +251,13 @@ class ChatService:
         clarification = output.clarification
         if clarification is None or output.answer is not None or output.data_evidence is not None:
             raise ConflictError("inconsistent clarification result")
-        if (output.evidence_refs is not None and (
-            output.evidence_refs.data_snapshot_id is not None
-            or output.evidence_refs.knowledge_snapshot_id is not None
-        )) or output.failures:
+        if (
+            output.evidence_refs is not None
+            and (
+                output.evidence_refs.data_snapshot_id is not None
+                or output.evidence_refs.knowledge_snapshot_id is not None
+            )
+        ) or output.failures:
             raise ConflictError("clarification contains analysis state")
         async with self.database.session() as session, session.begin():
             repo = TurnRepository(session, identity.user_id)
@@ -285,17 +301,22 @@ class ChatService:
         if bundle.refs != answer.evidence_refs:
             raise ConflictError("answer references differ from snapshots")
         expected_sql = bundle.data.data.sql if bundle.data else ""
-        expected_assumptions = list(dict.fromkeys([
-            *(bundle.data.data.assumptions if bundle.data else []),
-            *(bundle.knowledge.knowledge.assumptions if bundle.knowledge else []),
-        ]))
+        expected_assumptions = list(
+            dict.fromkeys(
+                [
+                    *(bundle.data.data.assumptions if bundle.data else []),
+                    *(bundle.knowledge.knowledge.assumptions if bundle.knowledge else []),
+                ]
+            )
+        )
         if answer.sql != expected_sql or answer.assumptions != expected_assumptions:
             raise ConflictError("answer fields differ from snapshots")
         if answer.knowledge_passages:
             if bundle.knowledge is None:
                 raise ConflictError("knowledge answer without snapshot")
             citations = validate_citations(
-                KnowledgeDraft(passages=tuple(answer.knowledge_passages)), bundle.knowledge.knowledge
+                KnowledgeDraft(passages=tuple(answer.knowledge_passages)),
+                bundle.knowledge.knowledge,
             )
             if list(citations) != answer.citations:
                 raise ConflictError("citation metadata differs from snapshot")

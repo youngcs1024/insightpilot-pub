@@ -84,33 +84,53 @@ async def test_both_parent_restart_reuses_committed_sources_without_external_cal
     identity = await admitted(database)
     async with database.session() as session, session.begin():
         assistant = await session.get(Turn, identity.turn_id)
-        await session.execute(update(Turn).where(Turn.id == assistant.reply_to_turn_id)
-                              .values(content="请分析2026年8月的经营情况"))
+        await session.execute(
+            update(Turn)
+            .where(Turn.id == assistant.reply_to_turn_id)
+            .values(content="请分析2026年8月的经营情况")
+        )
     base = parent_context(Route.BOTH)
     # Fail only the data prose generation, after both snapshots have committed.
     scripted = list(base.llm._responses)
     scripted[-2] = LlmStructuredOutputError()
     llm = FakeChatModel(scripted)
-    ctx = replace(base, identity=identity, conversations=ConversationService(database),
-                  evidence=EvidenceService(database), llm=llm,
-                  knowledge_generation=KnowledgeGenerationService(llm))
+    ctx = replace(
+        base,
+        identity=identity,
+        conversations=ConversationService(database),
+        evidence=EvidenceService(database),
+        llm=llm,
+        knowledge_generation=KnowledgeGenerationService(llm),
+    )
     first = GraphService(settings)
     await first.start()
     try:
         failed = await first.invoke(ctx)
         assert failed.status == "failed"
         bundle = await ctx.evidence.read_bundle(identity)
-        assert bundle.data and bundle.knowledge
+        assert bundle.data
+        assert bundle.knowledge
         checkpoint = await first.graph.aget_state(
             {"configurable": {"thread_id": str(identity.turn_id)}}
         )
-        assert AgentState.model_validate(checkpoint.values).source_summary.evidence_refs == bundle.refs
+        assert (
+            AgentState.model_validate(checkpoint.values).source_summary.evidence_refs == bundle.refs
+        )
     finally:
         await first.aclose()
-    llm = FakeChatModel([AnswerDraft(markdown="42", confidence=1),
-                         draft(bundle.knowledge.knowledge.chunks[0].chunk_id)])
-    resumed = replace(ctx, llm=llm, knowledge_generation=KnowledgeGenerationService(llm),
-                      mcp=AsyncMock(), retrieval=AsyncMock())
+    llm = FakeChatModel(
+        [
+            AnswerDraft(markdown="42", confidence=1),
+            draft(bundle.knowledge.knowledge.chunks[0].chunk_id),
+        ]
+    )
+    resumed = replace(
+        ctx,
+        llm=llm,
+        knowledge_generation=KnowledgeGenerationService(llm),
+        mcp=AsyncMock(),
+        retrieval=AsyncMock(),
+    )
     restarted = GraphService(settings)
     await restarted.start()
     try:

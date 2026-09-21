@@ -30,8 +30,9 @@ async def finalize_context(state: AgentState, runtime: Runtime[RuntimeContext]) 
             summary=state.routing_context.summary,
             time_scope=scope,
             prior_sql=list(state.prepared.prior_sql[-3:]),
-            knowledge_history=[turn.model_copy(deep=True)
-                               for turn in state.prepared.knowledge_history],
+            knowledge_history=[
+                turn.model_copy(deep=True) for turn in state.prepared.knowledge_history
+            ],
             format_preference=state.routing_context.format_preference,
         )
         return Command(update={"context": context})

@@ -10,7 +10,11 @@ from app.schemas.metric_resolution import ClarificationKind, MetricClarification
 def clarify(state: AgentState) -> Command[str]:
     """Preserve the router's bounded question without inventing evidence."""
     question = state.route.clarification_question if state.route else ""
-    return Command(update={"data_clarification": MetricClarification(
-        kind=ClarificationKind.REFERENCE_UNRESOLVED,
-        message=question or CLARIFICATION_QUESTION,
-    )})
+    return Command(
+        update={
+            "route_clarification": MetricClarification(
+                kind=ClarificationKind.REFERENCE_UNRESOLVED,
+                message=question or CLARIFICATION_QUESTION,
+            )
+        }
+    )

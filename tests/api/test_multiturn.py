@@ -7,7 +7,7 @@ import pytest
 import sqlglot
 from sqlglot import exp
 
-from app.agents.contracts import AnswerDraft, RewrittenQuestion, SqlGeneratorOutput
+from app.agents.contracts import AnswerDraft, Route, RouteDecision, SqlGeneratorOutput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
 from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
@@ -71,7 +71,7 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
                 thinking="GMV in East China", sql=east, tables_used=["biz.orders", "biz.customers"]
             ),
             AnswerDraft(markdown="2026年8月华东GMV为42。", confidence=1),
-            RewrittenQuestion(standalone="2026年8月华南的GMV", referenced_prior_turn=True),
+            RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月华南的GMV"),
             MetricIntent(
                 metric_keys=["gmv"],
                 period_expression="2026年8月",
@@ -96,7 +96,7 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
     assert len(mcp.calls) == EXPECTED_MCP_CALLS
     assert mcp.calls[-1].arguments.sql == south
     rewrite_input = json.loads(llm.calls[3].messages[1].content)
-    assert rewrite_input["history"][0]["content"] == "2026年8月华东的GMV"
+    assert rewrite_input["routing_context"]["recent_messages"][0]["content"] == "2026年8月华东的GMV"
     generated_input = json.loads(llm.calls[5].messages[1].content)
     assert generated_input == {
         "question": "2026年8月华南的GMV",
@@ -115,14 +115,14 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
 
 @pytest.mark.parametrize("streamed", [False, True])
 async def test_reference_clarification_persists_and_replays(chat: Harness, streamed: bool) -> None:
-    first = await chat.client.post(chat.url, json={"content": "2026年8月GMV"})
+    first = await chat.client.post(chat.url, json={"content": "count"})
     assert first.status_code == OK
     llm = FakeChatModel(
         [
-            RewrittenQuestion(
-                standalone="帮我看看昨天那个",
-                referenced_prior_turn=False,
-                unresolved_references=["昨天那个"],
+            RouteDecision(
+                route=Route.CLARIFY,
+                confidence=1,
+                clarification_question="请说明昨天所指的指标或政策。",
             )
         ]
     )
@@ -136,7 +136,7 @@ async def test_reference_clarification_persists_and_replays(chat: Harness, strea
     assert response.status_code == OK
     body = events(response)[-1][1] if streamed else response.json()
     assert body["clarification"]["kind"] == "reference_unresolved"
-    assert body["status"] == "succeeded"
+    assert body["status"] == "abstained"
     assert body["answer"] is None
     assert body["evidence_refs"]["data_snapshot_id"] is None
     assert body["content"] == (await chat.stored())[-1]["content"]

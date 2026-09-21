@@ -77,7 +77,7 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
         assert restored.data_clarification == saved.data_clarification
         assert restored.knowledge_evidence.chunks[0].original_text
         replay = await restarted.invoke(replace(ctx, llm=FakeChatModel([])), resume=True)
-        assert replay == original
+        assert replay == original.model_copy(update={"route": saved.route})
         assert len(ctx.mcp.calls) == 1
         next_identity = await admitted(database, identity=identity)
         next_ctx = connected_context(database, next_identity, followup=True)
@@ -89,7 +89,8 @@ async def test_parent_v2_checkpoint_roundtrip_after_restart(
                 )
             ).values
         )
-        assert fresh.context is not None and fresh.route is not None
+        assert fresh.context is not None
+        assert fresh.route is not None
         assert fresh.knowledge_evidence is None
         assert fresh.assumptions == fresh.data_evidence.assumptions
         assert fresh.failures == fresh.degraded_components == []

@@ -375,7 +375,12 @@ class GraphTraceCallback(BaseCallbackHandler):
                 or outputs.update.get("knowledge_abstention_reason") is not None
             )
         )
-        self._finish(run_id, failed=failed, abstained=abstained)
+        degraded = (
+            isinstance(outputs, Command)
+            and isinstance(outputs.update, dict)
+            and outputs.update.get("status") == "degraded"
+        )
+        self._finish(run_id, failed=failed, abstained=abstained, degraded=degraded)
 
     def close(self) -> None:
         """Close any unfinished node spans after graph cancellation or callback failure."""
@@ -388,11 +393,15 @@ class GraphTraceCallback(BaseCallbackHandler):
         """Exception prose and traceback never reach the tracing SDK."""
         self._finish(run_id, failed=True)
 
-    def _finish(self, run_id: UUID, *, failed: bool = False, abstained: bool = False) -> None:
+    def _finish(
+        self, run_id: UUID, *, failed: bool = False, abstained: bool = False, degraded: bool = False
+    ) -> None:
         entry = self._runs.pop(run_id, None)
         if entry is None:
             return
-        status = "failed" if failed else "abstained" if abstained else "succeeded"
+        status = (
+            "failed" if failed else "abstained" if abstained else "degraded" if degraded else "succeeded"
+        )
         entry.update(TraceMetadata(status=status))
         entry.end()
 
@@ -429,3 +438,10 @@ def update_current_observation(metadata: TraceMetadata) -> None:
     observation = _parent()
     if observation is not None:
         observation.update(metadata)
+
+
+def record_route(route: Literal["data_only", "knowledge_only", "both", "clarify"]) -> None:
+    """Record the actual bounded route on the turn as well as its router span."""
+    root = _current.get()
+    if root is not None:
+        root.update(TraceMetadata(route=route))
