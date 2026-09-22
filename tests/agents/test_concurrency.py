@@ -276,7 +276,7 @@ async def test_no_state_corruption_under_repeated_runs() -> None:
             template,
             identity=template.identity.model_copy(update={"turn_id": uuid4()}),
             llm=model,
-            mcp=FakeMcpClient(mcp_results),
+            mcp=FakeMcpClient(mcp_results, schema_responses=list(template.mcp._schema_responses)),
             retrieval=FakeRetrieval(retrieval),
             evidence=FakeEvidence(),
             knowledge_generation=KnowledgeGenerationService(model),

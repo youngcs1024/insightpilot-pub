@@ -358,7 +358,7 @@ async def test_invalid_evidence_never_becomes_success(chat: Harness, case: str) 
 
 
 async def test_graph_typed_failure_is_persisted(chat: Harness) -> None:
-    chat.app.state.mcp = FakeMcpClient([McpUnavailableError()])
+    chat.app.state.mcp = FakeMcpClient([McpUnavailableError()], schema_responses=[McpUnavailableError()])
     response = await chat.client.post(chat.url + "/stream", json={"content": "count"})
     assert events(response)[-1][1]["code"] == "mcp_unavailable"
     assert (await chat.stored())[1]["failure_reason"] == "mcp_unavailable"

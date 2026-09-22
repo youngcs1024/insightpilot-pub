@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from structlog.types import EventDict, WrappedLogger
 
-from app.core.errors import InsightPilotError, McpPolicyRejected, SqlExecutionError
+from app.core.errors import InsightPilotError, McpPolicyRejected, SqlExecutionError, SchemaDriftError, SchemaMetadataError
 from app.schemas.mcp import (
     McpErrorCode,
     McpErrorPayload,
@@ -26,12 +26,13 @@ from app.schemas.mcp import (
     SqlErrorKind,
     ValidationStatus,
 )
-from app.schemas.schema_catalog import BusinessSchemaResponse
+from app.schemas.schema_tools import GetSchemaArgs, RequestedTable, SchemaResponse, SchemaToolError
 from mcp_server.config import McpServerSettings
 from mcp_server.db import BusinessDatabase
 from mcp_server.policy.sql_validator import SQLValidator, clamp_result_cap
 from mcp_server.tools.business_schema import BusinessSchemaReader
 from mcp_server.tools.execute_query import QueryExecutor
+from mcp_server.tools.get_schema import SchemaTool
 
 logger = structlog.get_logger(__name__)
 
@@ -51,6 +52,17 @@ class StaticTokenVerifier:
 
 def error_result(exc: InsightPilotError) -> CallToolResult:
     """Return typed structured errors; never depend on SDK exception prose."""
+    if isinstance(exc, (SchemaDriftError, SchemaMetadataError)):
+        schema_payload = SchemaToolError(
+            code="SCHEMA_DRIFT" if isinstance(exc, SchemaDriftError) else "SCHEMA_METADATA_INVALID",
+            message=exc.user_message,
+            report=exc.report if isinstance(exc, SchemaDriftError) else None,
+        )
+        return CallToolResult(
+            is_error=True,
+            structured_content=schema_payload.model_dump(mode="json"),
+            content=[TextContent(type="text", text=schema_payload.model_dump_json())],
+        )
     payload = McpErrorPayload(
         code=McpErrorCode(exc.code),
         sql_error=exc.kind if isinstance(exc, SqlExecutionError) else SqlErrorKind.OTHER,
@@ -70,7 +82,9 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
     database = BusinessDatabase(settings.business)
     executor = QueryExecutor(database)
     validator = SQLValidator()
-    schema_reader = BusinessSchemaReader(database)
+    schema_tool = SchemaTool(
+        BusinessSchemaReader(database), settings.schema.artifact_path, ttl_s=settings.schema.ttl_s
+    )
 
     @asynccontextmanager
     async def lifespan(server: MCPServer[None]) -> AsyncIterator[None]:
@@ -117,21 +131,22 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             return error_result(exc)
 
     @server.tool()
-    async def get_business_schema(
-        known_revision: Annotated[str | None, Field(min_length=1, max_length=64)] = None,
-    ) -> Annotated[CallToolResult, BusinessSchemaResponse]:
-        """Return physical metadata for eight fixed tables, never business rows."""
+    async def get_schema(
+        tables: Annotated[list[RequestedTable] | None, Field(min_length=1, max_length=64)] = None,
+        include_samples: bool = False,
+        refresh: bool = False,
+    ) -> Annotated[CallToolResult, SchemaResponse]:
+        """Return allowed schema metadata with PII values suppressed; refresh bypasses cache."""
         try:
-            result = await schema_reader.read(known_revision)
-            logger.info(
-                "business_schema_read", revision=result.revision, unchanged=result.unchanged
+            result = await schema_tool.read(
+                GetSchemaArgs(tables=tables, include_samples=include_samples, refresh=refresh)
             )
             return CallToolResult(
                 structured_content=result.model_dump(mode="json"),
                 content=[TextContent(type="text", text=result.model_dump_json())],
             )
         except InsightPilotError as exc:
-            logger.exception("business_schema_failed", code=exc.code)
+            logger.exception("schema_read_failed", code=exc.code)
             return error_result(exc)
 
     @server.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]
@@ -141,7 +156,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
     @server.custom_route("/ready", methods=["GET"])  # type: ignore[untyped-decorator]
     async def ready(request: Request) -> JSONResponse:
         try:
-            await database.check()
+            await schema_tool.read(GetSchemaArgs(refresh=True))
         except Exception:
             logger.exception("mcp_readiness_failed")
             return JSONResponse({"ready": False}, status_code=503)

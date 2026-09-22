@@ -6,6 +6,7 @@ from app.schemas.mcp import SqlErrorKind
 
 if TYPE_CHECKING:
     from app.schemas.mcp import PolicyReason, ValidationStatus
+    from app.schemas.schema_catalog import SchemaDriftReport
 
 
 class InsightPilotError(Exception):
@@ -340,6 +341,12 @@ class SqlCorrectionExhaustedError(SqlExecutionError):
 
 class SchemaDriftError(InsightPilotError):
     """The semantic catalog does not match the live business schema."""
+
+    def __init__(
+        self, detail: str = "", *, report: "SchemaDriftReport | None" = None, **context: object
+    ) -> None:
+        super().__init__(detail, **context)
+        self.report = report
 
     code = "SCHEMA_DRIFT"
     user_message = "The schema catalog requires an update."

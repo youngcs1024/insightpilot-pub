@@ -20,6 +20,8 @@ from scripts.public_files import PublicIssue, allowed_path, content_issues
         "app/services/llm/prompts/structured_json.md",
         "app/resources/provider_capabilities.json",
         "tests/fixtures/seed_traps.json",
+        "tests/fixtures/get_business_schema_descriptor.json",
+        "mcp_server/data/schema_metadata.json",
         "scripts/data/tiktoken-LICENSE",
         "data/corpus/MANIFEST.yaml",
         "data/corpus/promo_2026_summer.md",

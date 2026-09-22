@@ -367,3 +367,11 @@ def test_structure_check_precedes_collection_and_uploads_have_diagnostic_ids() -
     assert "pytest" not in structure["run"]
     upload = next(step for step in steps if step.get("id") == "dependencies_upload")
     assert upload["with"]["name"] == "dependency-evidence"
+
+
+def test_mcp_image_smoke_loads_baked_schema_resource() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/docker.yml").read_text())
+    smoke = next(step for step in workflow["jobs"]["images"]["steps"] if step.get("id") == "smoke")
+    assert "load_artifact" in smoke["run"]
+    assert "mcp_server/data/schema_metadata.json" in smoke["run"]
+    assert "COPY mcp_server/data ./mcp_server/data" in (ROOT / "docker/Dockerfile.mcp").read_text()

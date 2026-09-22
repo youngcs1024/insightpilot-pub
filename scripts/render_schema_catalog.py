@@ -5,7 +5,8 @@ import sys
 
 from app.agents.budget import token_bound
 from app.core.errors import InsightPilotError
-from scripts.schema_catalog_runtime import catalog_service
+from scripts.dev_mcp import read_schema
+from app.schemas.schema_tools import GetSchemaArgs
 from scripts.schema_tokens import encoding
 
 
@@ -16,8 +17,7 @@ def measure(text: str) -> tuple[int, int]:
 
 async def render() -> str:
     """Return the full valid schema without truncating required semantics."""
-    async with catalog_service() as service:
-        return await service.render()
+    return (await read_schema(GetSchemaArgs(include_samples=True))).rendered
 
 
 def main() -> int:

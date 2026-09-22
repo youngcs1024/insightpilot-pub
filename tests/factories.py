@@ -5,6 +5,9 @@ from uuid import UUID, uuid4
 
 from mcp.types import CallToolResult
 
+from app.core.schema_artifact import build_artifact
+from app.schemas.schema_tools import SchemaResponse
+from mcp_server.tools.schema_rendering import render_catalog
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus, User
 from app.schemas.mcp import ColumnSpec, QueryResultPayload, SqlValue
 from app.schemas.schema_catalog import BusinessSchemaResponse, PhysicalTable, SchemaCatalog
@@ -88,10 +91,17 @@ def physical(catalog: SchemaCatalog) -> BusinessSchemaResponse:
     )
 
 
-def business_schema() -> BusinessSchemaResponse:
-    """Match the application migration's metadata, without accessing a business DB."""
+def business_schema() -> SchemaResponse:
+    """Full server response sourced from the frozen migration, without external I/O."""
     snapshot = Path(__file__).resolve().parents[1] / "alembic/app/data/0006_schema_metadata.json"
-    return physical(SchemaCatalog.model_validate_json(snapshot.read_text()))
+    artifact = build_artifact(SchemaCatalog.model_validate_json(snapshot.read_text()).tables)
+    return SchemaResponse(
+        metadata_revision=artifact.metadata_revision,
+        business_revision="business-v1",
+        tables=artifact.tables,
+        notes=list(dict.fromkeys(note for table in artifact.tables for note in table.notes)),
+        rendered=render_catalog(artifact.tables),
+    )
 
 
 def sanity_payload(

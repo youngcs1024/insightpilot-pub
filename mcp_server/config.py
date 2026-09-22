@@ -1,6 +1,7 @@
 """MCP-only process settings; API and administrator credentials are invalid."""
 
 from typing import Literal
+from pathlib import Path
 
 from pydantic import Field
 
@@ -29,9 +30,17 @@ class ServerSettings(ConfigModel):
     shutdown_timeout_s: float = Field(default=5, ge=0.01, le=30)
 
 
+class SchemaSettings(ConfigModel):
+    """Baked metadata location and disposable physical-schema cache lifetime."""
+
+    artifact_path: Path = Path(__file__).resolve().parent / "data/schema_metadata.json"
+    ttl_s: float = Field(default=300, ge=1, le=3600)
+
+
 class McpServerSettings(ProcessSettings):
     """Load .env.mcp, never the API's or operator's dotenv file."""
 
     process_name = "mcp"
     business: BusinessSettings
     mcp: ServerSettings
+    schema: SchemaSettings = Field(default_factory=SchemaSettings)

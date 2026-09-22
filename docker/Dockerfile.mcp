@@ -17,10 +17,12 @@ COPY --from=builder /opt/insightpilot/mcp_server/.venv ./mcp_server/.venv
 COPY mcp_server/*.py ./mcp_server/
 COPY mcp_server/tools ./mcp_server/tools
 COPY mcp_server/policy ./mcp_server/policy
+COPY mcp_server/data ./mcp_server/data
 COPY app/__init__.py ./app/__init__.py
 COPY app/core/__init__.py app/core/errors.py app/core/settings_base.py ./app/core/
+COPY app/core/schema_artifact.py app/core/schema_validation.py ./app/core/
 COPY app/core/sql_policy ./app/core/sql_policy
-COPY app/schemas/__init__.py app/schemas/mcp.py app/schemas/schema_catalog.py ./app/schemas/
+COPY app/schemas/__init__.py app/schemas/mcp.py app/schemas/schema_catalog.py app/schemas/schema_tools.py ./app/schemas/
 ENV PATH="/opt/insightpilot/mcp_server/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER appuser
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=3).status == 200 else 1)"]

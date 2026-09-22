@@ -34,6 +34,7 @@ from tests.agents.support import metric_intent, result, sql_candidate
 from tests.answer_support import data_draft
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
+from tests.factories import business_schema
 from tests.integration.checkpoint_support import (
     admitted,
     checkpoint_setup,
@@ -446,7 +447,7 @@ async def test_exact_budgeted_generation_survives_database_and_restart(
     payload = result([["private-long-description" * 200]])
     payload.columns = [ColumnSpec(name="description", type="text")]
     model = FakeChatModel([metric_intent(), sql_candidate(), LlmStructuredOutputError()])
-    ctx = replace(connected_context(database, identity), mcp=FakeMcpClient([payload]), llm=model)
+    ctx = replace(connected_context(database, identity), mcp=FakeMcpClient([payload], schema_responses=[business_schema()]), llm=model)
     graph = GraphService(settings)
     await graph.start()
     try:

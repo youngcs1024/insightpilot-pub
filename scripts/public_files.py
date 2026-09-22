@@ -42,6 +42,8 @@ RESOURCE_FILES = frozenset(
         "app/core/limiter.env",
         "app/resources/provider_capabilities.json",
         "tests/fixtures/seed_traps.json",
+        "tests/fixtures/get_business_schema_descriptor.json",
+        "mcp_server/data/schema_metadata.json",
         "tests/gpu/pytest.ini",
         "alembic/app/data/0006_schema_metadata.json",
         "alembic/app/data/0007_metric_catalog.json",

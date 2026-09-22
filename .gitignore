@@ -107,3 +107,6 @@ ssh/
 # Explicitly reviewed isolated E2E deployment; runtime evidence stays private.
 !/docker-compose.e2e.yml
 e2e-evidence/
+
+!mcp_server/data/schema_metadata.json
+!tests/fixtures/get_business_schema_descriptor.json

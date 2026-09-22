@@ -27,6 +27,7 @@ from app.schemas.metric_resolution import RegionReference, RegionScope
 from app.schemas.metrics import MetricDefinition
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
 from app.schemas.schema_catalog import SchemaCatalog
+from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 
 
 class LlmPort(Protocol):
@@ -53,7 +54,9 @@ class RetrievalPort(Protocol):
 
 
 class McpPort(Protocol):
-    """Only the authenticated read-only tool is exposed to the graph."""
+    """Authenticated query execution and server-owned schema rendering."""
+
+    async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse: ...
 
     async def call_tool(
         self, name: Literal["execute_readonly_query"], args: QueryArguments, *, deadline: Deadline

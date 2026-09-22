@@ -9,7 +9,6 @@ from sqlglot import exp
 
 from app.agents.contracts import Route, RouteDecision, SqlGeneratorOutput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
-from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
 from tests.agents.support import metric_intent, sql_candidate
 from tests.answer_support import data_draft
@@ -54,7 +53,7 @@ async def test_two_turn_region_followup_generates_and_executes_correct_sql(chat:
         ],
         schema_responses=[
             business_schema(),
-            *[BusinessSchemaResponse(revision="business-v1", unchanged=True) for _ in range(3)],
+            *[business_schema() for _ in range(3)],
         ],
     )
     chat.app.state.mcp = mcp

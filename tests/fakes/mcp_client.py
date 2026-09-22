@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.core.deadline import Deadline
 from app.schemas.mcp import QueryArguments, QueryResultPayload
-from app.schemas.schema_catalog import BusinessSchemaArguments, BusinessSchemaResponse
+from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 
 
 class FakeMcpCall(BaseModel):
@@ -25,32 +25,32 @@ class FakeMcpClient:
         self,
         responses: Sequence[QueryResultPayload | Exception],
         *,
-        schema_responses: Sequence[BusinessSchemaResponse | Exception] = (),
+        schema_responses: Sequence[SchemaResponse | Exception] = (),
     ) -> None:
         self._responses = deque(
             value.model_copy(deep=True) if isinstance(value, QueryResultPayload) else value
             for value in responses
         )
         self._calls: list[FakeMcpCall] = []
-        self._schema_responses: deque[BusinessSchemaResponse | Exception] = deque()
-        self._schema_calls: list[BusinessSchemaArguments] = []
+        self._schema_responses: deque[SchemaResponse | Exception] = deque()
+        self._schema_calls: list[GetSchemaArgs] = []
         self.enqueue_schema(*schema_responses)
 
-    def enqueue_schema(self, *responses: BusinessSchemaResponse | Exception) -> None:
+    def enqueue_schema(self, *responses: SchemaResponse | Exception) -> None:
         """Script metadata independently so schema reads cannot consume SQL results."""
         self._schema_responses.extend(
-            value.model_copy(deep=True) if isinstance(value, BusinessSchemaResponse) else value
+            value.model_copy(deep=True) if isinstance(value, SchemaResponse) else value
             for value in responses
         )
 
     @property
-    def schema_calls(self) -> list[BusinessSchemaArguments]:
+    def schema_calls(self) -> list[GetSchemaArgs]:
         """Return detached schema requests, including failed requests."""
         return [call.model_copy(deep=True) for call in self._schema_calls]
 
-    async def get_business_schema(
-        self, args: BusinessSchemaArguments, *, deadline: Deadline
-    ) -> BusinessSchemaResponse:
+    async def get_schema(
+        self, args: GetSchemaArgs, *, deadline: Deadline
+    ) -> SchemaResponse:
         """Use the same deadline discipline and strict queue as SQL calls."""
         deadline.check("fake_mcp_schema")
         self._schema_calls.append(args.model_copy(deep=True))

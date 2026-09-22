@@ -70,12 +70,6 @@ class PhysicalTable(Contract):
     columns: list[PhysicalColumn] = Field(max_length=1600)
 
 
-class BusinessSchemaArguments(Contract):
-    """A revision hint only; no SQL or arbitrary identifiers cross this interface."""
-
-    known_revision: str | None = Field(default=None, min_length=1, max_length=64)
-
-
 class BusinessSchemaResponse(Contract):
     """An unchanged response contains no tables; a fresh response contains live structure."""
 
@@ -162,6 +156,8 @@ class DriftKind(StrEnum):
     MISSING_METADATA = "missing_metadata"
     STALE_METADATA = "stale_metadata"
     TYPE_MISMATCH = "type_mismatch"
+    COLUMN_ORDER = "column_order"
+    METADATA_CONTENT = "metadata_content"
     NULLABILITY = "nullability"
     PRIMARY_KEY = "primary_key"
     FOREIGN_KEY = "foreign_key"

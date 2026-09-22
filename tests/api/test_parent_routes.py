@@ -10,7 +10,6 @@ from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
 from app.core.errors import McpUnavailableError, RetrievalUnavailableError
 from app.db.models import Turn
-from app.schemas.schema_catalog import BusinessSchemaResponse
 from app.services.schema_catalog import SchemaCatalogService
 from tests.agents.parent_support import parent_context
 from tests.api.chat_support import OK, Harness, chat, events
@@ -90,7 +89,7 @@ async def test_partial_both_answer_is_durable_and_replayable(
     )
     ctx.mcp.enqueue_schema(
         business_schema(),
-        *[BusinessSchemaResponse(revision="business-v1", unchanged=True) for _ in range(4)],
+        *[business_schema() for _ in range(4)],
     )
     chat.app.state.mcp = ctx.mcp
     chat.app.state.schema_catalog = SchemaCatalogService(
@@ -136,7 +135,7 @@ async def test_both_failures_name_sources_without_emitting_an_answer(
     )
     ctx.mcp.enqueue_schema(
         business_schema(),
-        *[BusinessSchemaResponse(revision="business-v1", unchanged=True) for _ in range(4)],
+        *[business_schema() for _ in range(4)],
     )
     chat.app.state.mcp = ctx.mcp
     chat.app.state.schema_catalog = SchemaCatalogService(

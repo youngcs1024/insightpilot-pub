@@ -27,6 +27,8 @@ from app.core.errors import (
     McpUnavailableError,
     SqlExecutionError,
     SqlTimeoutError,
+    SchemaDriftError,
+    SchemaMetadataError,
     UpstreamUnavailableError,
 )
 from app.core.observability import TraceMetadata, observe
@@ -39,7 +41,7 @@ from app.schemas.mcp import (
     QueryResultPayload,
     ValidationStatus,
 )
-from app.schemas.schema_catalog import BusinessSchemaArguments, BusinessSchemaResponse
+from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaToolError
 
 logger = structlog.get_logger(__name__)
 BREAKER_FAILURES = 5
@@ -238,20 +240,26 @@ class McpClient:
             raise McpResultError()
         return await self._with_retry(lambda: self._call(name, args), deadline)
 
-    async def get_business_schema(
-        self, args: BusinessSchemaArguments, *, deadline: Deadline
-    ) -> BusinessSchemaResponse:
-        """Read structure through the same authenticated session and retry owner."""
+    async def get_schema(
+        self, args: GetSchemaArgs, *, deadline: Deadline
+    ) -> SchemaResponse:
+        """Read server-rendered metadata through the existing session and retry owner."""
         return await self._with_retry(lambda: self._schema_call(args), deadline)
 
-    async def _schema_call(self, args: BusinessSchemaArguments) -> BusinessSchemaResponse:
-        with observe("mcp_schema", TraceMetadata(tool="get_business_schema")):
-            result = await self._raw_call("get_business_schema", args)
+    async def _schema_call(self, args: GetSchemaArgs) -> SchemaResponse:
+        with observe("mcp_schema", TraceMetadata(tool="get_schema")):
+            result = await self._raw_call("get_schema", args)
             if result.is_error:
-                decode_result(result)  # Shared typed error decoding always raises.
-                raise McpResultError()
+                try:
+                    failure = SchemaToolError.model_validate(result.structured_content)
+                except ValidationError:
+                    decode_result(result)
+                    raise McpResultError() from None
+                if failure.code == "SCHEMA_DRIFT":
+                    raise SchemaDriftError(report=failure.report)
+                raise SchemaMetadataError()
             try:
-                return BusinessSchemaResponse.model_validate(result.structured_content)
+                return SchemaResponse.model_validate(result.structured_content)
             except ValidationError as exc:
                 raise McpResultError() from exc
 

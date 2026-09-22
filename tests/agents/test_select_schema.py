@@ -26,26 +26,28 @@ from scripts.render_schema_catalog import measure
 from tests.agents.support import context
 from tests.observability_support import tracing
 from tests.schema_support import AUTHORING, full_block
+from tests.factories import business_schema
+from app.schemas.schema_tools import GetSchemaArgs
 
 
 async def test_full_strategy_includes_all_tables() -> None:
     block = full_block()
-    catalog = Mock(render=AsyncMock(return_value=block))
-    ctx = replace(context(), schema_catalog=catalog)
+    catalog = Mock(get_schema=AsyncMock(return_value=business_schema()))
+    ctx = replace(context(), mcp=catalog)
     state = DataAgentState(question="八月 GMV")
     before = state.model_dump()
     result = await select_schema(state, Runtime(context=ctx))
     assert result.update == {"schema_block": block, "schema_tables": list(BUSINESS_TABLES)}
     assert state.model_dump() == before
-    catalog.render.assert_awaited_once_with(None, deadline=ctx.deadline)
+    catalog.get_schema.assert_awaited_once_with(GetSchemaArgs(include_samples=True), deadline=ctx.deadline)
     assert len(load_catalog(AUTHORING).tables) == 8
     assert sum(len(table.columns) for table in load_catalog(AUTHORING).tables) == 52
 
 
 @pytest.mark.parametrize("failure", [SchemaDriftError(), DeadlineExceededError()])
 async def test_catalog_failure_propagates(failure: Exception) -> None:
-    catalog = Mock(render=AsyncMock(side_effect=failure))
-    ctx = replace(context(), schema_catalog=catalog)
+    catalog = Mock(get_schema=AsyncMock(side_effect=failure))
+    ctx = replace(context(), mcp=catalog)
     with pytest.raises(type(failure)) as caught:
         await select_schema(DataAgentState(question="GMV"), Runtime(context=ctx))
     assert caught.value is failure
@@ -72,7 +74,7 @@ def test_named_token_count_matches_cli() -> None:
 
 async def test_schema_tokens_recorded_in_trace() -> None:
     block = full_block()
-    ctx = replace(context(), schema_catalog=Mock(render=AsyncMock(return_value=block)))
+    ctx = replace(context(), mcp=Mock(get_schema=AsyncMock(return_value=business_schema())))
     graph = StateGraph(DataAgentState, context_schema=RuntimeContext)
     graph.add_node("select_schema", select_schema)
     graph.add_edge(START, "select_schema")
@@ -120,6 +122,23 @@ async def test_telemetry_failure_does_not_change_result() -> None:
         with service.turn(uuid4().hex, TraceMetadata()) as root:
             root.span = Mock(update=Mock(side_effect=RuntimeError("export failed")))
             result = await select_schema(DataAgentState(question="GMV"), Runtime(context=ctx))
-        assert result.update["schema_block"] == "test schema"
+        assert result.update["schema_block"] == full_block()
     finally:
         await service.aclose()
+
+
+async def test_node_records_returned_subset_without_reading_local_catalog() -> None:
+    response = business_schema()
+    response.tables = response.tables[:1]
+    response.rendered = "server-rendered subset"
+    ctx = replace(
+        context(),
+        mcp=Mock(get_schema=AsyncMock(return_value=response)),
+        schema_catalog=Mock(render=AsyncMock(side_effect=AssertionError("local renderer called"))),
+    )
+    result = await select_schema(DataAgentState(question="GMV"), Runtime(context=ctx))
+    assert result.update == {
+        "schema_block": response.rendered,
+        "schema_tables": [response.tables[0].table_name],
+    }
+    ctx.schema_catalog.render.assert_not_called()

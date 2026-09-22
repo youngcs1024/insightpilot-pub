@@ -22,7 +22,6 @@ from app.core.config_models import Settings
 from app.db.models import TurnStatus
 from app.db.session import Database
 from app.schemas.auth import UserResponse
-from app.schemas.schema_catalog import BusinessSchemaResponse
 from tests.agents.support import invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.factories import business_schema
@@ -87,7 +86,7 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
         [result() for _ in range(10)],
         schema_responses=[
             business_schema(),
-            *[BusinessSchemaResponse(revision="business-v1", unchanged=True) for _ in range(19)],
+            *[business_schema() for _ in range(19)],
         ],
     )
     application = create_app(settings, database=auth_database, mcp_client=mcp)

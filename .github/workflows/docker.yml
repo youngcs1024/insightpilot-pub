@@ -48,6 +48,9 @@ jobs:
           fi
           test "$(docker run --rm "$IMAGE" whoami)" = appuser
           docker run --rm "$IMAGE" python -c 'import shutil; assert all(shutil.which(name) is None for name in ("cc", "gcc", "g++", "make", "uv"))'
+          if [ "$IMAGE_KIND" = mcp ]; then
+            docker run --rm "$IMAGE" python -c 'from pathlib import Path; from app.core.schema_artifact import load_artifact; from mcp_server.tools.schema_rendering import render_catalog; artifact = load_artifact(Path("mcp_server/data/schema_metadata.json")); assert len(artifact.tables) == 8; assert "GMV=" in render_catalog(artifact.tables); import mcp_server.server'
+          fi
           case "$IMAGE_KIND" in
             model-runtime)
               docker run --rm "$IMAGE" python -c 'import sys; import model_runtime.server, model_runtime.probe; assert "torch" not in sys.modules; import torch; assert not torch.cuda.is_available()'

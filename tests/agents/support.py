@@ -36,6 +36,7 @@ from data.seed.metrics_loader import load_catalog as load_metrics
 from data.seed.schema_metadata_loader import load_catalog as load_schema
 from tests.answer_support import data_draft
 from tests.factories import query_result as result
+from tests.factories import business_schema
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
 
@@ -130,7 +131,10 @@ def context(
         llm={"base_url": "https://example.invalid/v1", "model": "test", "api_key": "test-key"},
         router={"strategy": "hybrid"},  # Legacy scripts explicitly exercise this comparison arm.
     )
-    mcp = FakeMcpClient([result()] if mcp_results is None else mcp_results)
+    mcp = FakeMcpClient(
+        [result()] if mcp_results is None else mcp_results,
+        schema_responses=[business_schema() for _ in range(10)],
+    )
     return RuntimeContext(
         regions=RegionService(mcp),
         metrics=FakeMetrics(),

@@ -266,3 +266,49 @@ def test_sdk_closed_connection_is_retryable() -> None:
 
     assert transport_failure(MCPError(code=CONNECTION_CLOSED, message="arbitrary")).retryable
     assert not transport_failure(RuntimeError("connection closed")).retryable
+
+
+@pytest.mark.parametrize("case", ["success", "drift", "metadata", "timeout", "invalid", "pii"])
+async def test_schema_calls_share_session_and_typed_nonretryable_errors(settings: MCPSettings, case: str) -> None:
+    from app.core.errors import SchemaDriftError, SchemaMetadataError
+    from app.schemas.schema_tools import GetSchemaArgs
+    from tests.factories import business_schema
+
+    response = business_schema()
+    raw = CallToolResult(content=[], structured_content=response.model_dump(mode="json"))
+    errors = {
+        "drift": SchemaDriftError, "metadata": SchemaMetadataError,
+        "timeout": SqlTimeoutError, "invalid": McpResultError, "pii": McpResultError,
+    }
+    if case in {"drift", "metadata"}:
+        raw = CallToolResult(content=[], is_error=True, structured_content={
+            "schema_version": 1,
+            "code": "SCHEMA_DRIFT" if case == "drift" else "SCHEMA_METADATA_INVALID",
+            "message": "ignored error prose",
+        })
+    elif case == "timeout":
+        raw = failure("SQL_TIMEOUT")
+    elif case == "invalid":
+        raw.structured_content = {"schema_version": 999}
+    elif case == "pii":
+        column = next(c for t in raw.structured_content["tables"] for c in t["columns"] if c["is_pii"])
+        column["sample_values"] = ["private"]
+    session = AsyncMock(spec=ClientSession)
+    session.call_tool.return_value = raw
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        args = GetSchemaArgs(include_samples=True)
+        if case == "success":
+            assert await client.get_schema(args, deadline=Deadline(time.monotonic() + 5)) == response
+        else:
+            with pytest.raises(errors[case]):
+                await client.get_schema(args, deadline=Deadline(time.monotonic() + 5))
+        session.call_tool.assert_awaited_once_with("get_schema", arguments=args.model_dump(mode="json"))
+        assert client.breaker.failures == 0
+    finally:
+        await client.aclose()

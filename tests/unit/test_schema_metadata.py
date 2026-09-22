@@ -10,12 +10,12 @@ import yaml
 
 from app.core.errors import SchemaMetadataError
 from app.schemas.schema_catalog import DriftKind, SchemaCatalog
-from app.services.schema_validation import compare_catalog, render_catalog
+from app.services.schema_validation import compare_catalog
 from data.seed.schema_metadata_loader import load_catalog
 from scripts import schema_tokens
 from scripts.render_schema_catalog import measure
 from tests.factories import physical
-from tests.schema_support import AUTHORING
+from tests.schema_support import AUTHORING, render_catalog
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "alembic/app/data/0006_schema_metadata.json"

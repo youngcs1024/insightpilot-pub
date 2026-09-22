@@ -6,7 +6,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from alembic import command
 from app.clients.mcp_client import McpClient
@@ -78,3 +79,35 @@ def cli_environment(
     env["IP_LLM__API_KEY"] = settings.llm.api_key.get_secret_value()
     env["IP_SECURITY__JWT_SECRET"] = settings.security.jwt_secret.get_secret_value()
     return env
+
+
+@asynccontextmanager
+async def operator_change(
+    stack: DatabaseStack,
+    database_name: str,
+    forward: list[str],
+    reverse: list[str],
+) -> AsyncIterator[None]:
+    """Commit explicit changes only in the fixture database, then restore them."""
+    settings = DatabaseSettings(
+        port=stack.settings.db_host_port,
+        app_db=database_name,
+        app_user="postgres",
+        app_password=stack.settings.postgres_superuser_password,
+    )
+    engine = create_async_engine(settings.app_url)
+    try:
+        await execute_statements(engine, forward)
+        try:
+            yield
+        finally:
+            await execute_statements(engine, reverse)
+    finally:
+        await engine.dispose()
+
+
+async def execute_statements(engine: AsyncEngine, statements: list[str]) -> None:
+    async with engine.begin() as connection:
+        for statement in statements:
+            await connection.execute(text(statement))
+

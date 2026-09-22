@@ -43,6 +43,7 @@ from tests.agents.correction_support import correction_context
 from tests.agents.support import context, metric_intent, result, sql_candidate
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
+from tests.factories import business_schema
 from tests.metric_resolution_support import request, schema
 
 
@@ -70,6 +71,7 @@ def parent_state(ctx: RuntimeContext) -> AgentState:
 async def test_happy_path_end_to_end(fake_llm: FakeChatModel, fake_mcp: FakeMcpClient) -> None:
     fake_llm.enqueue(metric_intent(), sql_candidate())
     fake_mcp.enqueue(result())
+    fake_mcp.enqueue_schema(business_schema())
     ctx = replace(context(), llm=fake_llm, mcp=fake_mcp)
     output = await invoke_child(ctx)
     assert output.failure is None

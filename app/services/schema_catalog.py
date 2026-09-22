@@ -6,24 +6,25 @@ from collections.abc import Callable
 from typing import Protocol
 
 import structlog
-from pydantic import Field
 from sqlalchemy import text
 
 from app.core.config_models import SchemaCatalogSettings
 from app.core.deadline import Deadline
-from app.core.errors import DeadlineExceededError, McpResultError, SchemaDriftError, ValidationError
+from app.core.errors import DeadlineExceededError, SchemaDriftError, ValidationError
 from app.db.session import Database
 from app.repositories.schema_metadata import SchemaMetadataRepository
 from app.schemas.mcp import Contract
 from app.schemas.schema_catalog import (
     BUSINESS_TABLES,
-    BusinessSchemaArguments,
-    BusinessSchemaResponse,
     SchemaCatalog,
     SchemaDriftReport,
     SemanticTable,
+    SchemaDrift,
+    DriftKind,
 )
-from app.services.schema_validation import compare_catalog, render_catalog
+from app.core.schema_validation import compare_catalog
+from app.core.schema_artifact import build_artifact, physical_schema
+from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -31,9 +32,9 @@ logger = structlog.get_logger(__name__)
 class SchemaClient(Protocol):
     """Only the typed MCP method is available to the catalog service."""
 
-    async def get_business_schema(
-        self, args: BusinessSchemaArguments, *, deadline: Deadline
-    ) -> BusinessSchemaResponse:
+    async def get_schema(
+        self, args: GetSchemaArgs, *, deadline: Deadline
+    ) -> SchemaResponse:
         """Fetch structure or validate a known revision."""
         ...
 
@@ -42,10 +43,9 @@ class CatalogCache(Contract):
     """Disposable copy of PostgreSQL-backed data, never its source of truth."""
 
     app_revision: str
-    live: BusinessSchemaResponse
+    response: SchemaResponse
     tables: list[SemanticTable]
     expires_at: float
-    rendered: dict[tuple[str, ...], str] = Field(default_factory=dict)
 
 
 class SchemaCatalogService:
@@ -83,20 +83,28 @@ class SchemaCatalogService:
         """Render a valid catalog; unknown or empty selections fail explicitly."""
         if tables is not None and (not tables or set(tables) - set(BUSINESS_TABLES)):
             raise ValidationError("Select one or more known business tables.")
-        selected = tuple(t for t in BUSINESS_TABLES if tables is None or t in tables)
         cache, report = await self._load(force=False, deadline=deadline)
         if not report.valid:
             raise SchemaDriftError(differences=len(report.differences))
-        if selected not in cache.rendered:
-            cache.rendered[selected] = render_catalog(cache.tables, cache.live, selected)
-        return cache.rendered[selected]
+        if tables is None:
+            return cache.response.rendered
+        budget = deadline or Deadline(time.monotonic() + self._settings.operation_timeout_s)
+        response = await self._client.get_schema(
+            GetSchemaArgs(tables=tables, include_samples=True), deadline=budget
+        )
+        return response.rendered
 
     async def validate_against_live_schema(
         self, *, deadline: Deadline | None = None
     ) -> SchemaDriftReport:
         """Always bypass both revision hints and TTL for an authoritative CI check."""
-        _, report = await self._load(force=True, deadline=deadline)
-        return report
+        try:
+            _, report = await self._load(force=True, deadline=deadline)
+            return report
+        except SchemaDriftError as exc:
+            if exc.report is None:
+                raise
+            return exc.report
 
     async def _load(
         self, *, force: bool, deadline: Deadline | None
@@ -128,26 +136,23 @@ class SchemaCatalogService:
             revision = await repository.revision()
             reload = force or expired or cache is None or cache.app_revision != revision
             tables = await repository.read() if reload or cache is None else cache.tables
-        live = await self._client.get_business_schema(
-            BusinessSchemaArguments(
-                known_revision=None if reload or cache is None else cache.live.revision
-            ),
-            deadline=deadline,
+        response = await self._client.get_schema(
+            GetSchemaArgs(include_samples=True, refresh=force), deadline=deadline
         )
-        if live.unchanged:
-            if reload or cache is None or live.revision != cache.live.revision:
-                raise McpResultError()
-            live = cache.live
-        else:
-            reload = True
+        live = physical_schema(response)
         report = compare_catalog(tables, live, revision)
+        if report.valid and build_artifact(tables).metadata_revision != response.metadata_revision:
+            report.differences.append(
+                SchemaDrift(kind=DriftKind.METADATA_CONTENT, table_name="schema_metadata")
+            )
         if reload or cache is None:
             cache = CatalogCache(
                 app_revision=revision,
-                live=live,
+                response=response,
                 tables=tables,
                 expires_at=self._clock() + self._settings.ttl_s,
             )
+        cache.response = response
         self._cache = cache if report.valid else None
         logger.info(
             "schema_catalog_checked",

@@ -7,12 +7,11 @@ import secrets
 import subprocess
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.clients.mcp_client import McpClient
 from app.core.config_models import DatabaseSettings, MCPSettings, SchemaCatalogSettings, Settings
@@ -20,17 +19,17 @@ from app.core.deadline import Deadline
 from app.core.errors import McpUnavailableError, SchemaDriftError, ValidationError
 from app.schemas.schema_catalog import (
     BUSINESS_TABLES,
-    BusinessSchemaArguments,
-    BusinessSchemaResponse,
     DriftKind,
 )
 from app.services.schema_catalog import SchemaCatalogService
+from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 from tests.database_support import DatabaseStack
 from tests.integration.catalog_support import (
     TransactionDatabase,
     catalog_migrated,
     cli_environment,
     client,
+    operator_change,
 )
 from tests.integration.mcp_support import mcp_endpoint as existing_endpoint
 from tests.seed_support import seed_database_stack
@@ -135,7 +134,9 @@ async def test_render_cached_and_invalidated_on_revision_change(
     )
     assert await catalog.render() == old
     await change(database, "UPDATE alembic_version_app SET version_num='schema-revision-test'")
-    assert "REVISED" in await catalog.render()
+    with pytest.raises(SchemaDriftError):
+        await catalog.render()
+    assert catalog._cache is None
 
 
 async def test_ttl_refresh_and_validation_bypasses_cache(
@@ -180,19 +181,17 @@ async def test_validate_detects_structural_drift(
     assert kind in {d.kind for d in (await catalog.validate_against_live_schema()).differences}
 
 
-async def test_revision_hint_and_boundary(client: McpClient) -> None:
-    live = await client.get_business_schema(
-        BusinessSchemaArguments(), deadline=Deadline(time.monotonic() + 15)
+async def test_schema_response_and_boundary(client: McpClient) -> None:
+    live = await client.get_schema(
+        GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15)
     )
     assert {t.table_name for t in live.tables} == set(BUSINESS_TABLES)
     assert sum(len(t.columns) for t in live.tables) == 52
-    assert "sample_values" not in live.model_dump_json()
-    result = await client.get_business_schema(
-        BusinessSchemaArguments(known_revision=live.revision),
-        deadline=Deadline(time.monotonic() + 15),
+    assert all(not c.sample_values for t in live.tables for c in t.columns)
+    result = await client.get_schema(
+        GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15)
     )
-    assert result.unchanged
-    assert result.tables == []
+    assert result == live
 
 
 async def test_invalid_selection_and_stable_order(catalog: SchemaCatalogService) -> None:
@@ -212,7 +211,7 @@ async def test_refresh_failure_never_returns_stale(
     async def failed(*args: object, **kwargs: object) -> None:
         raise McpUnavailableError()
 
-    monkeypatch.setattr(client, "get_business_schema", failed)
+    monkeypatch.setattr(client, "get_schema", failed)
     with pytest.raises(McpUnavailableError):
         await catalog.render()
     assert catalog._cache is None
@@ -222,18 +221,18 @@ async def test_concurrent_refresh_is_coalesced(
     catalog: SchemaCatalogService, client: McpClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = []
-    original = client.get_business_schema
+    original = client.get_schema
 
     async def counted(
-        args: BusinessSchemaArguments, *, deadline: Deadline
-    ) -> BusinessSchemaResponse:
-        calls.append(args.known_revision)
+        args: GetSchemaArgs, *, deadline: Deadline
+    ) -> SchemaResponse:
+        calls.append(args.refresh)
         return await original(args, deadline=deadline)
 
-    monkeypatch.setattr(client, "get_business_schema", counted)
+    monkeypatch.setattr(client, "get_schema", counted)
     blocks = await asyncio.gather(*(catalog.render() for _ in range(5)))
     assert len(set(blocks)) == 1
-    assert calls.count(None) == 1
+    assert calls == [False] * 5
 
 
 def test_cli_drift_gate_and_render(
@@ -260,29 +259,6 @@ def test_cli_drift_gate_and_render(
         ) in result.stdout
 
 
-@asynccontextmanager
-async def operator_change(
-    stack: DatabaseStack,
-    database_name: str,
-    forward: list[str],
-    reverse: list[str],
-) -> AsyncIterator[None]:
-    """Commit explicit changes only in the fixture database, then restore them."""
-    settings = DatabaseSettings(
-        port=stack.settings.db_host_port,
-        app_db=database_name,
-        app_user="postgres",
-        app_password=stack.settings.postgres_superuser_password,
-    )
-    engine = create_async_engine(settings.app_url)
-    try:
-        await execute_statements(engine, forward)
-        try:
-            yield
-        finally:
-            await execute_statements(engine, reverse)
-    finally:
-        await engine.dispose()
 
 
 async def test_business_revision_change_invalidates_cache(
@@ -370,10 +346,6 @@ async def test_cli_fails_on_drift_and_dependency_failure(
     assert '"differences": []' not in result.stdout
 
 
-async def execute_statements(engine: AsyncEngine, statements: list[str]) -> None:
-    async with engine.begin() as connection:
-        for statement in statements:
-            await connection.execute(text(statement))
 
 
 async def test_metric_schema_snapshot_is_detached_and_drift_checked(

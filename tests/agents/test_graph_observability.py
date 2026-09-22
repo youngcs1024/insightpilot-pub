@@ -15,6 +15,9 @@ from app.agents.contracts import PreparedContext, Route, RouteDecision
 from app.clients.mcp_client import McpClient
 from app.core.errors import McpUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
+from mcp.types import CallToolResult
+from tests.factories import business_schema
+
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.factories import mcp_success as success
@@ -107,7 +110,10 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
     service, exporter = tracing(ctx.settings)
     mcp = McpClient(ctx.settings.mcp)
     session = AsyncMock()
-    session.call_tool.return_value = success()
+    session.call_tool.side_effect = [
+        CallToolResult(content=[], structured_content=business_schema().model_dump(mode="json")),
+        success(),
+    ]
     monkeypatch.setattr(mcp, "_get_session", AsyncMock(return_value=session))
     monkeypatch.setattr("app.core.retry.wait_exponential", lambda **kwargs: wait_none())
     respx_mock.post(URL).mock(

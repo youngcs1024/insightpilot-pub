@@ -1,0 +1,224 @@
+{
+  "source_sha": "8dc7c472ee3285a4d09f4897c6ddd6c926062a2c",
+  "sdk_version": "2.1.1",
+  "server_name": "insightpilot-business",
+  "server_version": "",
+  "capture_method": "MCPServer.list_tools (SDK-generated descriptor, before tool retirement)",
+  "tool": {
+    "name": "get_business_schema",
+    "description": "Return physical metadata for eight fixed tables, never business rows.",
+    "inputSchema": {
+      "properties": {
+        "known_revision": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Known Revision"
+        }
+      },
+      "title": "get_business_schemaArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "PhysicalColumn": {
+          "additionalProperties": false,
+          "description": "Live structure read without accessing any business row.",
+          "properties": {
+            "column_name": {
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z_][a-z0-9_]*$",
+              "title": "Column Name",
+              "type": "string"
+            },
+            "sql_type": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Sql Type",
+              "type": "string"
+            },
+            "ordinal_position": {
+              "maximum": 1600,
+              "minimum": 1,
+              "title": "Ordinal Position",
+              "type": "integer"
+            },
+            "nullable": {
+              "title": "Nullable",
+              "type": "boolean"
+            },
+            "is_primary_key": {
+              "title": "Is Primary Key",
+              "type": "boolean"
+            },
+            "fk_table": {
+              "anyOf": [
+                {
+                  "maxLength": 127,
+                  "minLength": 1,
+                  "pattern": "^biz\\.[a-z_][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fk Table"
+            },
+            "fk_column": {
+              "anyOf": [
+                {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z_][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fk Column"
+            },
+            "constraints": {
+              "items": {
+                "$ref": "#/$defs/SchemaConstraint"
+              },
+              "maxItems": 100,
+              "title": "Constraints",
+              "type": "array"
+            }
+          },
+          "required": [
+            "column_name",
+            "sql_type",
+            "ordinal_position",
+            "nullable",
+            "is_primary_key"
+          ],
+          "title": "PhysicalColumn",
+          "type": "object"
+        },
+        "PhysicalTable": {
+          "additionalProperties": false,
+          "description": "An existing allowlisted table, including a missing-column state for drift checks.",
+          "properties": {
+            "table_name": {
+              "maxLength": 127,
+              "minLength": 1,
+              "pattern": "^biz\\.[a-z_][a-z0-9_]*$",
+              "title": "Table Name",
+              "type": "string"
+            },
+            "columns": {
+              "items": {
+                "$ref": "#/$defs/PhysicalColumn"
+              },
+              "maxItems": 1600,
+              "title": "Columns",
+              "type": "array"
+            }
+          },
+          "required": [
+            "table_name",
+            "columns"
+          ],
+          "title": "PhysicalTable",
+          "type": "object"
+        },
+        "SchemaConstraint": {
+          "additionalProperties": false,
+          "description": "PostgreSQL's stable rendered constraint, with ordered participating columns.",
+          "properties": {
+            "name": {
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z_][a-z0-9_]*$",
+              "title": "Name",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "p",
+                "f",
+                "u",
+                "c"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "definition": {
+              "maxLength": 8000,
+              "minLength": 1,
+              "title": "Definition",
+              "type": "string"
+            },
+            "columns": {
+              "items": {
+                "maxLength": 63,
+                "minLength": 1,
+                "pattern": "^[a-z_][a-z0-9_]*$",
+                "type": "string"
+              },
+              "maxItems": 64,
+              "title": "Columns",
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "definition",
+            "columns"
+          ],
+          "title": "SchemaConstraint",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "An unchanged response contains no tables; a fresh response contains live structure.",
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "revision": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "unchanged": {
+          "default": false,
+          "title": "Unchanged",
+          "type": "boolean"
+        },
+        "tables": {
+          "items": {
+            "$ref": "#/$defs/PhysicalTable"
+          },
+          "maxItems": 8,
+          "title": "Tables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "BusinessSchemaResponse",
+      "type": "object"
+    }
+  }
+}
