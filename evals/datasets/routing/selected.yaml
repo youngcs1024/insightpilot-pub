@@ -1,0 +1,7 @@
+schema_version: 1
+arm: llm_only
+development_run_id: 40107d3c603146d4ba4370d52414fadb
+development_sha: dd768970806fe96b4c6907874cdeeded63a88e97
+development_report_hash: aba29cd3bf7071780a44902c15fb48828edb6fc8ca1a0f92698358712ffdf9f9
+fingerprint: 0a660d222848ee9acc443fc1e0fb08b56f71dc55f317d240c1c6a6114737088e
+rule: accuracy_first_no_misroute_regression
