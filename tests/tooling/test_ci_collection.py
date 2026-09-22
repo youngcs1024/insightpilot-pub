@@ -93,9 +93,15 @@ def test_real_repository_partitions_are_complete_and_disjoint(pytester: pytest.P
     assert collected["unit"] | collected["integration"] | collected["storage"] == collected["all"]
     chaos = "tests/e2e/test_chaos.py::test_mcp_killed_midturn"
     expected_e2e = {chaos} | {
-        "tests/e2e/test_four_routes.py::" + name for name in (
-            "test_data_only", "test_knowledge_only", "test_both", "test_clarify",
-            "test_multiturn_followup", "test_restart_resumes", "test_evidence_retrievable_later",
+        "tests/e2e/test_four_routes.py::" + name
+        for name in (
+            "test_data_only",
+            "test_knowledge_only",
+            "test_both",
+            "test_clarify",
+            "test_multiturn_followup",
+            "test_restart_resumes",
+            "test_evidence_retrievable_later",
         )
     }
     assert expected_e2e <= collected["integration"]

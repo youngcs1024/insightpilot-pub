@@ -5,15 +5,29 @@ from pathlib import Path
 import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from scripts.deployment_contracts import API_ENVIRONMENT_KEYS, SERVICE_ENVIRONMENT_KEYS, forbidden_api_keys
+from scripts.deployment_contracts import (
+    API_ENVIRONMENT_KEYS,
+    SERVICE_ENVIRONMENT_KEYS,
+    forbidden_api_keys,
+)
 
 E2E_ENVIRONMENT_KEYS = {
-    **{name: keys for name, keys in SERVICE_ENVIRONMENT_KEYS.items()
-       if name in {"postgres", "migrate", "seed", "mcp", "etcd", "minio", "milvus"}},
+    **{
+        name: keys
+        for name, keys in SERVICE_ENVIRONMENT_KEYS.items()
+        if name in {"postgres", "migrate", "seed", "mcp", "etcd", "minio", "milvus"}
+    },
     "api": API_ENVIRONMENT_KEYS | {"IP_RATE_LIMITS"},
     "inference": frozenset(),
-    "ingest": frozenset({"IP_DATABASE__HOST", "IP_DATABASE__PORT", "IP_DATABASE__APP_PASSWORD",
-                          "IP_RETRIEVAL", "IP_MODEL_RUNTIME"}),
+    "ingest": frozenset(
+        {
+            "IP_DATABASE__HOST",
+            "IP_DATABASE__PORT",
+            "IP_DATABASE__APP_PASSWORD",
+            "IP_RETRIEVAL",
+            "IP_MODEL_RUNTIME",
+        }
+    ),
 }
 MODEL_CONFIG = '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
 RETRIEVAL_CONFIG = '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
@@ -73,22 +87,30 @@ def service_issues(name: str, service: Service) -> list[str]:
     if service.privileged or service.devices or set(service.networks) - {"backend", "egress"}:
         issues.append(f"e2e: {name}: unsafe isolation")
     expected_volumes = {
-        "postgres": ["./docker/postgres/init:/docker-entrypoint-initdb.d:ro", "pgdata:/var/lib/postgresql/data"],
-        "etcd": ["etcddata:/etcd"], "minio": ["miniodata:/minio_data"],
+        "postgres": [
+            "./docker/postgres/init:/docker-entrypoint-initdb.d:ro",
+            "pgdata:/var/lib/postgresql/data",
+        ],
+        "etcd": ["etcddata:/etcd"],
+        "minio": ["miniodata:/minio_data"],
         "milvus": ["milvusdata:/var/lib/milvus"],
     }
     if service.volumes != expected_volumes.get(name, []):
         issues.append(f"e2e: {name}: unreviewed mount")
-    expected_ports = {"api": ["127.0.0.1:${IP_API_HOST_PORT:?required}:8000"],
-                      "inference": ["127.0.0.1:${IP_E2E_INFERENCE_PORT:?required}:8100"]}
+    expected_ports = {
+        "api": ["127.0.0.1:${IP_API_HOST_PORT:?required}:8000"],
+        "inference": ["127.0.0.1:${IP_E2E_INFERENCE_PORT:?required}:8100"],
+    }
     if service.ports != expected_ports.get(name, []):
         issues.append(f"e2e: {name}: unreviewed host port")
     if name == "api":
         if forbidden_api_keys(set(service.environment)):
             issues.append("e2e: api: forbidden credentials")
-        expected = {"IP_LLM__BASE_URL": "http://inference:8100/v1",
-                    "IP_OBSERVABILITY": '{"langfuse_enabled":false,"log_format":"json"}',
-                    "IP_LLM__API_KEY": "e2e-synthetic-only"}
+        expected = {
+            "IP_LLM__BASE_URL": "http://inference:8100/v1",
+            "IP_OBSERVABILITY": '{"langfuse_enabled":false,"log_format":"json"}',
+            "IP_LLM__API_KEY": "e2e-synthetic-only",
+        }
         if any(service.environment.get(key) != value for key, value in expected.items()):
             issues.append("e2e: api: external inference or tracing")
     if name in {"api", "ingest"} and (

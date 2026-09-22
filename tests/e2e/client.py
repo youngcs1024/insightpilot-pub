@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from http import HTTPStatus
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,22 +32,29 @@ class Session:
 
     async def complete(self) -> ScriptStatus:
         status = await self.status()
-        (self.directory / (uuid4().hex+"-inference.json")).write_text(status.model_dump_json(indent=2))
+        (self.directory / (uuid4().hex + "-inference.json")).write_text(
+            status.model_dump_json(indent=2)
+        )
         assert not status.errors, status
-        assert status.remaining and not any(status.remaining.values()), status
+        assert status.remaining, status
+        assert not any(status.remaining.values()), status
         return status
 
     async def ask(self, question: str) -> TurnResponse:
-        response = await self.client.post(f"/api/v1/conversations/{self.cid}/messages",
-                                          json={"content": question},
-                                          headers={"X-Request-ID": uuid4().hex})
-        assert response.status_code == 200, response.text
+        response = await self.client.post(
+            f"/api/v1/conversations/{self.cid}/messages",
+            json={"content": question},
+            headers={"X-Request-ID": uuid4().hex},
+        )
+        assert response.status_code == HTTPStatus.OK, response.text
         turn = TurnResponse.model_validate_json(response.content)
         (self.directory / f"{turn.id}.json").write_text(turn.model_dump_json(indent=2))
         return turn
 
     async def evidence(self, turn: TurnResponse) -> EvidenceResponse:
-        response = await self.client.get(f"/api/v1/conversations/{self.cid}/turns/{turn.id}/evidence")
+        response = await self.client.get(
+            f"/api/v1/conversations/{self.cid}/turns/{turn.id}/evidence"
+        )
         response.raise_for_status()
         result = EvidenceResponse.model_validate_json(response.content)
         (self.directory / f"{turn.id}-evidence.json").write_text(result.model_dump_json(indent=2))
@@ -58,16 +66,21 @@ class Session:
         return TurnPage.model_validate_json(response.content)
 
     async def observations(self) -> Observations:
-        response = await self.client.get("/_e2e/observations", headers={
-            "Authorization": "Bearer " + self.stack.token.get_secret_value()})
+        response = await self.client.get(
+            "/_e2e/observations",
+            headers={"Authorization": "Bearer " + self.stack.token.get_secret_value()},
+        )
         response.raise_for_status()
         result = Observations.model_validate_json(response.content)
         (self.directory / "observations.json").write_text(result.model_dump_json(indent=2))
         return result
 
     async def route(self, turn: TurnResponse, expected: str) -> list[str]:
-        records = [record for record in (await self.observations()).spans
-                   if record.request_id == turn.trace_id]
+        records = [
+            record
+            for record in (await self.observations()).spans
+            if record.request_id == turn.trace_id
+        ]
         assert any(record.metadata.route == expected for record in records), records
         return [record.name for record in records]
 
@@ -76,8 +89,9 @@ class Session:
             while True:
                 status = await self.status()
                 records = (await self.observations()).spans
-                if status.sql_waiting and any(record.name == "knowledge_agent"
-                                             and record.metadata.status == "succeeded"
-                                             for record in records):
+                if status.sql_waiting and any(
+                    record.name == "knowledge_agent" and record.metadata.status == "succeeded"
+                    for record in records
+                ):
                     return
                 await asyncio.sleep(0.1)

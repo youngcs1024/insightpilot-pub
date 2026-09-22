@@ -24,7 +24,8 @@ async def test_mcp_killed_midturn(session: Session) -> None:
         assert turn.status == "degraded"
         assert turn.answer.degraded_components == ["data"]
         assert "数据源当前不可用" in turn.answer.markdown
-        assert turn.answer.citations and not turn.answer.abstained
+        assert turn.answer.citations
+        assert not turn.answer.abstained
         assert turn.evidence_refs.data_snapshot_id is None
         assert turn.evidence_refs.knowledge_snapshot_id
         evidence = await session.evidence(turn)

@@ -41,8 +41,8 @@ class Observations(BaseModel):
     spans: list[SpanRecord]
 
 
-DATA_QUESTION = "2026 年 8 月的 GMV 是多少？"
-KNOWLEDGE_QUESTION = "七天无理由退货有哪些例外？"
-BOTH_QUESTION = "为什么2026年8月华东退款率比7月上升？"
+DATA_QUESTION = "2026 年 8 月的 GMV 是多少?"
+KNOWLEDGE_QUESTION = "七天无理由退货有哪些例外?"
+BOTH_QUESTION = "为什么2026年8月华东退款率比7月上升?"
 CLARIFY_QUESTION = "帮我看看昨天那个"
-FOLLOWUP_QUESTION = "那华南呢？"
+FOLLOWUP_QUESTION = "那华南呢?"
