@@ -27,6 +27,7 @@ from scripts.setup_checkpointer import setup_checkpointer
 from tests.agents.support import metric_intent
 from tests.api.chat_support import Harness, asgi_stream, chat, events, parse_events
 from tests.auth_support import deadline
+from tests.factories import business_schema
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
 
@@ -529,7 +530,7 @@ async def test_clarification_is_persisted_and_replayed(chat: Harness, streamed: 
             metric_intent().model_copy(update={"metric_keys": []}),
         ]
     )
-    chat.app.state.mcp = FakeMcpClient([])
+    chat.app.state.mcp = FakeMcpClient([], schema_responses=[business_schema()])
     suffix = "/stream" if streamed else ""
     headers = {"Idempotency-Key": "clarification"}
     response = await chat.client.post(

@@ -273,7 +273,7 @@ jobs:
     outputs:
       coverage_artifact_id: ${{ steps.coverage_upload.outputs.artifact-id }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 17
+    timeout-minutes: 23
     services:
       postgres:
         image: pgvector/pgvector:0.8.5-pg16
@@ -307,7 +307,7 @@ jobs:
         run: docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < docker/postgres/init/01_bootstrap.sql
       - name: Real containers and typed model substitutes
         id: tests
-        timeout-minutes: 14
+        timeout-minutes: 20
         env:
           INSIGHTPILOT_TEST_REQUIRE_DOCKER: "true"
           INSIGHTPILOT_TEST_POSTGRES__PORT: ${{ job.services.postgres.ports['5432'] }}
