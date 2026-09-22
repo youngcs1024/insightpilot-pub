@@ -103,3 +103,7 @@ ssh/
 **/evidence/
 **/.agents/
 **/.codex/
+
+# Explicitly reviewed isolated E2E deployment; runtime evidence stays private.
+!/docker-compose.e2e.yml
+e2e-evidence/

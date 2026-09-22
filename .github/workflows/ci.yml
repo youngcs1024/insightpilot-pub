@@ -313,6 +313,9 @@ jobs:
           INSIGHTPILOT_TEST_POSTGRES__PORT: ${{ job.services.postgres.ports['5432'] }}
           INSIGHTPILOT_TEST_POSTGRES__PASSWORD: ci-only-postgres
           INSIGHTPILOT_TEST_POSTGRES__APP_PASSWORD: ci-only-app
+          CI_STORAGE_TESTED_SHA: ${{ github.sha }}
+          CI_STORAGE_RUN_ID: ${{ github.run_id }}
+          CI_STORAGE_RUN_ATTEMPT: ${{ github.run_attempt }}
           COVERAGE_FILE: .coverage.integration
         shell: bash
         run: |
@@ -351,6 +354,7 @@ jobs:
             integration-results.xml
             integration-tests.log
             model-tunnel-evidence/
+            e2e-evidence/
           if-no-files-found: error
 
       - name: Record integration diagnostics

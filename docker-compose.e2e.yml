@@ -1,0 +1,364 @@
+# Test-only isolated stack; synthetic inference only.
+services:
+  postgres:
+    platform: linux/amd64
+    image: pgvector/pgvector:0.8.5-pg16
+    environment:
+      POSTGRES_PASSWORD: ${IP_POSTGRES_SUPERUSER_PASSWORD:?required}
+      IP_BOOTSTRAP_APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
+      IP_BOOTSTRAP_ETL_PASSWORD: ${IP_BOOTSTRAP__ETL_PASSWORD:?required}
+      IP_BOOTSTRAP_MCP_PASSWORD: ${IP_BOOTSTRAP__MCP_PASSWORD:?required}
+    volumes:
+    - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    - pgdata:/var/lib/postgresql/data
+    networks:
+    - backend
+    command:
+    - postgres
+    - -c
+    - shared_buffers=256MB
+    - -c
+    - max_connections=100
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -h 127.0.0.1 -U postgres
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  migrate:
+    platform: linux/amd64
+    image: ${IP_E2E_API_BASE:?required}
+    command:
+    - python
+    - -m
+    - scripts.migrate_all
+    - upgrade
+    environment:
+      IP_MIGRATION__HOST: postgres
+      IP_MIGRATION__PORT: '5432'
+      IP_MIGRATION__PASSWORD: ${IP_POSTGRES_SUPERUSER_PASSWORD:?required}
+    networks:
+    - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+  seed:
+    platform: linux/amd64
+    image: ${IP_E2E_API_IMAGE:?required}
+    command:
+    - python
+    - -m
+    - tests.e2e.seed_job
+    environment:
+      IP_SEED__HOST: postgres
+      IP_SEED__PORT: '5432'
+      IP_SEED__PASSWORD: ${IP_BOOTSTRAP__ETL_PASSWORD:?required}
+    networks:
+    - backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+  mcp:
+    platform: linux/amd64
+    image: ${IP_E2E_MCP_IMAGE:?required}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mcp
+    environment:
+      IP_BUSINESS__HOST: postgres
+      IP_BUSINESS__PASSWORD: ${IP_BOOTSTRAP__MCP_PASSWORD:?required}
+      IP_MCP__AUTH_TOKEN: ${IP_MCP_AUTH_TOKEN:-}
+    networks:
+    - backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+  api:
+    platform: linux/amd64
+    image: ${IP_E2E_API_IMAGE:?required}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        BASE_IMAGE: ${IP_E2E_API_BASE:?required}
+    environment:
+      IP_DATABASE__HOST: postgres
+      IP_DATABASE__PORT: '5432'
+      IP_DATABASE__APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
+      IP_MCP__BASE_URL: http://mcp:8001/mcp
+      IP_MCP__AUTH_TOKEN: ${IP_MCP_AUTH_TOKEN:-}
+      IP_SECURITY__JWT_SECRET: ${IP_JWT_SECRET:-}
+      IP_LLM__BASE_URL: http://inference:8100/v1
+      IP_LLM__MODEL: qwen3.6-flash-2026-04-16
+      IP_LLM__TIMEOUT_S: ${IP_LLM_TIMEOUT_S:-45}
+      IP_LLM__ROLES: '{}'
+      IP_LLM__CAPABILITIES_PATHS: ${IP_LLM_CAPABILITIES_PATHS:-["app/resources/provider_capabilities.json"]}
+      IP_LLM__API_KEY: e2e-synthetic-only
+      IP_OBSERVABILITY: '{"langfuse_enabled":false,"log_format":"json"}'
+      IP_DATA_AGENT: ${IP_DATA_AGENT:-{}}
+      IP_ROUTER: ${IP_ROUTER:-{}}
+      IP_HTTP: ${IP_HTTP:-{}}
+      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
+      IP_MODEL_RUNTIME: '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
+      IP_OBSERVABILITY__LOG_FORMAT: json
+      IP_RATE_LIMITS: '{"register_rules":[{"requests":100,"seconds":3600}]}'
+    ports:
+    - 127.0.0.1:${IP_API_HOST_PORT:?required}:8000
+    networks:
+    - backend
+    - egress
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mcp:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+      ingest:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 400M
+    command:
+    - uvicorn
+    - tests.e2e.api_entry:application
+    - --factory
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready',
+        timeout=3)
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  etcd:
+    platform: linux/amd64
+    image: insightpilot-etcd:3.5.18-nonroot
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.etcd
+    user: 10001:10001
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '2147483648'
+      ETCD_SNAPSHOT_COUNT: '50000'
+    command:
+    - etcd
+    - -advertise-client-urls=http://etcd:2379
+    - -listen-client-urls
+    - http://0.0.0.0:2379
+    - --data-dir
+    - /etcd
+    volumes:
+    - etcddata:/etcd
+    networks:
+    - backend
+    healthcheck:
+      test:
+      - CMD
+      - etcdctl
+      - endpoint
+      - health
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  minio:
+    platform: linux/amd64
+    image: insightpilot-minio:RELEASE.2024-05-28T17-19-04Z-nonroot
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.minio
+    user: 10001:10001
+    environment:
+      MINIO_ROOT_USER: ${IP_MINIO__USER:-}
+      MINIO_ROOT_PASSWORD: ${IP_MINIO__PASSWORD:-}
+    command:
+    - minio
+    - server
+    - /minio_data
+    volumes:
+    - miniodata:/minio_data
+    networks:
+    - backend
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:9000/minio/health/live
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  milvus:
+    platform: linux/amd64
+    image: insightpilot-milvus:2.6.4-nonroot
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.milvus
+    user: 10001:10001
+    command:
+    - milvus
+    - run
+    - standalone
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${IP_MINIO__USER:-}
+      MINIO_SECRET_ACCESS_KEY: ${IP_MINIO__PASSWORD:-}
+    volumes:
+    - milvusdata:/var/lib/milvus
+    networks:
+    - backend
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:9091/healthz
+      interval: 5s
+      timeout: 3s
+      retries: 18
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 3072M
+        reservations:
+          memory: 2048M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  inference:
+    image: ${IP_E2E_API_IMAGE:?required}
+    command:
+    - uvicorn
+    - tests.e2e.inference:application
+    - --factory
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8100'
+    ports:
+    - 127.0.0.1:${IP_E2E_INFERENCE_PORT:?required}:8100
+    networks:
+    - backend
+    - egress
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/ready',
+        timeout=3)
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+  ingest:
+    image: ${IP_E2E_API_IMAGE:?required}
+    command:
+    - python
+    - -m
+    - tests.e2e.ingest_job
+    environment:
+      IP_DATABASE__HOST: postgres
+      IP_DATABASE__PORT: '5432'
+      IP_DATABASE__APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
+      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
+      IP_MODEL_RUNTIME: '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
+    networks:
+    - backend
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      milvus:
+        condition: service_healthy
+      inference:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+volumes:
+  etcddata: {}
+  miniodata: {}
+  milvusdata: {}
+  pgdata: {}
+networks:
+  backend:
+    internal: true
+  egress: {}

@@ -1,0 +1,4 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY tests/e2e ./tests/e2e
+COPY tests/fakes/chat_model.py ./tests/fakes/chat_model.py

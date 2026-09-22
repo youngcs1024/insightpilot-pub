@@ -33,6 +33,7 @@ ROOT_FILES = frozenset(
         "alembic.ini",
         "docker-compose.yml",
         "docker-compose.dev.yml",
+        "docker-compose.e2e.yml",
         "docker-compose.model-server.yml",
     }
 )

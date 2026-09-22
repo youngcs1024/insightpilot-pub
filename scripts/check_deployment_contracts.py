@@ -13,6 +13,7 @@ from scripts.deployment_contracts import (
     SERVICE_ENVIRONMENT_KEYS,
     environment_issues,
 )
+from scripts.e2e_contracts import isolation_issues
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_YAML_DEPTH = 64
@@ -128,6 +129,12 @@ def main() -> None:
         )
     except ContractInputError:
         issues.append("remote: invalid or unsupported Compose document")
+    e2e_path = ROOT / "docker-compose.e2e.yml"
+    try:
+        load_compose(e2e_path)
+        issues.extend(isolation_issues(e2e_path))
+    except ContractInputError:
+        issues.append("e2e: invalid or unsupported Compose document")
     print("Deployment environment contracts: " + ("FAIL" if issues else "PASS"))
     for issue in issues:
         # JSON-style escaping keeps newlines and workflow command syntax inert.

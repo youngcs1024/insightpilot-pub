@@ -1,0 +1,7 @@
+*
+!tests/
+!tests/e2e/
+!tests/e2e/*.py
+!tests/fakes/
+!tests/fakes/chat_model.py
+**/__pycache__
