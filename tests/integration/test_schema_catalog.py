@@ -21,8 +21,8 @@ from app.schemas.schema_catalog import (
     BUSINESS_TABLES,
     DriftKind,
 )
-from app.services.schema_catalog import SchemaCatalogService
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
+from app.services.schema_catalog import SchemaCatalogService
 from tests.database_support import DatabaseStack
 from tests.integration.catalog_support import (
     TransactionDatabase,
@@ -182,15 +182,11 @@ async def test_validate_detects_structural_drift(
 
 
 async def test_schema_response_and_boundary(client: McpClient) -> None:
-    live = await client.get_schema(
-        GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15)
-    )
+    live = await client.get_schema(GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15))
     assert {t.table_name for t in live.tables} == set(BUSINESS_TABLES)
     assert sum(len(t.columns) for t in live.tables) == 52
     assert all(not c.sample_values for t in live.tables for c in t.columns)
-    result = await client.get_schema(
-        GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15)
-    )
+    result = await client.get_schema(GetSchemaArgs(), deadline=Deadline(time.monotonic() + 15))
     assert result == live
 
 
@@ -223,9 +219,7 @@ async def test_concurrent_refresh_is_coalesced(
     calls = []
     original = client.get_schema
 
-    async def counted(
-        args: GetSchemaArgs, *, deadline: Deadline
-    ) -> SchemaResponse:
+    async def counted(args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse:
         calls.append(args.refresh)
         return await original(args, deadline=deadline)
 
@@ -257,8 +251,6 @@ def test_cli_drift_gate_and_render(
         assert (
             "differences" if module.endswith("metadata") else "Table: biz.orders"
         ) in result.stdout
-
-
 
 
 async def test_business_revision_change_invalidates_cache(
@@ -344,8 +336,6 @@ async def test_cli_fails_on_drift_and_dependency_failure(
     assert result.returncode == 1
     assert any(code in result.stdout for code in ("AUTHENTICATION_ERROR", "MCP_INVALID_RESULT"))
     assert '"differences": []' not in result.stdout
-
-
 
 
 async def test_metric_schema_snapshot_is_detached_and_drift_checked(

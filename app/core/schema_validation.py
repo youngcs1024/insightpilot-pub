@@ -1,13 +1,12 @@
 """Pure comparison and rendering of typed metadata, with no database or HTTP I/O."""
 
+from collections.abc import Sequence
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
 from app.core.errors import SchemaMetadataError
-from collections.abc import Sequence
-
-from app.schemas.schema_tools import ColumnSchema, TableSchema
 from app.schemas.schema_catalog import (
     BUSINESS_TABLES,
     BusinessSchemaResponse,
@@ -20,6 +19,7 @@ from app.schemas.schema_catalog import (
     SemanticTable,
     SemanticType,
 )
+from app.schemas.schema_tools import ColumnSchema, TableSchema
 
 
 def enum_keys(column: SemanticColumn | ColumnSchema) -> set[str]:
@@ -115,8 +115,10 @@ def compare_column(
         for kind, left, right in pairs
         if left != right
     ]
-    if not expected.is_pii and expected.semantic_type is SemanticType.ENUM and set(expected.allowed_values) != enum_keys(
-        expected
+    if (
+        not expected.is_pii
+        and expected.semantic_type is SemanticType.ENUM
+        and set(expected.allowed_values) != enum_keys(expected)
     ):
         differences.append(
             SchemaDrift(
@@ -124,4 +126,3 @@ def compare_column(
             )
         )
     return differences
-

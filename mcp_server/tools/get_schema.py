@@ -11,7 +11,7 @@ from app.core.errors import SchemaDriftError, SchemaMetadataError, SqlTimeoutErr
 from app.core.schema_artifact import load_artifact
 from app.core.schema_validation import compare_catalog
 from app.schemas.schema_catalog import BusinessSchemaResponse
-from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaArtifact
+from app.schemas.schema_tools import GetSchemaArgs, SchemaArtifact, SchemaResponse
 from mcp_server.policy.allowlist import ALLOWED_TABLES
 from mcp_server.policy.column_policy import suppress_values
 from mcp_server.tools.business_schema import BusinessSchemaReader

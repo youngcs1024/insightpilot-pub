@@ -1,8 +1,8 @@
 """Pure deterministic schema projections shared by the exporter and MCP process."""
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
-import json
 
 from pydantic import ValidationError
 
@@ -12,6 +12,7 @@ from app.schemas.schema_catalog import (
     BusinessSchemaResponse,
     PhysicalColumn,
     PhysicalTable,
+    SemanticColumn,
     SemanticTable,
 )
 from app.schemas.schema_tools import (
@@ -34,7 +35,8 @@ def project_tables(
             continue
         table = by_name[name]
         columns = []
-        for column in sorted(table.columns, key=lambda c: c.ordinal_position):
+        source_columns: Sequence[SemanticColumn | ColumnSchema] = table.columns
+        for column in sorted(source_columns, key=lambda c: c.ordinal_position):
             values = column.model_dump()
             values["allowed_values"] = {} if column.is_pii else column.allowed_values
             values["sample_values"] = (
@@ -53,7 +55,9 @@ def project_tables(
 
 def build_artifact(tables: list[SemanticTable]) -> SchemaArtifact:
     """Export application-owned metadata as a sanitized, content-addressed resource."""
-    if len(tables) != len(BUSINESS_TABLES) or {t.table_name for t in tables} != set(BUSINESS_TABLES):
+    if len(tables) != len(BUSINESS_TABLES) or {t.table_name for t in tables} != set(
+        BUSINESS_TABLES
+    ):
         raise SchemaMetadataError()
     safe = project_tables(tables)
     return SchemaArtifact(metadata_revision=metadata_digest(safe), tables=safe)
@@ -61,7 +65,10 @@ def build_artifact(tables: list[SemanticTable]) -> SchemaArtifact:
 
 def artifact_json(artifact: SchemaArtifact) -> str:
     """The checked-in artifact and CI export use identical deterministic bytes."""
-    return json.dumps(artifact.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    return (
+        json.dumps(artifact.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, indent=2)
+        + "\n"
+    )
 
 
 def load_artifact(path: Path) -> SchemaArtifact:

@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.config_models import Settings
-from app.core.errors import SchemaDriftError, McpUnavailableError
+from app.core.errors import McpUnavailableError, SchemaDriftError
 from app.db.session import Database
 from app.services.schema_catalog import SchemaCatalogService
 from tests.auth_support import deadline
@@ -35,7 +35,8 @@ async def test_metadata_mismatch_or_failure_clears_application_cache(
     initial = business_schema()
     next_response = (
         initial.model_copy(update={"metadata_revision": "a" * 64})
-        if failure == "content" else McpUnavailableError()
+        if failure == "content"
+        else McpUnavailableError()
     )
     client = FakeMcpClient([], schema_responses=[initial, next_response])
     catalog = SchemaCatalogService(auth_database, client, settings.schema_catalog)

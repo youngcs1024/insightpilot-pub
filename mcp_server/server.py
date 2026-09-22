@@ -17,7 +17,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from structlog.types import EventDict, WrappedLogger
 
-from app.core.errors import InsightPilotError, McpPolicyRejected, SqlExecutionError, SchemaDriftError, SchemaMetadataError
+from app.core.errors import (
+    InsightPilotError,
+    McpPolicyRejected,
+    SchemaDriftError,
+    SchemaMetadataError,
+    SqlExecutionError,
+)
 from app.schemas.mcp import (
     McpErrorCode,
     McpErrorPayload,
@@ -83,7 +89,9 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
     executor = QueryExecutor(database)
     validator = SQLValidator()
     schema_tool = SchemaTool(
-        BusinessSchemaReader(database), settings.schema.artifact_path, ttl_s=settings.schema.ttl_s
+        BusinessSchemaReader(database),
+        settings.schema_metadata.artifact_path,
+        ttl_s=settings.schema_metadata.ttl_s,
     )
 
     @asynccontextmanager

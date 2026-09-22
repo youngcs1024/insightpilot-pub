@@ -2,11 +2,10 @@
 
 from pathlib import Path
 
-from app.schemas.schema_catalog import BUSINESS_TABLES
 from app.core.schema_artifact import project_tables
-from app.schemas.schema_catalog import SemanticTable, BusinessSchemaResponse
-from mcp_server.tools.schema_rendering import render_catalog as render_safe
+from app.schemas.schema_catalog import BUSINESS_TABLES, BusinessSchemaResponse, SemanticTable
 from data.seed.schema_metadata_loader import load_catalog
+from mcp_server.tools.schema_rendering import render_catalog as render_safe
 from tests.factories import physical
 
 AUTHORING = Path(__file__).resolve().parents[1] / "data/seed/schema_metadata.yaml"

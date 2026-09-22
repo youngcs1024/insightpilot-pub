@@ -6,11 +6,11 @@ from uuid import UUID, uuid4
 from mcp.types import CallToolResult
 
 from app.core.schema_artifact import build_artifact
-from app.schemas.schema_tools import SchemaResponse
-from mcp_server.tools.schema_rendering import render_catalog
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus, User
 from app.schemas.mcp import ColumnSpec, QueryResultPayload, SqlValue
 from app.schemas.schema_catalog import BusinessSchemaResponse, PhysicalTable, SchemaCatalog
+from app.schemas.schema_tools import SchemaResponse
+from mcp_server.tools.schema_rendering import render_catalog
 
 
 def user(*, email: str | None = None, hashed_password: str | None = None) -> User:

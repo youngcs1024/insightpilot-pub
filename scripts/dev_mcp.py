@@ -38,11 +38,15 @@ def main() -> int:
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
     try:
-        result = asyncio.run(read_schema(GetSchemaArgs(
-            tables=args.tables.split(",") if args.tables is not None else None,
-            include_samples=args.include_samples,
-            refresh=args.refresh,
-        )))
+        result = asyncio.run(
+            read_schema(
+                GetSchemaArgs(
+                    tables=args.tables.split(",") if args.tables is not None else None,
+                    include_samples=args.include_samples,
+                    refresh=args.refresh,
+                )
+            )
+        )
         print(result.model_dump_json(indent=2))
         return 0
     except ValidationError:

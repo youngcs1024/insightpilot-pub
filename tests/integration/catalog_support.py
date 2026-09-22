@@ -7,7 +7,12 @@ from contextlib import asynccontextmanager
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from alembic import command
 from app.clients.mcp_client import McpClient
@@ -110,4 +115,3 @@ async def execute_statements(engine: AsyncEngine, statements: list[str]) -> None
     async with engine.begin() as connection:
         for statement in statements:
             await connection.execute(text(statement))
-

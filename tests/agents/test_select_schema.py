@@ -20,14 +20,14 @@ from app.core.errors import DeadlineExceededError, SchemaDriftError
 from app.core.masking import mask, safe_attributes
 from app.core.observability import GraphTraceCallback, TraceMetadata
 from app.schemas.schema_catalog import BUSINESS_TABLES
+from app.schemas.schema_tools import GetSchemaArgs
 from app.services.schema_tokens import SchemaTokenCounter
 from data.seed.schema_metadata_loader import load_catalog
 from scripts.render_schema_catalog import measure
 from tests.agents.support import context
+from tests.factories import business_schema
 from tests.observability_support import tracing
 from tests.schema_support import AUTHORING, full_block
-from tests.factories import business_schema
-from app.schemas.schema_tools import GetSchemaArgs
 
 
 async def test_full_strategy_includes_all_tables() -> None:
@@ -39,7 +39,9 @@ async def test_full_strategy_includes_all_tables() -> None:
     result = await select_schema(state, Runtime(context=ctx))
     assert result.update == {"schema_block": block, "schema_tables": list(BUSINESS_TABLES)}
     assert state.model_dump() == before
-    catalog.get_schema.assert_awaited_once_with(GetSchemaArgs(include_samples=True), deadline=ctx.deadline)
+    catalog.get_schema.assert_awaited_once_with(
+        GetSchemaArgs(include_samples=True), deadline=ctx.deadline
+    )
     assert len(load_catalog(AUTHORING).tables) == 8
     assert sum(len(table.columns) for table in load_catalog(AUTHORING).tables) == 52
 

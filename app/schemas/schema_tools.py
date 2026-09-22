@@ -68,8 +68,9 @@ class TableSchema(Contract):
 def metadata_digest(tables: list[TableSchema]) -> str:
     """Hash canonical metadata, independent of source row order or application migrations."""
     normalized = [
-        table.model_copy(update={"columns": sorted(table.columns, key=lambda c: c.ordinal_position)})
-        .model_dump(mode="json")
+        table.model_copy(
+            update={"columns": sorted(table.columns, key=lambda c: c.ordinal_position)}
+        ).model_dump(mode="json")
         for table in sorted(tables, key=lambda t: t.table_name)
     ]
     payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

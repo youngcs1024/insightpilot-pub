@@ -9,17 +9,16 @@ from uuid import uuid4
 import httpx
 import pytest
 import respx
+from mcp.types import CallToolResult
 from tenacity import wait_none
 
 from app.agents.contracts import PreparedContext, Route, RouteDecision
 from app.clients.mcp_client import McpClient
 from app.core.errors import McpUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
-from mcp.types import CallToolResult
-from tests.factories import business_schema
-
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
+from tests.factories import business_schema
 from tests.factories import mcp_success as success
 from tests.llm_support import URL, response
 from tests.llm_support import service as llm_service

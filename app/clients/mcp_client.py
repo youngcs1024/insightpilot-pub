@@ -25,10 +25,10 @@ from app.core.errors import (
     McpPolicyRejected,
     McpResultError,
     McpUnavailableError,
-    SqlExecutionError,
-    SqlTimeoutError,
     SchemaDriftError,
     SchemaMetadataError,
+    SqlExecutionError,
+    SqlTimeoutError,
     UpstreamUnavailableError,
 )
 from app.core.observability import TraceMetadata, observe
@@ -240,9 +240,7 @@ class McpClient:
             raise McpResultError()
         return await self._with_retry(lambda: self._call(name, args), deadline)
 
-    async def get_schema(
-        self, args: GetSchemaArgs, *, deadline: Deadline
-    ) -> SchemaResponse:
+    async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse:
         """Read server-rendered metadata through the existing session and retry owner."""
         return await self._with_retry(lambda: self._schema_call(args), deadline)
 

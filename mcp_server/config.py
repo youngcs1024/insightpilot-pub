@@ -1,7 +1,7 @@
 """MCP-only process settings; API and administrator credentials are invalid."""
 
-from typing import Literal
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 
@@ -43,4 +43,4 @@ class McpServerSettings(ProcessSettings):
     process_name = "mcp"
     business: BusinessSettings
     mcp: ServerSettings
-    schema: SchemaSettings = Field(default_factory=SchemaSettings)
+    schema_metadata: SchemaSettings = Field(default_factory=SchemaSettings)

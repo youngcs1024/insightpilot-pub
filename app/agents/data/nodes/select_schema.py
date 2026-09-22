@@ -13,9 +13,7 @@ async def select_schema(state: DataAgentState, runtime: Runtime[RuntimeContext])
     """Render complete catalog semantics through the injected service."""
     ctx = runtime.context
     ctx.deadline.check("select_schema")
-    response = await ctx.mcp.get_schema(
-        GetSchemaArgs(include_samples=True), deadline=ctx.deadline
-    )
+    response = await ctx.mcp.get_schema(GetSchemaArgs(include_samples=True), deadline=ctx.deadline)
     block = response.rendered
     tables = [table.table_name for table in response.tables]
     tokens = ctx.schema_token_counter.count(block)

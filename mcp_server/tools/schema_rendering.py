@@ -25,9 +25,7 @@ def render_column(column: ColumnSchema) -> list[str]:
     return lines
 
 
-def render_catalog(
-    tables: list[TableSchema]
-) -> str:
+def render_catalog(tables: list[TableSchema]) -> str:
     """Use live column ordering; validation must have succeeded before this call."""
     semantic = {t.table_name: t for t in tables}
     lines: list[str] = []

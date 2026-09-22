@@ -48,9 +48,7 @@ class FakeMcpClient:
         """Return detached schema requests, including failed requests."""
         return [call.model_copy(deep=True) for call in self._schema_calls]
 
-    async def get_schema(
-        self, args: GetSchemaArgs, *, deadline: Deadline
-    ) -> SchemaResponse:
+    async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse:
         """Use the same deadline discipline and strict queue as SQL calls."""
         deadline.check("fake_mcp_schema")
         self._schema_calls.append(args.model_copy(deep=True))

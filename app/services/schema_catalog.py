@@ -11,19 +11,19 @@ from sqlalchemy import text
 from app.core.config_models import SchemaCatalogSettings
 from app.core.deadline import Deadline
 from app.core.errors import DeadlineExceededError, SchemaDriftError, ValidationError
+from app.core.schema_artifact import build_artifact, physical_schema
+from app.core.schema_validation import compare_catalog
 from app.db.session import Database
 from app.repositories.schema_metadata import SchemaMetadataRepository
 from app.schemas.mcp import Contract
 from app.schemas.schema_catalog import (
     BUSINESS_TABLES,
+    DriftKind,
     SchemaCatalog,
+    SchemaDrift,
     SchemaDriftReport,
     SemanticTable,
-    SchemaDrift,
-    DriftKind,
 )
-from app.core.schema_validation import compare_catalog
-from app.core.schema_artifact import build_artifact, physical_schema
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 
 logger = structlog.get_logger(__name__)
@@ -32,9 +32,7 @@ logger = structlog.get_logger(__name__)
 class SchemaClient(Protocol):
     """Only the typed MCP method is available to the catalog service."""
 
-    async def get_schema(
-        self, args: GetSchemaArgs, *, deadline: Deadline
-    ) -> SchemaResponse:
+    async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse:
         """Fetch structure or validate a known revision."""
         ...
 

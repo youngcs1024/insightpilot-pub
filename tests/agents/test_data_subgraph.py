@@ -41,9 +41,9 @@ from app.schemas.sql_correction import CorrectionDecision, CorrectionStopReason,
 from app.services.metric_binding import build_binding
 from tests.agents.correction_support import correction_context
 from tests.agents.support import context, metric_intent, result, sql_candidate
+from tests.factories import business_schema
 from tests.fakes.chat_model import FakeChatModel
 from tests.fakes.mcp_client import FakeMcpClient
-from tests.factories import business_schema
 from tests.metric_resolution_support import request, schema
 
 
