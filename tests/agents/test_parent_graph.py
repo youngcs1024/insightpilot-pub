@@ -49,7 +49,7 @@ async def test_selected_production_default_uses_llm_and_preserves_source_isolati
     assert ctx.settings.router.strategy is RoutingStrategy.LLM_ONLY
     questions = {
         Route.DATA_ONLY: "2026年8月GMV",
-        Route.KNOWLEDGE_ONLY: "退货政策有哪些？",
+        Route.KNOWLEDGE_ONLY: "退货政策有哪些?",
         Route.BOTH: "请分析2026年8月的经营情况",
         Route.CLARIFY: "那个",
     }
