@@ -2,8 +2,8 @@
 
 import sqlglot
 
-from app.schemas.metric_tools import ResolveMetricArgs
 from app.schemas.metric_resolution import MetricPatch
+from app.schemas.metric_tools import ResolveMetricArgs
 from app.services.metric_binding import build_binding
 from tests.metric_resolution_support import definition, request, schema
 

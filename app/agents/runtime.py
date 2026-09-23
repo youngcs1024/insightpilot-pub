@@ -59,7 +59,9 @@ class McpPort(Protocol):
 
     async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse: ...
 
-    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment: ...
+    async def resolve_metric(
+        self, args: ResolveMetricArgs, *, deadline: Deadline
+    ) -> MetricFragment: ...
 
     async def call_tool(
         self, name: Literal["execute_readonly_query"], args: QueryArguments, *, deadline: Deadline

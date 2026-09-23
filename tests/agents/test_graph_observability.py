@@ -16,12 +16,14 @@ from app.agents.contracts import PreparedContext, Route, RouteDecision
 from app.clients.mcp_client import McpClient
 from app.core.errors import McpUnavailableError
 from app.core.observability import GraphTraceCallback, TraceMetadata
+from app.schemas.metric_tools import MetricFragment
 from tests.agents.support import context, invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.factories import business_schema
 from tests.factories import mcp_success as success
 from tests.llm_support import URL, response
 from tests.llm_support import service as llm_service
+from tests.metric_tool_support import metric_args
 from tests.observability_support import tracing
 
 
@@ -109,8 +111,20 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
     service, exporter = tracing(ctx.settings)
     mcp = McpClient(ctx.settings.mcp)
     session = AsyncMock()
+    normalized = metric_args().resolved_sql
     session.call_tool.side_effect = [
         CallToolResult(content=[], structured_content=business_schema().model_dump(mode="json")),
+        CallToolResult(
+            content=[],
+            structured_content=MetricFragment(
+                select_fragment="",
+                from_fragment="",
+                where_fragment="",
+                group_by_fragment="",
+                normalized_sql=normalized,
+                normalized=False,
+            ).model_dump(mode="json"),
+        ),
         success(),
     ]
     monkeypatch.setattr(mcp, "_get_session", AsyncMock(return_value=session))
@@ -147,6 +161,8 @@ async def test_real_service_spans_under_nodes_include_retries_and_fallback(
         )
         assert generations[3].attributes["langfuse.observation.model.name"] == "backup"
         tool = next(span for span in spans if span.name == "mcp_execute")
+        metric_tool = next(span for span in spans if span.name == "mcp_metric")
+        assert metric_tool.parent.span_id == metrics.context.span_id
         assert tool.parent.span_id == execution.context.span_id
         assert tool.attributes["langfuse.observation.metadata.mcp_call_id"] == "test-call"
         root_span = next(span for span in spans if span.name == "turn")

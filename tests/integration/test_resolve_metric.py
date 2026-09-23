@@ -70,8 +70,7 @@ async def test_subquery_against_pg_catalog_rejected(client: McpClient) -> None:
     args = metric_args()
     args.resolved_sql = args.resolved_sql.replace(
         "o.status <> 'cancelled'",
-        "o.status <> 'cancelled' AND o.order_id IN "
-        "(SELECT oid FROM pg_catalog.pg_class)",
+        "o.status <> 'cancelled' AND o.order_id IN (SELECT oid FROM pg_catalog.pg_class)",
     )
     with pytest.raises(McpPolicyRejected) as caught:
         await client.resolve_metric(args, deadline=budget())

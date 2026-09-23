@@ -122,7 +122,9 @@ async def test_metric_client_accepts_complete_normalized_sql(settings: MCPSettin
     client = McpClient(settings, session_factory=factory)
     try:
         args = metric_args()
-        assert await client.resolve_metric(args, deadline=Deadline(time.monotonic() + 5)) == response
+        assert (
+            await client.resolve_metric(args, deadline=Deadline(time.monotonic() + 5)) == response
+        )
         session.call_tool.assert_awaited_once_with(
             "resolve_metric", arguments=args.model_dump(mode="json")
         )

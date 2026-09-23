@@ -24,6 +24,7 @@ from mcp_server.tools.get_schema import SchemaTool
 logger = structlog.get_logger(__name__)
 MAX_METRIC_SQL = 32_000
 METRIC_PROJECTION_INDEX = 1
+MIN_USING_SOURCES = 2
 _BOOLEAN = (
     exp.And,
     exp.Or,
@@ -79,9 +80,7 @@ def _sources(scope: Scope, metadata: SchemaResponse) -> dict[str, set[str]]:
     try:
         selected = scope.selected_sources
     except SqlglotError as exc:
-        raise McpPolicyRejected(
-            ValidationStatus.INVALID, [PolicyReason.UNSUPPORTED_SCOPE]
-        ) from exc
+        raise McpPolicyRejected(ValidationStatus.INVALID, [PolicyReason.UNSUPPORTED_SCOPE]) from exc
     for alias, (_node, source) in selected.items():
         if isinstance(source, exp.Table):
             name = f"{source.db or 'biz'}.{source.name}"
@@ -96,32 +95,44 @@ def _sources(scope: Scope, metadata: SchemaResponse) -> dict[str, set[str]]:
     return result
 
 
+def _check_column(column: exp.Column, sources: dict[str, set[str]]) -> None:
+    if column.is_star:
+        _reject(PolicyReason.INVALID_METRIC_BINDING)
+    choices = [sources[column.table]] if column.table in sources else []
+    if not column.table:
+        choices = list(sources.values())
+    if sum(column.name in names for names in choices) != 1:
+        _reject(PolicyReason.UNKNOWN_COLUMN, column=column.name)
+
+
+def _check_using(join: exp.Join, sources: dict[str, set[str]]) -> None:
+    for identifier in join.args.get("using") or []:
+        count = sum(identifier.name in names for names in sources.values())
+        if count < MIN_USING_SOURCES:
+            _reject(PolicyReason.UNKNOWN_COLUMN, column=identifier.name)
+
+
+def _scope_tables(scope: Scope, metadata: SchemaResponse) -> set[str]:
+    sources = _sources(scope, metadata)
+    actual = {
+        f"{source.db or 'biz'}.{source.name}"
+        for _node, source in scope.selected_sources.values()
+        if isinstance(source, exp.Table)
+    }
+    for column in scope.columns:
+        _check_column(column, sources)
+    for join in scope.find_all(exp.Join):
+        _check_using(join, sources)
+    return actual
+
+
 def _validate_columns(query: exp.Select, metadata: SchemaResponse, declared: set[str]) -> None:
     actual: set[str] = set()
     try:
-        scopes = traverse_scope(query)
-        for scope in scopes:
-            sources = _sources(scope, metadata)
-            for _alias, (_node, source) in scope.selected_sources.items():
-                if isinstance(source, exp.Table):
-                    actual.add(f"{source.db or 'biz'}.{source.name}")
-            for column in scope.columns:
-                if column.is_star:
-                    _reject(PolicyReason.INVALID_METRIC_BINDING)
-                if column.table:
-                    choices = [sources[column.table]] if column.table in sources else []
-                else:
-                    choices = list(sources.values())
-                if sum(column.name in names for names in choices) != 1:
-                    _reject(PolicyReason.UNKNOWN_COLUMN, column=column.name)
-            for join in scope.find_all(exp.Join):
-                for identifier in join.args.get("using") or []:
-                    if sum(identifier.name in names for names in sources.values()) < 2:
-                        _reject(PolicyReason.UNKNOWN_COLUMN, column=identifier.name)
+        for scope in traverse_scope(query):
+            actual.update(_scope_tables(scope, metadata))
     except (SqlglotError, RecursionError) as exc:
-        raise McpPolicyRejected(
-            ValidationStatus.INVALID, [PolicyReason.UNSUPPORTED_SCOPE]
-        ) from exc
+        raise McpPolicyRejected(ValidationStatus.INVALID, [PolicyReason.UNSUPPORTED_SCOPE]) from exc
     if not actual or not actual <= declared:
         _reject(PolicyReason.TABLE_NOT_ALLOWED)
 
@@ -164,24 +175,38 @@ def _instant(value: exp.Expr) -> datetime | None:
     return instant if instant.utcoffset() is not None else None
 
 
+def _validate_fragment_columns(
+    fragment: exp.Expr, query: exp.Select, metadata: SchemaResponse
+) -> None:
+    sources = [_sources(scope, metadata) for scope in traverse_scope(query)]
+    for column in fragment.find_all(exp.Column):
+        if not any(
+            column.table in available and column.name in available[column.table]
+            for available in sources
+        ):
+            _reject(PolicyReason.UNKNOWN_COLUMN, column=column.name)
+
+
 def _check_binding(query: exp.Select, args: ResolveMetricArgs, metadata: SchemaResponse) -> None:
     if len(query.expressions) <= METRIC_PROJECTION_INDEX or not isinstance(
         query.expressions[METRIC_PROJECTION_INDEX], exp.Alias
     ):
         _reject(PolicyReason.INVALID_METRIC_BINDING)
     projection = query.expressions[METRIC_PROJECTION_INDEX]
-    if projection.alias != args.metric_key or projection.this != _fragment(args.expression):
+    expression = _fragment(args.expression)
+    _validate_fragment_columns(expression, query, metadata)
+    if projection.alias != args.metric_key or projection.this != expression:
         _reject(PolicyReason.INVALID_METRIC_BINDING)
     date_field = _fragment(args.date_field)
     if not isinstance(date_field, exp.Column) or not date_field.table or date_field.db:
         _reject(PolicyReason.INVALID_METRIC_BINDING)
+    _validate_fragment_columns(date_field, query, metadata)
     catalog = {table.table_name: table for table in metadata.tables}
     typed_date = any(
         isinstance(source, exp.Table)
         and alias == date_field.table
         and any(
-            column.column_name == date_field.name
-            and column.semantic_type is SemanticType.TIMESTAMP
+            column.column_name == date_field.name and column.semantic_type is SemanticType.TIMESTAMP
             for column in catalog[f"{source.db or 'biz'}.{source.name}"].columns
         )
         for scope in traverse_scope(query)
@@ -192,6 +217,10 @@ def _check_binding(query: exp.Select, args: ResolveMetricArgs, metadata: SchemaR
     predicates = _where_parts(query)
     for value in args.filters:
         predicate = _fragment(value, boolean=True)
+        outcome = SQLValidator().validate(f"SELECT 1 WHERE {value}")
+        if outcome.status is not ValidationStatus.VALID:
+            raise McpPolicyRejected(outcome.status, outcome.reasons)
+        _validate_fragment_columns(predicate, query, metadata)
         if predicate.unnest() not in predicates:
             _reject(PolicyReason.INVALID_METRIC_BINDING)
     for operator, instant in ((exp.GTE, args.period_start), (exp.LT, args.period_end)):
@@ -269,7 +298,9 @@ class MetricResolver:
         if len(normalized_sql) > MAX_METRIC_SQL:
             _reject(PolicyReason.INVALID_METRIC_BINDING)
         select, source, where, group, warnings = _fragments(query, args)
-        logger.info("metric_binding_validated", table_count=len(declared), complex_query=bool(warnings))
+        logger.info(
+            "metric_binding_validated", table_count=len(declared), complex_query=bool(warnings)
+        )
         return MetricFragment(
             select_fragment=select,
             from_fragment=source,

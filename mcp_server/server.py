@@ -88,6 +88,44 @@ def error_result(exc: InsightPilotError) -> CallToolResult:
     )
 
 
+def register_metric_tool(server: MCPServer[None], resolver: MetricResolver) -> None:
+    """Register the bound metric capability independently of server lifecycle routes."""
+
+    @server.tool()
+    async def resolve_metric(  # noqa: PLR0913, PLR0917 -- MCP's public typed wire fields.
+        metric_key: Annotated[str, Field(min_length=1, max_length=64)],
+        expression: Annotated[str, Field(min_length=1, max_length=32000)],
+        resolved_sql: Annotated[str, Field(min_length=1, max_length=32000)],
+        base_tables: Annotated[list[str], Field(min_length=1, max_length=8)],
+        date_field: Annotated[str, Field(min_length=1, max_length=127)],
+        period_start: datetime,
+        period_end: datetime,
+        filters: Annotated[list[str], Field(max_length=16)],
+        grain: Grain,
+    ) -> Annotated[CallToolResult, MetricFragment]:
+        """Check a rendered metric binding against the business schema and SQL policy."""
+        try:
+            args = ResolveMetricArgs(
+                metric_key=metric_key,
+                expression=expression,
+                resolved_sql=resolved_sql,
+                base_tables=base_tables,
+                date_field=date_field,
+                period_start=period_start,
+                period_end=period_end,
+                filters=filters,
+                grain=grain,
+            )
+            result = await resolver.resolve(args)
+            return CallToolResult(
+                structured_content=result.model_dump(mode="json"),
+                content=[TextContent(type="text", text=result.model_dump_json())],
+            )
+        except InsightPilotError as exc:
+            logger.warning("metric_binding_rejected", code=exc.code)
+            return error_result(exc)
+
+
 def create_server(settings: McpServerSettings) -> MCPServer[None]:
     """Build the supported tools and their pool; imports never open a connection."""
     database = BusinessDatabase(settings.business)
@@ -120,6 +158,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             required_scopes=["query"],
         ),
     )
+    register_metric_tool(server, metric_resolver)
 
     @server.tool()
     async def execute_readonly_query(
@@ -161,40 +200,6 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             )
         except InsightPilotError as exc:
             logger.exception("schema_read_failed", code=exc.code)
-            return error_result(exc)
-
-    @server.tool()
-    async def resolve_metric(
-        metric_key: Annotated[str, Field(min_length=1, max_length=64)],
-        expression: Annotated[str, Field(min_length=1, max_length=32000)],
-        resolved_sql: Annotated[str, Field(min_length=1, max_length=32000)],
-        base_tables: Annotated[list[str], Field(min_length=1, max_length=8)],
-        date_field: Annotated[str, Field(min_length=1, max_length=127)],
-        period_start: datetime,
-        period_end: datetime,
-        filters: Annotated[list[str], Field(max_length=16)],
-        grain: Grain,
-    ) -> Annotated[CallToolResult, MetricFragment]:
-        """Check a rendered metric binding against the business schema and SQL policy."""
-        try:
-            args = ResolveMetricArgs(
-                metric_key=metric_key,
-                expression=expression,
-                resolved_sql=resolved_sql,
-                base_tables=base_tables,
-                date_field=date_field,
-                period_start=period_start,
-                period_end=period_end,
-                filters=filters,
-                grain=grain,
-            )
-            result = await metric_resolver.resolve(args)
-            return CallToolResult(
-                structured_content=result.model_dump(mode="json"),
-                content=[TextContent(type="text", text=result.model_dump_json())],
-            )
-        except InsightPilotError as exc:
-            logger.warning("metric_binding_rejected", code=exc.code)
             return error_result(exc)
 
     @server.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]

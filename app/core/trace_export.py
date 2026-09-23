@@ -53,6 +53,7 @@ _NAMES = frozenset(
         "format_answer",
         "llm_completion",
         "mcp_execute",
+        "mcp_metric",
     }
 )
 

@@ -49,7 +49,9 @@ class FakeMcpClient:
         """Script a validated query or a typed boundary failure."""
         self._metric_responses.extend(responses)
 
-    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment:
+    async def resolve_metric(
+        self, args: ResolveMetricArgs, *, deadline: Deadline
+    ) -> MetricFragment:
         """Default to a faithful validated response for unrelated graph tests."""
         deadline.check("fake_mcp_metric")
         self._metric_calls.append(args.model_copy(deep=True))

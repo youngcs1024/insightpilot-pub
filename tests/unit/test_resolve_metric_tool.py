@@ -54,6 +54,27 @@ async def test_unknown_using_column_is_rejected_before_execution() -> None:
     assert caught.value.column_name == "imagined_id"
 
 
+@pytest.mark.parametrize("field", ["expression", "filters"])
+async def test_unknown_column_in_declared_fragment_reports_name(field: str) -> None:
+    args = metric_args()
+    if field == "expression":
+        args.expression = "SUM(o.imagined_amount)"
+    else:
+        args.filters.append("o.imagined_amount > 0")
+    with pytest.raises(McpPolicyRejected) as caught:
+        await resolver().resolve(args)
+    assert caught.value.reasons == [PolicyReason.UNKNOWN_COLUMN]
+    assert caught.value.column_name == "imagined_amount"
+
+
+async def test_filter_only_subquery_against_pg_catalog_is_rejected() -> None:
+    args = metric_args()
+    args.filters.append("o.order_id IN (SELECT oid FROM pg_catalog.pg_class)")
+    with pytest.raises(McpPolicyRejected) as caught:
+        await resolver().resolve(args)
+    assert caught.value.reasons == [PolicyReason.TABLE_NOT_ALLOWED]
+
+
 @pytest.mark.parametrize(
     ("key", "patch"),
     [

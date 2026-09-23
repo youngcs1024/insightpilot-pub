@@ -113,6 +113,18 @@ def decode_result(result: CallToolResult) -> QueryResultPayload:
             raise McpResultError()
 
 
+def raise_metric_error(result: CallToolResult) -> None:
+    """Decode schema-health and policy failures without inspecting message text."""
+    try:
+        failure = SchemaToolError.model_validate(result.structured_content)
+    except ValidationError:
+        decode_result(result)
+        raise McpResultError() from None
+    if failure.code == "SCHEMA_DRIFT":
+        raise SchemaDriftError(report=failure.report)
+    raise SchemaMetadataError()
+
+
 def transport_failure(exc: BaseException) -> InsightPilotError:
     """Unwrap transport task groups using exception types/status, never messages."""
     if isinstance(exc, BaseExceptionGroup):
@@ -249,7 +261,9 @@ class McpClient:
         """Read server-rendered metadata through the existing session and retry owner."""
         return await self._with_retry(lambda: self._schema_call(args), deadline)
 
-    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment:
+    async def resolve_metric(
+        self, args: ResolveMetricArgs, *, deadline: Deadline
+    ) -> MetricFragment:
         """Validate a rendered metric through the existing bounded MCP session."""
         return await self._with_retry(lambda: self._metric_call(args), deadline)
 
@@ -257,16 +271,7 @@ class McpClient:
         with observe("mcp_metric", TraceMetadata(tool="resolve_metric")):
             result = await self._raw_call("resolve_metric", args)
             if result.is_error:
-                try:
-                    failure = SchemaToolError.model_validate(result.structured_content)
-                except ValidationError:
-                    pass
-                else:
-                    if failure.code == "SCHEMA_DRIFT":
-                        raise SchemaDriftError(report=failure.report)
-                    raise SchemaMetadataError()
-                decode_result(result)
-                raise McpResultError()
+                raise_metric_error(result)
             try:
                 return MetricFragment.model_validate(result.structured_content)
             except ValidationError as exc:
