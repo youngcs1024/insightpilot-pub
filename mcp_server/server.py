@@ -33,13 +33,13 @@ from app.core.errors import (
     SqlExecutionError,
 )
 from app.schemas.mcp import (
+    RESULT_CEILING,
     McpErrorCode,
     McpErrorPayload,
     PolicyReason,
     PositiveRows,
     QueryResultPayload,
     QueryWarning,
-    RESULT_CEILING,
     SqlErrorKind,
     ValidationStatus,
 )
@@ -179,6 +179,13 @@ def error_result(exc: InsightPilotError) -> CallToolResult:
     )
 
 
+def mark_row_cap_warning(result: QueryResultPayload, requested_rows: int) -> QueryResultPayload:
+    """Expose the server clamp without altering a request at the exact ceiling."""
+    if requested_rows > RESULT_CEILING:
+        result.warnings.append(QueryWarning.ROW_CAP_CLAMPED)
+    return result
+
+
 def register_metric_tool(server: MCPServer[None], resolver: MetricResolver) -> None:
     """Register the bound metric capability independently of server lifecycle routes."""
 
@@ -271,11 +278,12 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
                 # SQL literals can contain arbitrary secrets/PII: log no user literals.
                 logger.warning("sql_policy_rejected", reasons=outcome.reasons, sql="<redacted>")
                 raise McpPolicyRejected(outcome.status, outcome.reasons)
-            result = await executor.execute(
-                outcome.rewritten_sql, max_rows=cap, limit_applied=outcome.limit_applied
+            result = mark_row_cap_warning(
+                await executor.execute(
+                    outcome.rewritten_sql, max_rows=cap, limit_applied=outcome.limit_applied
+                ),
+                max_rows,
             )
-            if max_rows > RESULT_CEILING:
-                result.warnings.append(QueryWarning.ROW_CAP_CLAMPED)
             return CallToolResult(
                 structured_content=result.model_dump(mode="json"),
                 content=[TextContent(type="text", text=result.model_dump_json())],

@@ -3,7 +3,7 @@
 # ruff: noqa: PLR2004 -- fixed catalog counts and independent numerical acceptance bounds.
 
 import subprocess
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from decimal import Decimal
 from pathlib import Path
 
@@ -33,7 +33,7 @@ from tests.integration.catalog_support import (
     cli_environment,
     client,
 )
-from tests.integration.mcp_support import mcp_endpoint, query
+from tests.integration.mcp_support import query, running_mcp_endpoint
 from tests.metric_resolution_support import request as resolution_request
 from tests.metric_resolution_support import schema as resolution_schema
 from tests.metric_support import expected_sql
@@ -50,8 +50,14 @@ def seed_stack(database_stack: DatabaseStack) -> DatabaseStack:
     return database_stack
 
 
-server_endpoint = mcp_endpoint
 __all__ = ["catalog_migrated", "client", "seed_directory", "seeded"]
+
+
+@pytest.fixture
+def server_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
+    """Give each metric case a fresh sixty-call MCP service quota."""
+    with running_mcp_endpoint(database_stack) as endpoint:
+        yield endpoint
 
 
 @pytest.fixture

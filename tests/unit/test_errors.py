@@ -126,6 +126,7 @@ def test_failure_vocabulary_and_invalid_kind() -> None:
         "sql_correction_exhausted",
         "mcp_unavailable",
         "mcp_policy_rejected",
+        "mcp_rate_limited",
         "retrieval_unavailable",
         "retrieval_no_evidence",
         "model_runtime_unavailable",

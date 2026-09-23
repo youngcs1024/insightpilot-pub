@@ -27,12 +27,12 @@ from app.core.config_models import MCPSettings
 from app.core.deadline import Deadline
 from app.core.errors import McpRateLimitError
 from app.schemas.mcp import (
+    RESULT_CEILING,
     McpErrorCode,
     McpErrorPayload,
     PolicyReason,
     QueryArguments,
     QueryWarning,
-    RESULT_CEILING,
 )
 from mcp_server.config import McpServerSettings
 from mcp_server.server import MCP_REQUEST_BODY_LIMIT, create_server
@@ -134,7 +134,7 @@ def test_short_token_rejected_at_startup(token: str | None, tmp_path: Path) -> N
         check=False,
     )
     assert result.returncode != 0
-    assert "auth_token" in result.stderr
+    assert ("auth_token" if token is not None else "mcp\n  Field required") in result.stderr
     assert token is None or token not in result.stderr
 
 
@@ -194,7 +194,9 @@ class CountingMcpClient(McpClient):
 
 
 @pytest.mark.integration
-async def test_rate_limit_enforced(rate_endpoint: MCPSettings, database_stack: DatabaseStack) -> None:
+async def test_rate_limit_enforced(
+    rate_endpoint: MCPSettings, database_stack: DatabaseStack
+) -> None:
     client = CountingMcpClient(rate_endpoint)
     try:
         for _ in range(60):
@@ -322,9 +324,7 @@ async def test_policy_rejections_consume_tool_quota() -> None:
         assert McpErrorPayload.model_validate(result.structured_content).code is (
             McpErrorCode.POLICY_REJECTED
         )
-    limited = await server.call_tool(
-        "execute_readonly_query", {"sql": "SELECT 1", "max_rows": 0}
-    )
+    limited = await server.call_tool("execute_readonly_query", {"sql": "SELECT 1", "max_rows": 0})
     assert isinstance(limited, CallToolResult)
     assert McpErrorPayload.model_validate(limited.structured_content).code is (
         McpErrorCode.RATE_LIMITED

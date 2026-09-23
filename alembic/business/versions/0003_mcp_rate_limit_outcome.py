@@ -28,9 +28,9 @@ def downgrade() -> None:
             END IF;
         END $$
     """)
-    op.drop_constraint("ck_audit_log_outcome", "audit_log", schema="mcp", type_="check")
+    op.drop_constraint(op.f("ck_audit_log_outcome"), "audit_log", schema="mcp", type_="check")
     op.create_check_constraint(
-        op.f("ck_audit_log_outcome"),
+        "ck_audit_log_outcome",
         "audit_log",
         "outcome IN ('ok','policy_rejected','execution_error','timeout')",
         schema="mcp",

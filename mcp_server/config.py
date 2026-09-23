@@ -8,6 +8,8 @@ from pydantic_core import PydanticCustomError
 
 from app.core.settings_base import ConfigModel, ProcessSettings, Secret
 
+MIN_MCP_TOKEN_CHARS = 32
+
 
 class BusinessSettings(ConfigModel):
     """The sole business database login available to the query executor."""
@@ -47,7 +49,7 @@ class ServerSettings(ConfigModel):
     @classmethod
     def check_auth_token_length(cls, value: SecretStr) -> SecretStr:
         """Reject weak or placeholder credentials before opening server resources."""
-        if len(value.get_secret_value()) < 32:
+        if len(value.get_secret_value()) < MIN_MCP_TOKEN_CHARS:
             raise PydanticCustomError(
                 "mcp_token_length", "MCP bearer token must contain at least 32 characters"
             )
