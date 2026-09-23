@@ -156,26 +156,29 @@ async def test_unsupported_grain_raises(metrics: MetricService) -> None:
         assert "category" not in caught.value.supported
 
 
+@pytest.mark.parametrize(
+    "metric_key", [item.key for item in load_catalog(ROOT / "data/seed/metrics.yaml").definitions]
+)
 async def test_every_metric_example_sql_executes(
-    metrics: MetricService, client: McpClient, seeded: object
+    metrics: MetricService, client: McpClient, seeded: object, metric_key: str
 ) -> None:
-    for item in await metrics.list_active():
-        for example in item.examples:
-            actual = await query(client, example.sql)
-            assert actual.row_count > 0
-            assert not actual.result_truncated
-        for grain in item.supported_grains:
-            start, end = example_period()
-            actual = await query(
-                client,
-                render_expression(
-                    item, MetricRenderContext(period_start=start, period_end=end, grain=grain)
-                ),
-            )
-            expected = await query(
-                client, expected_sql(item.key, grain, start.isoformat(), end.isoformat())
-            )
-            assert actual.rows == expected.rows, (item.key, grain, actual.rows, expected.rows)
+    item = await metrics.get_active(metric_key)
+    for example in item.examples:
+        actual = await query(client, example.sql)
+        assert actual.row_count > 0
+        assert not actual.result_truncated
+    for grain in item.supported_grains:
+        start, end = example_period()
+        actual = await query(
+            client,
+            render_expression(
+                item, MetricRenderContext(period_start=start, period_end=end, grain=grain)
+            ),
+        )
+        expected = await query(
+            client, expected_sql(item.key, grain, start.isoformat(), end.isoformat())
+        )
+        assert actual.rows == expected.rows, (item.key, grain, actual.rows, expected.rows)
 
 
 async def test_gmv_example_excludes_cancelled(
