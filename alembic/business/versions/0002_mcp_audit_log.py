@@ -1,8 +1,9 @@
 """Add the MCP-owned audit table without granting read access to its writer."""
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision = "0002_mcp_audit_log"
 down_revision = "0001_business_schema"
@@ -16,7 +17,10 @@ def upgrade() -> None:
         "audit_log",
         sa.Column("id", sa.BigInteger(), autoincrement=True, primary_key=True),
         sa.Column(
-            "occurred_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "occurred_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("caller", sa.Text(), nullable=False),
         sa.Column("correlation_id", sa.Text()),

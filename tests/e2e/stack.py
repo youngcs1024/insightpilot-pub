@@ -81,7 +81,10 @@ def e2e_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
         api_host_port=api_port,
         postgres_superuser_password=secrets.token_urlsafe(24),
         bootstrap=BootstrapSecrets(
-            **{name + "_password": secrets.token_urlsafe(24) for name in ("app", "etl", "mcp", "audit")}
+            **{
+                name + "_password": secrets.token_urlsafe(24)
+                for name in ("app", "etl", "mcp", "audit")
+            }
         ),
         mcp_auth_token=secrets.token_urlsafe(24),
         jwt_secret=secrets.token_urlsafe(48),

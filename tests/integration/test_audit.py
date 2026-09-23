@@ -129,9 +129,7 @@ async def test_arguments_hashed_not_stored(
     assert row["sql_text"] is None
 
 
-async def test_correlation_id_propagated(
-    client: McpClient, database_stack: DatabaseStack
-) -> None:
+async def test_correlation_id_propagated(client: McpClient, database_stack: DatabaseStack) -> None:
     with request_id() as value:
         await query(client, "SELECT 12")
     row = await audit_row(database_stack, value)
@@ -187,9 +185,7 @@ async def test_execution_error_audited(client: McpClient, database_stack: Databa
     assert (await audit_row(database_stack, value))["outcome"] == "execution_error"
 
 
-async def test_invalid_arguments_audited(
-    client: McpClient, database_stack: DatabaseStack
-) -> None:
+async def test_invalid_arguments_audited(client: McpClient, database_stack: DatabaseStack) -> None:
     with request_id() as value:
         session = await client._get_session()
         result = await session.call_tool(

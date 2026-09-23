@@ -263,7 +263,10 @@ def test_core_startup_and_migration_gate(
         api_host_port=port,
         postgres_superuser_password=secrets.token_urlsafe(32),
         bootstrap=BootstrapSecrets(
-            **{f"{role}_password": secrets.token_urlsafe(32) for role in ("app", "etl", "mcp", "audit")}
+            **{
+                f"{role}_password": secrets.token_urlsafe(32)
+                for role in ("app", "etl", "mcp", "audit")
+            }
         ),
         mcp_auth_token=secrets.token_urlsafe(32),
         jwt_secret=secrets.token_urlsafe(48),
@@ -351,7 +354,10 @@ def test_seed_container_create_and_replay(docker_images: str, tmp_path: Path) ->
         compose_project_name=f"insightpilot-test-{uuid4().hex[:12]}",
         postgres_superuser_password=secrets.token_urlsafe(32),
         bootstrap=BootstrapSecrets(
-            **{f"{role}_password": secrets.token_urlsafe(32) for role in ("app", "etl", "mcp", "audit")}
+            **{
+                f"{role}_password": secrets.token_urlsafe(32)
+                for role in ("app", "etl", "mcp", "audit")
+            }
         ),
     )
     override = tmp_path / "seed.acceptance.yml"

@@ -198,7 +198,10 @@ async def test_request_id_is_sent_per_tool_call(settings: MCPSettings) -> None:
                 )
             finally:
                 correlation_id.reset(token)
-        assert [call.kwargs["meta"]["insightpilot/request_id"] for call in session.call_tool.await_args_list] == [
+        assert [
+            call.kwargs["meta"]["insightpilot/request_id"]
+            for call in session.call_tool.await_args_list
+        ] == [
             "a" * 32,
             "b" * 32,
         ]

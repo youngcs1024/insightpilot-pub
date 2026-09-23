@@ -33,8 +33,8 @@ from app.core.errors import (
 from app.schemas.mcp import (
     McpErrorCode,
     McpErrorPayload,
-    PositiveRows,
     PolicyReason,
+    PositiveRows,
     QueryResultPayload,
     SqlErrorKind,
     ValidationStatus,
@@ -273,7 +273,9 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
 
     @server.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]
     async def health(request: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok", "audit_write_failures_total": audit.write_failures_total})
+        return JSONResponse(
+            {"status": "ok", "audit_write_failures_total": audit.write_failures_total}
+        )
 
     @server.custom_route("/ready", methods=["GET"])  # type: ignore[untyped-decorator]
     async def ready(request: Request) -> JSONResponse:

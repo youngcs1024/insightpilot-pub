@@ -357,10 +357,14 @@ class McpClient:
         try:
             session = await self._get_session()
             request_id = correlation_id.get()
-            options = {"meta": {_CORRELATION_META: request_id}} if request_id is not None else {}
-            result = await session.call_tool(
-                name, arguments=args.model_dump(mode="json"), **options
-            )
+            if request_id is None:
+                result = await session.call_tool(name, arguments=args.model_dump(mode="json"))
+            else:
+                result = await session.call_tool(
+                    name,
+                    arguments=args.model_dump(mode="json"),
+                    meta={_CORRELATION_META: request_id},
+                )
         except asyncio.CancelledError:
             # End the session after cancellation; late responses cannot poison its reuse.
             self._stop.set()

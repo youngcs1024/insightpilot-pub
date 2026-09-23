@@ -235,7 +235,9 @@ MCP_AUDIT_LOG = sa.Table(
     "audit_log",
     BUSINESS_METADATA,
     sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-    sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    sa.Column(
+        "occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
     sa.Column("caller", sa.Text, nullable=False),
     sa.Column("correlation_id", sa.Text),
     sa.Column("tool", sa.Text, nullable=False),

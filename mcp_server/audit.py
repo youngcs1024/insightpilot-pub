@@ -8,7 +8,6 @@ from collections.abc import Mapping
 from enum import StrEnum
 from uuid import UUID
 
-import psycopg
 import structlog
 from mcp.types import CallToolResult
 from psycopg.conninfo import make_conninfo
@@ -73,29 +72,42 @@ def classify_result(
     """Derive audit fields from typed tool results, never exception prose."""
     content = result.structured_content
     if result.is_error:
-        try:
-            error = McpErrorPayload.model_validate(content)
-        except ValidationError:
-            return AuditOutcome.EXECUTION_ERROR, None, None
-        if error.code is McpErrorCode.POLICY_REJECTED:
-            return AuditOutcome.POLICY_REJECTED, [reason.value for reason in error.reasons], None
-        if error.code is McpErrorCode.SQL_TIMEOUT:
-            return AuditOutcome.TIMEOUT, None, None
-        return AuditOutcome.EXECUTION_ERROR, None, None
+        return _classify_error(content)
     if tool == "get_schema":
-        try:
-            schema = SchemaResponse.model_validate(content)
-        except ValidationError:
-            return AuditOutcome.EXECUTION_ERROR, None, None
-        if schema.rejected:
-            return AuditOutcome.POLICY_REJECTED, [PolicyReason.TABLE_NOT_ALLOWED.value], None
+        return _classify_schema(content)
     if tool == "execute_readonly_query":
-        try:
-            query = QueryResultPayload.model_validate(content)
-        except ValidationError:
-            return AuditOutcome.EXECUTION_ERROR, None, None
-        return AuditOutcome.OK, None, query.row_count
+        return _classify_query(content)
     return AuditOutcome.OK, None, None
+
+
+def _classify_error(content: object) -> tuple[AuditOutcome, list[str] | None, int | None]:
+    try:
+        error = McpErrorPayload.model_validate(content)
+    except ValidationError:
+        return AuditOutcome.EXECUTION_ERROR, None, None
+    if error.code is McpErrorCode.POLICY_REJECTED:
+        return AuditOutcome.POLICY_REJECTED, [reason.value for reason in error.reasons], None
+    if error.code is McpErrorCode.SQL_TIMEOUT:
+        return AuditOutcome.TIMEOUT, None, None
+    return AuditOutcome.EXECUTION_ERROR, None, None
+
+
+def _classify_schema(content: object) -> tuple[AuditOutcome, list[str] | None, int | None]:
+    try:
+        schema = SchemaResponse.model_validate(content)
+    except ValidationError:
+        return AuditOutcome.EXECUTION_ERROR, None, None
+    if schema.rejected:
+        return AuditOutcome.POLICY_REJECTED, [PolicyReason.TABLE_NOT_ALLOWED.value], None
+    return AuditOutcome.OK, None, None
+
+
+def _classify_query(content: object) -> tuple[AuditOutcome, list[str] | None, int | None]:
+    try:
+        query = QueryResultPayload.model_validate(content)
+    except ValidationError:
+        return AuditOutcome.EXECUTION_ERROR, None, None
+    return AuditOutcome.OK, None, query.row_count
 
 
 class AuditWriter:

@@ -37,7 +37,11 @@ def test_policy_and_timeout_are_typed() -> None:
         ["table_not_allowed"],
         None,
     )
-    assert classify_result("execute_readonly_query", timed_out) == (AuditOutcome.TIMEOUT, None, None)
+    assert classify_result("execute_readonly_query", timed_out) == (
+        AuditOutcome.TIMEOUT,
+        None,
+        None,
+    )
 
 
 def test_unstructured_error_cannot_be_misclassified_as_success() -> None:
