@@ -110,12 +110,13 @@ async def test_qualified_catalog_cte_shadow_rejected_over_mcp(client: McpClient)
 
 async def test_union_limit_enforced_over_mcp(client: McpClient) -> None:
     sql = "SELECT n FROM generate_series(1, 21) AS t(n) UNION ALL SELECT 22 ORDER BY n"
-    result = await query(client, sql, 10)
-    assert result.rows == [[number] for number in range(1, 11)]
-    assert result.row_count == 10
+    cap = 10
+    result = await query(client, sql, cap)
+    assert result.rows == [[number] for number in range(1, cap + 1)]
+    assert result.row_count == cap
     assert result.result_truncated
     assert result.limit_applied
-    assert result.executed_sql.endswith("LIMIT 11")
+    assert result.executed_sql.endswith(f"LIMIT {cap + 1}")
 
 
 async def test_aggregate_input_not_capped_over_mcp(client: McpClient) -> None:

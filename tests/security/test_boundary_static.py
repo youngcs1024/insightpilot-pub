@@ -75,7 +75,8 @@ def test_no_module_imports_business_url() -> None:
                 ), path
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                assert module != "mcp_server" and not module.startswith("mcp_server."), path
+                assert module != "mcp_server", path
+                assert not module.startswith("mcp_server."), path
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                 value = node.value.upper()
                 assert value not in FORBIDDEN_LITERALS, path

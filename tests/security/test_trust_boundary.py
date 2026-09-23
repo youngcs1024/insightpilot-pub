@@ -16,7 +16,6 @@ from psycopg import sql
 from pydantic import SecretStr
 
 from app.core.errors import SqlExecutionError
-from mcp_server.db import BusinessDatabase
 from mcp_server.tools.execute_query import QueryExecutor
 from scripts.deployment import Command, execute
 from scripts.deployment_contracts import environment_issues
@@ -25,6 +24,7 @@ from tests.integration.mcp_support import business, business_tables
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from mcp_server.db import BusinessDatabase
     from tests.database_support import DatabaseStack
 
 pytestmark = pytest.mark.integration
