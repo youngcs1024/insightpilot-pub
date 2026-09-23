@@ -361,7 +361,7 @@ class McpClient:
                 result = await session.call_tool(name, arguments=args.model_dump(mode="json"))
             else:
                 # The SDK permits extra _meta keys; mypy does not honor TypedDict extra_items.
-                meta = cast(RequestParamsMeta, {"insightpilot/request_id": request_id})
+                meta = cast("RequestParamsMeta", {"insightpilot/request_id": request_id})
                 result = await session.call_tool(
                     name,
                     arguments=args.model_dump(mode="json"),
