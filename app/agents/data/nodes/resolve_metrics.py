@@ -224,5 +224,6 @@ async def _resolve(  # noqa: PLR0913, PLR0917 -- typed node inputs, no hidden st
             "metric_examples": examples,
             "assumptions": list(dict.fromkeys(a for result in results for a in result.assumptions)),
             "clarification": None,
+            "native_tool_kinds": list(dict.fromkeys(intent.native_tool_kinds)),
         }
     )

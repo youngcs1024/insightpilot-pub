@@ -130,6 +130,9 @@ class MetricIntent(Contract):
     explicit_patch: MetricPatches = Field(default_factory=MetricPatches)
     region_mentioned: bool = False
     region: RegionReference = Field(default_factory=RegionReference)
+    native_tool_kinds: list[Literal["periods", "arithmetic"]] = Field(
+        default_factory=list, max_length=2
+    )
 
 
 class ClarificationKind(StrEnum):

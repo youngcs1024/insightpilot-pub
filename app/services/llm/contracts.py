@@ -48,8 +48,16 @@ class CompletionRequest(WireModel):
     stream: Literal[False] = False
     response_format: dict[str, JsonValue] | None = None
     tools: list[dict[str, JsonValue]] | None = None
-    tool_choice: dict[str, JsonValue] | None = None
+    tool_choice: dict[str, JsonValue] | Literal["auto"] | None = None
     parallel_tool_calls: Literal[False] | None = None
+
+
+class ToolDefinition(WireModel):
+    """A bounded, typed function exposed for one model call."""
+
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(min_length=1, max_length=1000)
+    parameters: dict[str, JsonValue]
 
 
 class Choice(WireModel):

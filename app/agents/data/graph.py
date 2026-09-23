@@ -17,6 +17,7 @@ from app.agents.data.nodes.lifecycle import (
     package_failure,
     validate_sql,
 )
+from app.agents.data.nodes.native_tools import native_tools
 from app.agents.data.nodes.resolve_metrics import resolve_metrics
 from app.agents.data.nodes.sanity_check import sanity_check
 from app.agents.data.nodes.select_schema import select_schema
@@ -88,7 +89,11 @@ async def metrics(state: DataAgentState, runtime: Runtime[RuntimeContext]) -> Co
     result = await resolve_metrics(state, runtime)
     update = result.update if isinstance(result.update, dict) else {}
     updated = DataAgentState.model_validate({**state.model_dump(), **update})
-    destination = "package_failure" if updated.clarification is not None else "generate_sql"
+    destination = (
+        "package_failure"
+        if updated.clarification is not None
+        else ("native_tools" if updated.native_tool_kinds else "generate_sql")
+    )
     return Command(update=result.update, goto=destination)
 
 
@@ -115,6 +120,11 @@ def topology() -> StateGraph[DataAgentState, RuntimeContext, DataAgentInput, Dat
     graph.add_node(
         "resolve_metrics",
         guarded("resolve_metrics", metrics, "generate_sql"),
+        destinations=("native_tools", "generate_sql", "package_failure"),
+    )
+    graph.add_node(
+        "native_tools",
+        guarded("native_tools", native_tools, "generate_sql"),
         destinations=("generate_sql", "package_failure"),
     )
     graph.add_node(

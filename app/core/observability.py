@@ -56,6 +56,7 @@ _NODES = frozenset(
         "sanity_check",
         "correct_sql",
         "resolve_metrics",
+        "native_tools",
         "generate_sql",
         "validate_sql",
         "execute_sql",

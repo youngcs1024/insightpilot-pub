@@ -15,9 +15,9 @@ from app.core.deadline import Deadline
 from app.core.errors import LlmConfigurationError, LlmResponseError, UpstreamUnavailableError
 from app.core.llm_config import ModelRole
 from app.core.observability import mark_degraded, model_role
-from app.services.llm.contracts import CompletionRequest, GenerationBudget
+from app.services.llm.contracts import CompletionRequest, GenerationBudget, ToolCall, ToolDefinition
 from app.services.llm.messages import to_wire
-from app.services.llm.registry import ModelRegistry
+from app.services.llm.registry import ModelRegistry, StructuredTier
 from app.services.llm.structured import generate_structured
 from app.services.llm.transport import LlmTransport
 
@@ -134,6 +134,73 @@ class LlmService:
     ) -> T:
         """Return the requested schema type through the common structured ladder."""
         return await self.call(role, messages, response_format=schema, deadline=deadline)
+
+    async def call_with_tools(
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        tools: list[ToolDefinition],
+        *,
+        deadline: Deadline,
+    ) -> list[ToolCall]:
+        """Request at most one native call; callers validate and dispatch it locally."""
+        if self._registry is None or self._client is None or not tools:
+            raise LlmConfigurationError()
+        config = self._registry.role(role)
+        if config.model is None or config.timeout_s is None:
+            raise LlmConfigurationError()
+        chain = [config.model, *config.fallback_models]
+        for index, model in enumerate(chain):
+            deadline.check("llm_native_tools")
+            request = CompletionRequest(
+                model=model,
+                messages=to_wire(messages),
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                tools=[
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters,
+                        },
+                    }
+                    for tool in tools
+                ],
+                tool_choice="auto",
+                parallel_tool_calls=False,
+            )
+            logger.info("llm_native_tools_started", role=role, fallback_index=index)
+            try:
+                with model_role(role.value):
+                    completion = await LlmTransport(self._client).complete(
+                        request,
+                        deadline=deadline,
+                        timeout_s=config.timeout_s,
+                        tier=StructuredTier.TOOL,
+                    )
+            except UpstreamUnavailableError:
+                deadline.check("llm_native_tools_fallback")
+                if index + 1 >= len(chain):
+                    raise
+                mark_degraded("llm")
+                continue
+            choice = completion.choices[0]
+            calls = choice.message.tool_calls or []
+            if choice.message.role != "assistant":
+                raise LlmResponseError()
+            if choice.finish_reason == "stop" and not calls:
+                return []
+            if (
+                choice.finish_reason != "tool_calls"
+                or len(calls) != 1
+                or not calls[0].id
+                or not calls[0].function.name
+            ):
+                raise LlmResponseError()
+            return calls
+        raise LlmConfigurationError()
 
     async def _generate(
         self,

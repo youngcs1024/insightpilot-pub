@@ -29,6 +29,7 @@ from app.schemas.metrics import MetricDefinition
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
 from app.schemas.schema_catalog import SchemaCatalog
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
+from app.services.llm.contracts import ToolCall, ToolDefinition
 
 
 class LlmPort(Protocol):
@@ -37,6 +38,15 @@ class LlmPort(Protocol):
     async def generate_structured[T: BaseModel](
         self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
     ) -> T: ...
+
+    async def call_with_tools(
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        tools: list[ToolDefinition],
+        *,
+        deadline: Deadline,
+    ) -> list[ToolCall]: ...
 
 
 @dataclass(frozen=True)

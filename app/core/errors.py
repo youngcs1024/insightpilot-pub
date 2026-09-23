@@ -36,6 +36,20 @@ class ValidationError(InsightPilotError):
     user_message = "The request is invalid."
 
 
+class NativeArithmeticError(ValidationError):
+    """A deterministic calculation has no finite, defined result."""
+
+    code = "NATIVE_ARITHMETIC_UNDEFINED"
+    user_message = "The requested calculation is undefined."
+
+
+class NativeToolError(ValidationError):
+    """A model selected a capability unavailable in its specialist context."""
+
+    code = "NATIVE_TOOL_UNAVAILABLE"
+    user_message = "The requested tool is unavailable."
+
+
 class RetrievalUnavailableError(InsightPilotError):
     """Knowledge storage is unavailable; data-only requests remain independent."""
 

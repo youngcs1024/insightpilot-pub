@@ -5,7 +5,7 @@ import re
 
 import sqlglot
 import structlog
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 from sqlglot import exp
@@ -48,7 +48,7 @@ def build_messages(state: DataAgentState, ctx: RuntimeContext) -> list[BaseMessa
             [e.model_dump(mode="json") for e in state.metric_examples], ensure_ascii=False
         ),
     )
-    return [
+    messages: list[BaseMessage] = [
         SystemMessage(content=prompt),
         HumanMessage(
             content=json.dumps(
@@ -60,6 +60,14 @@ def build_messages(state: DataAgentState, ctx: RuntimeContext) -> list[BaseMessa
             )
         ),
     ]
+    if state.messages:
+        messages.extend(
+            message
+            for message in state.messages
+            if isinstance(message, ToolMessage)
+            or (isinstance(message, AIMessage) and bool(message.tool_calls))
+        )
+    return messages
 
 
 def clean_sql(query: str) -> str:

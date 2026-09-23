@@ -2,7 +2,7 @@
 
 from typing import Literal, Self
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AnyMessage
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
@@ -70,9 +70,12 @@ class DataAgentState(DataAgentInput):
     assumptions: list[str] = Field(default_factory=list)
     clarification: MetricClarification | None = None
     metric_examples: list[MetricExamplesSnapshot] = Field(default_factory=list, max_length=6)
+    native_tool_kinds: list[Literal["periods", "arithmetic"]] = Field(
+        default_factory=list, max_length=2
+    )
     generated_sql: str = ""
     tables_used: list[str] = Field(default_factory=list)
-    messages: list[AIMessage] = Field(default_factory=list)
+    messages: list[AnyMessage] = Field(default_factory=list)
     query_result: QueryResultPayload | None = None
     sanity_check_result: SanityCheckResult = Field(default_factory=SanityCheckResult)
     failures: list[NodeFailure] = Field(default_factory=list)

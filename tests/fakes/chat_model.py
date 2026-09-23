@@ -9,10 +9,11 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.messages.ai import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from pydantic import BaseModel, ConfigDict, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from app.core.deadline import Deadline
 from app.core.llm_config import ModelRole
+from app.services.llm.contracts import ToolCall, ToolDefinition
 
 
 class FakeCall(BaseModel):
@@ -21,6 +22,8 @@ class FakeCall(BaseModel):
     messages: list[BaseMessage]
     role: ModelRole | None = None
     schema_name: str | None = None
+    tool_names: list[str] = Field(default_factory=list)
+    deadline_at: float | None = None
 
 
 class FakeChatModel(BaseChatModel):
@@ -88,7 +91,35 @@ class FakeChatModel(BaseChatModel):
     ) -> T:
         """Respect deadlines and validate the response using the requested schema."""
         deadline.check("fake_llm")
-        response = self._next(FakeCall(messages=messages, role=role, schema_name=schema.__name__))
+        response = self._next(
+            FakeCall(
+                messages=messages, role=role, schema_name=schema.__name__, deadline_at=deadline.at
+            )
+        )
         if isinstance(response, str):
             return schema.model_validate_json(response)
         return schema.model_validate(response.model_dump())
+
+    async def call_with_tools(
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        tools: list[ToolDefinition],
+        *,
+        deadline: Deadline,
+    ) -> list[ToolCall]:
+        """Return one scripted provider call or a no-tool response."""
+        deadline.check("fake_llm_native_tools")
+        response = self._next(
+            FakeCall(
+                messages=messages,
+                role=role,
+                tool_names=[tool.name for tool in tools],
+                deadline_at=deadline.at,
+            )
+        )
+        if isinstance(response, ToolCall):
+            return [response]
+        if response == "no_tools":
+            return []
+        raise AssertionError("Expected a scripted ToolCall or no_tools")
