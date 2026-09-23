@@ -1,12 +1,14 @@
 """Long-lived MCP v2 client with one retry owner and a concurrency-safe breaker."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import anyio
 import httpx2
@@ -15,8 +17,17 @@ from asgi_correlation_id import correlation_id
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
-from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT, CallToolResult, RequestParamsMeta
-from pydantic import ValidationError
+from mcp.types import (
+    CONNECTION_CLOSED,
+    REQUEST_TIMEOUT,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    RequestParamsMeta,
+    TextContent,
+    Tool,
+)
+from pydantic import BaseModel, JsonValue, TypeAdapter, ValidationError
 
 from app.core.background import spawn
 from app.core.config_models import MCPSettings
@@ -36,7 +47,7 @@ from app.core.errors import (
 from app.core.observability import TraceMetadata, observe
 from app.core.retry import run_operation
 from app.schemas.mcp import (
-    Contract,
+    DiscoveredToolResult,
     McpErrorCode,
     McpErrorPayload,
     QueryArguments,
@@ -45,6 +56,9 @@ from app.schemas.mcp import (
 )
 from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaToolError
+
+if TYPE_CHECKING:
+    from langchain_core.tools import BaseTool
 
 logger = structlog.get_logger(__name__)
 BREAKER_FAILURES = 5
@@ -186,6 +200,21 @@ class McpClient:
         self._stop = asyncio.Event()
         self._closed = False
         self.breaker = CircuitBreaker()
+        self._refresh_lock = asyncio.Lock()
+        self._tools: tuple[BaseTool, ...] = ()
+        self._descriptors: dict[str, Tool] = {}
+        self._argument_models: dict[str, type[BaseModel]] = {}
+        self._tools_loaded = False
+
+    @property
+    def tools(self) -> tuple[BaseTool, ...]:
+        """Return an immutable snapshot of the successfully built tool cache."""
+        return self._tools
+
+    @property
+    def tools_loaded(self) -> bool:
+        """Distinguish a completed discovery from startup without MCP access."""
+        return self._tools_loaded
 
     @asynccontextmanager
     async def _session_context(self) -> AsyncIterator[ClientSession]:
@@ -263,6 +292,101 @@ class McpClient:
         async with self._lock:
             self._closed = True
             await self._stop_owner()
+
+    async def list_tools(self, *, deadline: Deadline) -> tuple[Tool, ...]:
+        """Discover every descriptor through the shared authenticated session."""
+        return await self._with_retry(self._list_tools, deadline)
+
+    async def _list_tools(self) -> tuple[Tool, ...]:
+        try:
+            session = await self._get_session()
+            tools: list[Tool] = []
+            seen_cursors: set[str] = set()
+            cursor: str | None = None
+            while True:
+                params = PaginatedRequestParams(cursor=cursor) if cursor is not None else None
+                response = await session.list_tools(params=params)
+                if not isinstance(response, ListToolsResult):
+                    raise McpResultError()
+                tools.extend(response.tools)
+                cursor = response.next_cursor
+                if cursor is None:
+                    return tuple(tools)
+                if cursor in seen_cursors:
+                    raise McpResultError()
+                seen_cursors.add(cursor)
+        except asyncio.CancelledError:
+            self._stop.set()
+            self._session = None
+            raise
+        except Exception as exc:
+            self._stop.set()
+            self._session = None
+            raise transport_failure(exc) from exc
+
+    async def refresh_tools(self, *, deadline: Deadline) -> tuple[BaseTool, ...]:
+        """Build a full replacement cache before making descriptors available."""
+        from app.clients.mcp_langchain import mcp_tool_to_langchain
+
+        async with self._refresh_lock:
+            descriptors = await self.list_tools(deadline=deadline)
+            by_name = {tool.name: tool for tool in descriptors}
+            if len(by_name) != len(descriptors):
+                raise McpResultError()
+            built = tuple(mcp_tool_to_langchain(tool, self) for tool in descriptors)
+            for name in sorted(set(self._descriptors) | set(by_name)):
+                old = self._descriptors.get(name)
+                new = by_name.get(name)
+                if old != new and self._tools_loaded:
+                    logger.warning("mcp_tool_descriptor_changed", tool=name)
+            self._descriptors = by_name
+            self._tools = built
+            self._argument_models = {
+                tool.name: cast("type[BaseModel]", tool.args_schema) for tool in built
+            }
+            self._tools_loaded = True
+            logger.info("mcp_tools_loaded", count=len(built))
+            return built
+
+    async def invoke_discovered_tool(
+        self, name: str, args: BaseModel, *, deadline: Deadline
+    ) -> DiscoveredToolResult:
+        """Execute one cached descriptor with a typed Pydantic input model."""
+        model = self._argument_models.get(name)
+        if model is None or not isinstance(args, model):
+            raise McpResultError()
+        return await self._with_retry(lambda: self._discovered_call(name, args), deadline)
+
+    async def _discovered_call(self, name: str, args: BaseModel) -> DiscoveredToolResult:
+        with observe("mcp_discovered_tool", TraceMetadata(tool=name)):
+            result = await self._raw_call(name, args, omit_unset=True)
+            if result.is_error:
+                raise_metric_error(result)
+            payload = result.structured_content
+            if payload is not None:
+                try:
+                    if name == "execute_readonly_query":
+                        text = QueryResultPayload.model_validate(payload).model_dump_json()
+                    elif name == "get_schema":
+                        text = SchemaResponse.model_validate(payload).model_dump_json()
+                    elif name == "resolve_metric":
+                        text = MetricFragment.model_validate(payload).model_dump_json()
+                    else:
+                        text = json.dumps(
+                            TypeAdapter(JsonValue).validate_python(payload), allow_nan=False
+                        )
+                except (ValidationError, TypeError, ValueError) as exc:
+                    raise McpResultError() from exc
+                return DiscoveredToolResult(text=text)
+            if name in {"execute_readonly_query", "get_schema", "resolve_metric"}:
+                raise McpResultError()
+            texts = [item.text for item in result.content if isinstance(item, TextContent)]
+            if not texts or len(texts) != len(result.content):
+                raise McpResultError()
+            text = "\n".join(texts)
+            if not text:
+                raise McpResultError()
+            return DiscoveredToolResult(text=text)
 
     async def call_tool(
         self,
@@ -353,18 +477,21 @@ class McpClient:
     async def _execute_call(self, name: str, args: QueryArguments) -> QueryResultPayload:
         return decode_result(await self._raw_call(name, args))
 
-    async def _raw_call(self, name: str, args: Contract) -> CallToolResult:
+    async def _raw_call(
+        self, name: str, args: BaseModel, *, omit_unset: bool = False
+    ) -> CallToolResult:
         try:
             session = await self._get_session()
             request_id = correlation_id.get()
+            arguments = args.model_dump(mode="json", exclude_unset=omit_unset)
             if request_id is None:
-                result = await session.call_tool(name, arguments=args.model_dump(mode="json"))
+                result = await session.call_tool(name, arguments=arguments)
             else:
                 # The SDK permits extra _meta keys; mypy does not honor TypedDict extra_items.
                 meta = cast("RequestParamsMeta", {"insightpilot/request_id": request_id})
                 result = await session.call_tool(
                     name,
-                    arguments=args.model_dump(mode="json"),
+                    arguments=arguments,
                     meta=meta,
                 )
         except asyncio.CancelledError:

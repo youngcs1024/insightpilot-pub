@@ -10,7 +10,8 @@ from starlette.types import Message, Receive, Scope, Send
 
 from app.application import create_app
 from app.core.config_models import Settings
-from app.core.deadline import Deadline
+from app.core.deadline import Deadline, current_deadline
+from app.core.errors import DeadlineExceededError
 from app.core.middleware import DeadlineMiddleware, RequestIdMiddleware
 
 GATEWAY_TIMEOUT = 504
@@ -105,6 +106,20 @@ async def test_concurrent_requests_have_distinct_deadlines() -> None:
         group.create_task(middleware({"type": "http"}, wait_receive, send))
     assert deadlines[0] is not deadlines[1]
     assert all(item.at >= start + 1 for item in deadlines)
+
+
+async def test_request_deadline_context_is_cleared_after_response() -> None:
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        assert current_deadline() is scope["state"]["deadline"]
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def send(message: Message) -> None:
+        pass
+
+    await DeadlineMiddleware(app, 1)({"type": "http"}, wait_receive, send)
+    with pytest.raises(DeadlineExceededError):
+        current_deadline()
 
 
 async def test_timeout_during_header_send_never_sends_second_status() -> None:

@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 
 from fastapi import Request
@@ -27,6 +28,27 @@ class Deadline:
     def budget(self, want: float) -> float:
         """Limit a call's configured timeout to the remaining request budget."""
         return min(want, self.remaining())
+
+
+_current_deadline: ContextVar[Deadline | None] = ContextVar("ip_deadline", default=None)
+
+
+def bind_deadline(deadline: Deadline) -> Token[Deadline | None]:
+    """Bind the request's existing absolute budget for async tool adapters."""
+    return _current_deadline.set(deadline)
+
+
+def reset_deadline(token: Token[Deadline | None]) -> None:
+    """Prevent one request's budget from leaking into the next."""
+    _current_deadline.reset(token)
+
+
+def current_deadline() -> Deadline:
+    """Require an active request budget before a discovered tool performs I/O."""
+    value = _current_deadline.get()
+    if value is None:
+        raise DeadlineExceededError("tool invoked without request deadline", operation="mcp_tool")
+    return value
 
 
 def get_deadline(request: Request) -> Deadline:

@@ -11,7 +11,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.exception_handlers import handle_known
-from app.core.deadline import Deadline, ResponseBudget
+from app.core.deadline import Deadline, ResponseBudget, bind_deadline, reset_deadline
 from app.core.errors import DeadlineExceededError
 from app.schemas.chat import ErrorEvent
 
@@ -55,6 +55,7 @@ class DeadlineMiddleware:
             return
         deadline = Deadline(monotonic() + self.timeout_s)
         scope.setdefault("state", {})["deadline"] = deadline
+        deadline_token = bind_deadline(deadline)
         started = False
         finished = False
         terminal = False
@@ -88,6 +89,8 @@ class DeadlineMiddleware:
             elif not finished:
                 await _stream_deadline(scope, send, terminal, error)
                 await send({"type": "http.response.body", "body": b"", "more_body": False})
+        finally:
+            reset_deadline(deadline_token)
 
 
 class LoggingContextMiddleware:

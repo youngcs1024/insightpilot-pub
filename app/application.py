@@ -26,7 +26,7 @@ from app.clients.model_runtime import ModelRuntimeClient, ModelRuntimeProbe
 from app.core.background import shutdown as shutdown_background
 from app.core.config_models import Settings
 from app.core.deadline import Deadline
-from app.core.errors import InsightPilotError
+from app.core.errors import InsightPilotError, McpResultError, McpToolSchemaError
 from app.core.limiter import AuthLimiter
 from app.core.logging import setup_logging
 from app.core.middleware import DeadlineMiddleware, LoggingContextMiddleware, RequestIdMiddleware
@@ -146,6 +146,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
         model=ModelRuntimeProbe(model_runtime_client)
         if settings.retrieval.enabled and model_runtime_client is not None
         else None,
+        mcp_tools_ready=lambda: mcp_client.tools_loaded,
     )
 
     @asynccontextmanager
@@ -168,6 +169,10 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
             await app.state.chat.reconcile()
             try:
                 await mcp_client.connect()
+                await mcp_client.refresh_tools(deadline=startup_deadline)
+            except (McpToolSchemaError, McpResultError):
+                logger.exception("mcp_tool_schema_invalid")
+                raise
             except Exception:
                 logger.exception("mcp_startup_unavailable")
             if settings.retrieval.enabled and model_runtime_client is not None:

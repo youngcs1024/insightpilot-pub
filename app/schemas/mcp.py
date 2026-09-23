@@ -17,6 +17,13 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class DiscoveredToolResult(Contract):
+    """Model-facing rendering of one discovered MCP result."""
+
+    schema_version: Literal[1] = 1
+    text: str = Field(min_length=1)
+
+
 class QueryArguments(Contract):
     """The sole supported tool input; the server clamps a valid positive cap."""
 

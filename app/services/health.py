@@ -1,6 +1,7 @@
 """Real, bounded readiness probes; no business queries or persistent substitutes."""
 
 import asyncio
+from collections.abc import Callable
 from typing import Protocol
 
 import httpx2
@@ -97,13 +98,19 @@ class HealthService:
     """Coordinate probes without retaining stale dependency success across requests."""
 
     def __init__(
-        self, postgresql: Probe, mcp: Probe, settings: HealthSettings, model: Probe | None = None
+        self,
+        postgresql: Probe,
+        mcp: Probe,
+        settings: HealthSettings,
+        model: Probe | None = None,
+        mcp_tools_ready: Callable[[], bool] | None = None,
     ) -> None:
         self._postgresql = postgresql
         self._mcp = mcp
         self._settings = settings
         self.active = False
         self._model = model
+        self._mcp_tools_ready = mcp_tools_ready or (lambda: True)
 
     async def start(self) -> HealthChecks:
         """Activate and check dependencies without failing on transient outages."""
@@ -126,7 +133,7 @@ class HealthService:
             )
         return HealthChecks(
             postgresql=database.result(),
-            mcp=mcp.result(),
+            mcp=mcp.result() and self._mcp_tools_ready(),
             model_runtime=model.result() if model else None,
         )
 

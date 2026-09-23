@@ -262,6 +262,18 @@ class McpResultError(InsightPilotError):
     user_message = "The data source returned an unsupported result."
 
 
+class McpToolSchemaError(InsightPilotError):
+    """A discovered MCP input schema cannot be represented without losing validation."""
+
+    code = "MCP_TOOL_SCHEMA_UNSUPPORTED"
+    user_message = "The data source advertised an unsupported tool schema."
+
+    def __init__(self, tool: str, construct: str) -> None:
+        super().__init__(f"{tool}: {construct}", tool=tool, construct=construct)
+        self.tool = tool
+        self.construct = construct
+
+
 class LlmConfigurationError(InsightPilotError):
     """Missing or invalid local provider capability evidence."""
 
