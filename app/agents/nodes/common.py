@@ -11,6 +11,8 @@ from app.core.errors import (
     DeadlineExceededError,
     InsightPilotError,
     LlmStructuredOutputError,
+    McpAuthenticationError,
+    McpCallTimeoutError,
     McpPolicyRejected,
     McpUnavailableError,
     RetrievalUnavailableError,
@@ -35,6 +37,8 @@ def node_failure(node: str, exc: InsightPilotError) -> NodeFailure:
     kinds: dict[type[InsightPilotError], FailureKind] = {
         LlmStructuredOutputError: FailureKind.LLM_STRUCTURED_OUTPUT_FAILED,
         McpPolicyRejected: FailureKind.MCP_POLICY_REJECTED,
+        McpAuthenticationError: FailureKind.MCP_UNAVAILABLE,
+        McpCallTimeoutError: FailureKind.MCP_UNAVAILABLE,
         McpUnavailableError: FailureKind.MCP_UNAVAILABLE,
         SqlTimeoutError: FailureKind.SQL_TIMEOUT,
         SqlExecutionError: FailureKind.SQL_EXECUTION_FAILED,

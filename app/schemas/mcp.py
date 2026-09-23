@@ -24,6 +24,12 @@ class DiscoveredToolResult(Contract):
     text: str = Field(min_length=1)
 
 
+class McpReadyResponse(Contract):
+    """The independent server readiness endpoint's complete wire contract."""
+
+    ready: bool = Field(strict=True)
+
+
 class QueryArguments(Contract):
     """The sole supported tool input; the server clamps a valid positive cap."""
 

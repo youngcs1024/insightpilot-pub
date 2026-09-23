@@ -32,11 +32,13 @@ from pydantic import BaseModel, JsonValue, TypeAdapter, ValidationError
 from app.clients.mcp_langchain import mcp_tool_to_langchain
 from app.core.background import spawn
 from app.core.errors import (
-    AuthenticationError,
     InsightPilotError,
+    McpAuthenticationError,
+    McpCallTimeoutError,
     McpPolicyRejected,
     McpResultError,
     McpUnavailableError,
+    OperationTimeoutError,
     SchemaDriftError,
     SchemaMetadataError,
     SqlExecutionError,
@@ -44,11 +46,12 @@ from app.core.errors import (
     UpstreamUnavailableError,
 )
 from app.core.observability import TraceMetadata, observe
-from app.core.retry import run_operation
+from app.core.retry import is_retryable, run_operation
 from app.schemas.mcp import (
     DiscoveredToolResult,
     McpErrorCode,
     McpErrorPayload,
+    McpReadyResponse,
     QueryArguments,
     QueryResultPayload,
     ValidationStatus,
@@ -85,6 +88,24 @@ async def attach_correlation_header(request: httpx2.Request) -> None:
         request.headers["X-Request-ID"] = value
 
 
+async def preserve_http_failure(response: httpx2.Response) -> None:
+    """Keep HTTP status available before the SDK turns it into a generic JSON-RPC error."""
+    status = response.status_code
+    if status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN) or (
+        response.request.method == "POST"
+        and (
+            status in (HTTPStatus.NOT_FOUND, HTTPStatus.REQUEST_TIMEOUT)
+            or status >= HTTPStatus.INTERNAL_SERVER_ERROR
+        )
+    ):
+        response.raise_for_status()
+
+
+def retry_mcp_failure(exc: BaseException) -> bool:
+    """Repeat only failures known to be safe; a call timeout may still be running."""
+    return not isinstance(exc, OperationTimeoutError) and is_retryable(exc)
+
+
 class CircuitBreaker:
     """Count final logical failures, with a single admitted recovery probe."""
 
@@ -110,7 +131,7 @@ class CircuitBreaker:
         self.probing = False
 
     def failed(self) -> None:
-        """Only callers with a final retryable upstream failure may call this."""
+        """Count a final availability failure once, including a non-retryable timeout."""
         self.failures += 1
         if self.failures >= BREAKER_FAILURES:
             self.opened_at = self.clock()
@@ -159,6 +180,19 @@ def raise_metric_error(result: CallToolResult) -> None:
     raise SchemaMetadataError()
 
 
+def _http_failure(exc: httpx2.HTTPStatusError) -> InsightPilotError:
+    status = exc.response.status_code
+    if status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+        return McpAuthenticationError()
+    if status in (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.GATEWAY_TIMEOUT):
+        return McpCallTimeoutError()
+    if status >= HTTPStatus.INTERNAL_SERVER_ERROR or (
+        status == HTTPStatus.NOT_FOUND and "mcp-session-id" in exc.request.headers
+    ):
+        return McpUnavailableError()
+    return McpResultError()
+
+
 def transport_failure(exc: BaseException) -> InsightPilotError:
     """Unwrap transport task groups using exception types/status, never messages."""
     if isinstance(exc, BaseExceptionGroup):
@@ -166,19 +200,19 @@ def transport_failure(exc: BaseException) -> InsightPilotError:
         return next((item for item in mapped if not item.retryable), mapped[0])
     if isinstance(exc, InsightPilotError):
         return exc
-    if (isinstance(exc, MCPError) and exc.code in (CONNECTION_CLOSED, REQUEST_TIMEOUT)) or (
-        isinstance(exc, httpx2.HTTPStatusError)
-        and exc.response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
-    ):
-        return McpUnavailableError()
+    if isinstance(exc, MCPError):
+        if exc.code == REQUEST_TIMEOUT:
+            return McpCallTimeoutError()
+        return McpUnavailableError() if exc.code == CONNECTION_CLOSED else McpResultError()
     if isinstance(exc, httpx2.HTTPStatusError):
-        return AuthenticationError() if exc.response.status_code in (401, 403) else McpResultError()
+        return _http_failure(exc)
+    if isinstance(exc, (httpx2.TimeoutException, TimeoutError)):
+        return McpCallTimeoutError()
     if isinstance(
         exc,
         (
             httpx2.TransportError,
             OSError,
-            TimeoutError,
             anyio.BrokenResourceError,
             anyio.ClosedResourceError,
             anyio.EndOfStream,
@@ -223,7 +257,10 @@ class McpClient:
         async with (
             httpx2.AsyncClient(
                 headers={"Authorization": "Bearer " + self.settings.auth_token.get_secret_value()},
-                event_hooks={"request": [attach_correlation_header]},
+                event_hooks={
+                    "request": [attach_correlation_header],
+                    "response": [preserve_http_failure],
+                },
                 timeout=self.settings.timeout_s,
                 trust_env=False,
             ) as http,
@@ -257,7 +294,7 @@ class McpClient:
             async with asyncio.timeout(self.settings.timeout_s):
                 await self._get_session()
         except TimeoutError as exc:
-            raise McpUnavailableError() from exc
+            raise McpCallTimeoutError() from exc
 
     async def _get_session(self) -> ClientSession:
         async with self._lock:
@@ -302,21 +339,7 @@ class McpClient:
     async def _list_tools(self) -> tuple[Tool, ...]:
         try:
             session = await self._get_session()
-            tools: list[Tool] = []
-            seen_cursors: set[str] = set()
-            cursor: str | None = None
-            while True:
-                params = PaginatedRequestParams(cursor=cursor) if cursor is not None else None
-                response = await session.list_tools(params=params)
-                if not isinstance(response, ListToolsResult):
-                    raise McpResultError()
-                tools.extend(response.tools)
-                cursor = response.next_cursor
-                if cursor is None:
-                    return tuple(tools)
-                if cursor in seen_cursors:
-                    raise McpResultError()
-                seen_cursors.add(cursor)
+            return await self._list_descriptors(session)
         except asyncio.CancelledError:
             self._stop.set()
             self._session = None
@@ -326,27 +349,72 @@ class McpClient:
             self._session = None
             raise transport_failure(exc) from exc
 
+    @staticmethod
+    async def _list_descriptors(session: ClientSession) -> tuple[Tool, ...]:
+        tools: list[Tool] = []
+        seen_cursors: set[str] = set()
+        cursor: str | None = None
+        while True:
+            params = PaginatedRequestParams(cursor=cursor) if cursor is not None else None
+            response = await session.list_tools(params=params)
+            if not isinstance(response, ListToolsResult):
+                raise McpResultError()
+            tools.extend(response.tools)
+            cursor = response.next_cursor
+            if cursor is None:
+                return tuple(tools)
+            if cursor in seen_cursors:
+                raise McpResultError()
+            seen_cursors.add(cursor)
+
     async def refresh_tools(self, *, deadline: Deadline) -> tuple[BaseTool, ...]:
         """Build a full replacement cache before making descriptors available."""
         async with self._refresh_lock:
             descriptors = await self.list_tools(deadline=deadline)
-            by_name = {tool.name: tool for tool in descriptors}
-            if len(by_name) != len(descriptors):
-                raise McpResultError()
-            built = tuple(mcp_tool_to_langchain(tool, self) for tool in descriptors)
-            for name in sorted(set(self._descriptors) | set(by_name)):
-                old = self._descriptors.get(name)
-                new = by_name.get(name)
-                if old != new and self._tools_loaded:
-                    logger.warning("mcp_tool_descriptor_changed", tool=name)
-            self._descriptors = by_name
-            self._tools = built
-            self._argument_models = {
-                tool.name: cast("type[BaseModel]", tool.args_schema) for tool in built
-            }
-            self._tools_loaded = True
-            logger.info("mcp_tools_loaded", count=len(built))
-            return built
+            return self._install_descriptors(descriptors)
+
+    def _install_descriptors(self, descriptors: tuple[Tool, ...]) -> tuple[BaseTool, ...]:
+        by_name = {tool.name: tool for tool in descriptors}
+        if len(by_name) != len(descriptors):
+            raise McpResultError()
+        built = tuple(mcp_tool_to_langchain(tool, self) for tool in descriptors)
+        for name in sorted(set(self._descriptors) | set(by_name)):
+            if self._descriptors.get(name) != by_name.get(name) and self._tools_loaded:
+                logger.warning("mcp_tool_descriptor_changed", tool=name)
+        self._descriptors = by_name
+        self._tools = built
+        self._argument_models = {
+            tool.name: cast("type[BaseModel]", tool.args_schema) for tool in built
+        }
+        self._tools_loaded = True
+        logger.info("mcp_tools_loaded", count=len(built))
+        return built
+
+    async def health(self) -> None:
+        """Check physical readiness and auth without retries or breaker mutation."""
+        ready_url = str(self.settings.base_url).removesuffix("/mcp") + "/ready"
+        try:
+            async with httpx2.AsyncClient(timeout=self.settings.timeout_s, trust_env=False) as http:
+                response = await http.get(ready_url)
+                response.raise_for_status()
+                try:
+                    ready = McpReadyResponse.model_validate(response.json())
+                except (ValidationError, ValueError) as exc:
+                    raise McpResultError() from exc
+                if not ready.ready:
+                    raise McpUnavailableError()
+            async with self._factory() as session:
+                descriptors = await self._list_descriptors(session)
+            async with self._refresh_lock:
+                if (
+                    not self._tools_loaded
+                    or {tool.name: tool for tool in descriptors} != self._descriptors
+                ):
+                    self._install_descriptors(descriptors)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            raise transport_failure(exc) from exc
 
     async def invoke_discovered_tool(
         self, name: str, args: BaseModel, *, deadline: Deadline
@@ -448,8 +516,23 @@ class McpClient:
                 deadline=deadline,
                 timeout_s=self.settings.timeout_s,
                 name="mcp_call",
-                attempts=2,
+                attempts=3,
+                retry_policy=retry_mcp_failure,
             )
+        except McpAuthenticationError:
+            logger.exception("mcp_authentication_failed", exc_info=False)
+            raise
+        except McpCallTimeoutError:
+            self.breaker.failed()
+            raise
+        except OperationTimeoutError as exc:
+            self.breaker.failed()
+            raise McpCallTimeoutError() from exc
+        except McpPolicyRejected as exc:
+            logger.warning(
+                "mcp_policy_rejected", reasons=[reason.value for reason in exc.reasons]
+            )
+            raise
         except UpstreamUnavailableError as exc:
             if exc.retryable:
                 self.breaker.failed()

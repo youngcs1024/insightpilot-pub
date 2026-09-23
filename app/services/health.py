@@ -2,20 +2,20 @@
 
 import asyncio
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-import httpx2
 import structlog
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.core.config_models import HealthSettings, MCPSettings
+from app.core.config_models import HealthSettings
 from app.core.errors import HealthProbeError, HealthProbeTimeoutError
 from app.db.session import Database
 
 logger = structlog.get_logger(__name__)
+
+if TYPE_CHECKING:
+    from app.clients.mcp_client import McpClient
 
 
 class HealthChecks(BaseModel):
@@ -62,36 +62,20 @@ class PostgreSQLProbe:
 
 
 class MCPProbe:
-    """Use a short authenticated SDK session; never invoke business tools."""
+    """Borrow the lifespan-owned client for its independent readiness operation."""
 
-    def __init__(self, settings: MCPSettings, timeout_s: float) -> None:
-        self._settings = settings
-        self._timeout_s = timeout_s
+    def __init__(self, client: McpClient) -> None:
+        self._client = client
 
     async def check(self) -> None:
-        """Initialize, list tools, and close in the same task/context scope."""
+        """Check server schema readiness and authenticated discovery."""
         try:
-            async with (
-                httpx2.AsyncClient(
-                    headers={
-                        "Authorization": "Bearer " + self._settings.auth_token.get_secret_value()
-                    },
-                    timeout=self._timeout_s,
-                    trust_env=False,
-                ) as http,
-                streamable_http_client(str(self._settings.base_url), http_client=http) as (
-                    read,
-                    write,
-                ),
-                ClientSession(read, write, read_timeout_seconds=self._timeout_s) as session,
-            ):
-                await session.initialize()
-                await session.list_tools()
+            await self._client.health()
         except Exception as exc:
             raise HealthProbeError from exc
 
     async def aclose(self) -> None:
-        """Sessions are closed by each check's context managers, including cancellation."""
+        """The API lifespan closes the client after readiness stops."""
 
 
 class HealthService:

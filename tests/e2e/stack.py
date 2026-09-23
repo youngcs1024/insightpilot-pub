@@ -36,6 +36,12 @@ class E2EStack(BaseModel):
     recorder: CommandRecorder
     directory: Path
 
+    def api_container_id(self, stage: str) -> str:
+        """Read the running API identity to prove an MCP restart kept it alive."""
+        result = self.recorder.run(stage, [*self.command, "ps", "-q", "api"])
+        assert result.stdout.strip()
+        return result.stdout.strip()
+
     def restart_api(self) -> None:
         self.recorder.run("restart-api", [*self.command, "restart", "api"], timeout=60)
         self.recorder.run(
@@ -48,6 +54,14 @@ class E2EStack(BaseModel):
         assert service in {"mcp", "inference"}
         self.recorder.run(
             "stop-" + service, [*self.command, "stop", "-t", "1", service], timeout=30
+        )
+
+    def start_mcp(self) -> None:
+        """Restore only MCP; the API must recover its existing client session."""
+        self.recorder.run(
+            "start-mcp",
+            [*self.command, "up", "-d", "--no-deps", "--wait", "--wait-timeout", "90", "mcp"],
+            timeout=120,
         )
 
     def restore(self) -> None:

@@ -1,25 +1,38 @@
 """Deterministic transport, retry and circuit-breaker behavior without sockets."""
 
+# ruff: noqa: PLR2004 -- fixed HTTP statuses and failure budgets are the tested contract.
+
 import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx2
 import pytest
 from asgi_correlation_id import correlation_id
 from mcp import ClientSession
 from mcp.shared.exceptions import MCPError
-from mcp.types import CONNECTION_CLOSED, CallToolResult
+from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT, CallToolResult, ListToolsResult
 from pydantic import SecretStr
+from structlog.testing import capture_logs
 
-from app.clients.mcp_client import CircuitBreaker, McpClient, decode_result, transport_failure
+from app.agents.failures import FailureKind
+from app.agents.nodes.common import node_failure
+from app.clients.mcp_client import (
+    CircuitBreaker,
+    McpClient,
+    decode_result,
+    preserve_http_failure,
+    transport_failure,
+)
 from app.core.config_models import MCPSettings
 from app.core.deadline import Deadline
 from app.core.errors import (
     DeadlineExceededError,
+    McpAuthenticationError,
+    McpCallTimeoutError,
     McpPolicyRejected,
     McpResultError,
     McpUnavailableError,
@@ -232,7 +245,7 @@ async def test_nonretryable_never_affects_breaker(settings: MCPSettings, code: s
         await client.aclose()
 
 
-async def test_unavailable_retried_twice_counted_once(settings: MCPSettings) -> None:
+async def test_unavailable_three_attempts_counted_once(settings: MCPSettings) -> None:
     session = AsyncMock(spec=ClientSession)
     session.call_tool.return_value = failure("MCP_UNAVAILABLE")
 
@@ -246,9 +259,9 @@ async def test_unavailable_retried_twice_counted_once(settings: MCPSettings) -> 
             await client.call_tool(
                 "execute_readonly_query",
                 QueryArguments(sql="SELECT 1"),
-                deadline=Deadline(time.monotonic() + 5),
+                deadline=Deadline(time.monotonic() + 10),
             )
-        assert session.call_tool.await_count == TWO
+        assert session.call_tool.await_count == 3
         assert client.breaker.failures == 1
     finally:
         await client.aclose()
@@ -357,13 +370,212 @@ def test_http_failures_use_status_not_prose(status: int) -> None:
             "misleading policy rejected text", request=response.request, response=response
         )
     )
-    assert error.retryable is (status >= HTTPStatus.INTERNAL_SERVER_ERROR)
+    assert error.retryable is (
+        HTTPStatus.INTERNAL_SERVER_ERROR <= status < HTTPStatus.GATEWAY_TIMEOUT
+    )
+    if status in (401, 403):
+        assert isinstance(error, McpAuthenticationError)
+    if status == 504:
+        assert isinstance(error, McpCallTimeoutError)
 
 
 def test_sdk_closed_connection_is_retryable() -> None:
 
     assert transport_failure(MCPError(code=CONNECTION_CLOSED, message="arbitrary")).retryable
+    assert isinstance(
+        transport_failure(MCPError(code=REQUEST_TIMEOUT, message="arbitrary")),
+        McpCallTimeoutError,
+    )
     assert not transport_failure(RuntimeError("connection closed")).retryable
+
+
+async def test_response_hook_preserves_status_and_allows_get_405() -> None:
+    for status in (401, 403, 404, 408, 500, 504):
+        response = httpx2.Response(status, request=httpx2.Request("POST", "http://mcp/mcp"))
+        with pytest.raises(httpx2.HTTPStatusError):
+            await preserve_http_failure(response)
+    response = httpx2.Response(405, request=httpx2.Request("GET", "http://mcp/mcp"))
+    await preserve_http_failure(response)
+
+
+def test_stale_mcp_session_404_reconnects_but_unknown_endpoint_does_not() -> None:
+    stale_request = httpx2.Request(
+        "POST", "http://mcp/mcp", headers={"mcp-session-id": "expired-session"}
+    )
+    missing_request = httpx2.Request("POST", "http://mcp/mcp")
+    for request, retryable in ((stale_request, True), (missing_request, False)):
+        response = httpx2.Response(404, request=request)
+        failure = transport_failure(
+            httpx2.HTTPStatusError("ignored", request=request, response=response)
+        )
+        assert failure.retryable is retryable
+
+
+async def test_client_timeout_not_retried_but_counts_breaker() -> None:
+    settings = MCPSettings(auth_token=SecretStr("test-token"), timeout_s=0.02)
+    session = AsyncMock(spec=ClientSession)
+
+    async def hang(*args: object, **kwargs: object) -> CallToolResult:
+        await asyncio.Event().wait()
+        return success()
+
+    session.call_tool.side_effect = hang
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        with pytest.raises(McpCallTimeoutError):
+            await client.call_tool(
+                "execute_readonly_query",
+                QueryArguments(sql="SELECT 1"),
+                deadline=Deadline(time.monotonic() + 5),
+            )
+        assert session.call_tool.await_count == 1
+        assert client.breaker.failures == 1
+        assert (
+            node_failure("execute_sql", McpCallTimeoutError()).kind is FailureKind.MCP_UNAVAILABLE
+        )
+    finally:
+        await client.aclose()
+
+
+async def test_auth_failure_logged_once_and_does_not_count(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    response = httpx2.Response(401, request=httpx2.Request("POST", "http://mcp/mcp"))
+    session.call_tool.side_effect = httpx2.HTTPStatusError(
+        "ignored credential prose", request=response.request, response=response
+    )
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        with capture_logs() as logs, pytest.raises(McpAuthenticationError):
+            await client.call_tool(
+                "execute_readonly_query",
+                QueryArguments(sql="SELECT 1"),
+                deadline=Deadline(time.monotonic() + 5),
+            )
+        assert session.call_tool.await_count == 1
+        assert client.breaker.failures == 0
+        assert any(
+            event["event"] == "mcp_authentication_failed" and event["log_level"] == "error"
+            for event in logs
+        )
+        failure_kind = node_failure("execute_sql", McpAuthenticationError()).kind
+        assert failure_kind is FailureKind.MCP_UNAVAILABLE
+    finally:
+        await client.aclose()
+
+
+async def test_ten_policy_rejections_leave_breaker_closed(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    session.call_tool.side_effect = [failure("MCP_POLICY_REJECTED")] * 10 + [success()]
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        for _ in range(10):
+            with pytest.raises(McpPolicyRejected):
+                await client.call_tool(
+                    "execute_readonly_query",
+                    QueryArguments(sql="SELECT 1"),
+                    deadline=Deadline(time.monotonic() + 5),
+                )
+            assert client.breaker.failures == 0
+            assert client.breaker.opened_at is None
+        result = await client.call_tool(
+            "execute_readonly_query",
+            QueryArguments(sql="SELECT 1"),
+            deadline=Deadline(time.monotonic() + 5),
+        )
+        assert result.rows == [[1]]
+        assert session.call_tool.await_count == 11
+    finally:
+        await client.aclose()
+
+
+async def test_health_recovers_cache_without_changing_breaker(
+    settings: MCPSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = httpx2.Request("GET", "http://mcp:8001/ready")
+    unavailable = httpx2.Response(503, request=request)
+    ready = httpx2.Response(200, json={"ready": True}, request=request)
+    http = AsyncMock()
+    http.__aenter__.return_value = http
+    http.get.side_effect = [unavailable, ready, ready]
+    monkeypatch.setattr("app.clients.mcp_client.httpx2.AsyncClient", MagicMock(return_value=http))
+    session = AsyncMock(spec=ClientSession)
+    session.list_tools.return_value = ListToolsResult(tools=[])
+    probes = 0
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        nonlocal probes
+        probes += 1
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    client.breaker.failures = 2
+    try:
+        with pytest.raises(McpUnavailableError):
+            await client.health()
+        assert not client.tools_loaded
+        await client.health()
+        assert client.tools_loaded
+        await client.health()
+        assert probes == 2
+        assert session.list_tools.await_count == 2
+        assert not session.call_tool.await_count
+        assert client.breaker.failures == 2
+        assert client.breaker.opened_at is None
+    finally:
+        await client.aclose()
+
+
+async def test_health_cancellation_closes_temporary_sdk_session(
+    settings: MCPSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ready = httpx2.Response(
+        200,
+        json={"ready": True},
+        request=httpx2.Request("GET", "http://mcp:8001/ready"),
+    )
+    http = AsyncMock()
+    http.__aenter__.return_value = http
+    http.get.return_value = ready
+    monkeypatch.setattr("app.clients.mcp_client.httpx2.AsyncClient", MagicMock(return_value=http))
+    session = AsyncMock(spec=ClientSession)
+    closed = asyncio.Event()
+
+    async def hang(*args: object, **kwargs: object) -> ListToolsResult:
+        await asyncio.Event().wait()
+        return ListToolsResult(tools=[])
+
+    session.list_tools.side_effect = hang
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        try:
+            yield session
+        finally:
+            closed.set()
+
+    client = McpClient(settings, session_factory=factory)
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.02):
+            await client.health()
+    assert closed.is_set()
+    assert client.breaker.failures == 0
+    await client.aclose()
 
 
 @pytest.mark.parametrize("case", ["success", "drift", "metadata", "timeout", "invalid", "pii"])

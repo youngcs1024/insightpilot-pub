@@ -268,6 +268,18 @@ class McpUnavailableError(UpstreamUnavailableError):
     user_message = "The data source is unavailable."
 
 
+class McpAuthenticationError(McpUnavailableError):
+    """The MCP service rejected its configured credential; retry cannot repair it."""
+
+    retryable = False
+
+
+class McpCallTimeoutError(McpUnavailableError):
+    """The MCP call may still be running remotely and must not be repeated."""
+
+    retryable = False
+
+
 class McpResultError(InsightPilotError):
     """Malformed or unsupported data at the MCP boundary; never retry."""
 

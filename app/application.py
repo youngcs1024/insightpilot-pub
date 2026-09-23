@@ -141,7 +141,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
         model_runtime_client = model_runtime_client or ModelRuntimeClient(settings.model_runtime)
     service = health_service or HealthService(
         PostgreSQLProbe(database),
-        MCPProbe(settings.mcp, settings.health.mcp_timeout_s),
+        MCPProbe(mcp_client),
         settings.health,
         model=ModelRuntimeProbe(model_runtime_client)
         if settings.retrieval.enabled and model_runtime_client is not None
