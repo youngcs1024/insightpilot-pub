@@ -37,9 +37,10 @@ async def evaluate(case: Case, repeat: int, generate: Generate, execute: Execute
     if case.adversarial_sql:
         outcome = SQLValidator().validate(case.adversarial_sql)
         result.policy_reasons = outcome.reasons
-        result.unsafe_sql_blocked = outcome.status is not ValidationStatus.VALID and set(
-            case.expected_reasons
-        ).issubset(outcome.reasons)
+        result.unsafe_sql_blocked = (
+            outcome.status is not ValidationStatus.VALID
+            and outcome.reasons == case.expected_reasons
+        )
         return result
     try:
         canonical = await execute(case.canonical_sql)

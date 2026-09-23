@@ -14,6 +14,14 @@ class Scenario(StrEnum):
     CLARIFY = "clarify"
     FOLLOWUP = "followup"
     CHAOS = "chaos"
+    RED_SQL = "red_sql"
+    RED_CREDENTIAL = "red_credential"
+    RED_DOCUMENT = "red_document"
+    RED_FALSE_POLICY = "red_false_policy"
+    RED_CITATION = "red_citation"
+    RED_CAUSALITY = "red_causality"
+    RED_CROSS_USER = "red_cross_user"
+    RED_WIDEN = "red_widen"
 
 
 class ScriptRequest(BaseModel):

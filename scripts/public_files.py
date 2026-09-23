@@ -34,6 +34,7 @@ ROOT_FILES = frozenset(
         "docker-compose.yml",
         "docker-compose.dev.yml",
         "docker-compose.e2e.yml",
+        "docker-compose.redteam.yml",
         "docker-compose.model-server.yml",
     }
 )
@@ -50,7 +51,9 @@ RESOURCE_FILES = frozenset(
         "data/seed/metrics.yaml",
         "data/seed/schema_metadata.yaml",
         "evals/datasets/nl2sql/cases.yaml",
+        "evals/datasets/nl2sql/adversarial.yaml",
         "evals/datasets/routing/cases.yaml",
+        "evals/datasets/routing/injection.yaml",
         "evals/datasets/routing/selected.yaml",
         "evals/datasets/retrieval/queries.yaml",
         "evals/datasets/retrieval/judgments.yaml",
@@ -122,7 +125,10 @@ def _corpus_resource(path: PurePosixPath) -> bool:
         path.parts[:2] == ("data", "corpus")
         and not any(part.startswith(".") for part in path.parts)
         and (
-            path.as_posix() == "data/corpus/MANIFEST.yaml"
+            path.as_posix() in {
+                "data/corpus/MANIFEST.yaml",
+                "data/corpus/adversarial/MANIFEST.yaml",
+            }
             or path.suffix in {".md", ".xlsx", ".pdf"}
             or path.name.endswith((".xlsx.meta.yaml", ".pdf.meta.yaml"))
         )

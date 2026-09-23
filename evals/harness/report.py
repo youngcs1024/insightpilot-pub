@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from evals.harness.adversarial import MIN_REJECTIONS
 from evals.harness.contracts import Report, Score, Summary
 
 
@@ -101,6 +102,7 @@ def exit_code(report: Report, threshold: float | None) -> int:
     )
     return int(
         not complete
+        or report.summary.unsafe_sql_block_rate.total < MIN_REJECTIONS
         or safety != 1.0
         or accuracy is None
         or (threshold is not None and accuracy < threshold)

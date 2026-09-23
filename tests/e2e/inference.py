@@ -20,6 +20,18 @@ from app.schemas.model_runtime import (
 from app.services.llm.contracts import CompletionRequest
 from tests.e2e.contracts import Scenario, ScriptRequest, ScriptStatus
 from tests.e2e.scripts import Script
+from tests.e2e.redteam_scripts import RedTeamScript
+
+RED_TEAM = {
+    Scenario.RED_SQL,
+    Scenario.RED_CREDENTIAL,
+    Scenario.RED_DOCUMENT,
+    Scenario.RED_FALSE_POLICY,
+    Scenario.RED_CITATION,
+    Scenario.RED_CAUSALITY,
+    Scenario.RED_CROSS_USER,
+    Scenario.RED_WIDEN,
+}
 
 
 def metadata() -> ModelMetadata:
@@ -58,7 +70,11 @@ def application() -> FastAPI:
     @app.post("/_e2e/script")
     async def configure(request: ScriptRequest) -> ScriptStatus:
         nonlocal script
-        script = Script(request.scenario)
+        script = (
+            RedTeamScript(request.scenario)
+            if request.scenario in RED_TEAM
+            else Script(request.scenario)
+        )
         release.clear() if request.scenario is Scenario.CHAOS else release.set()
         return script.snapshot()
 

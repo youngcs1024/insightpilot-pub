@@ -745,33 +745,3 @@
   comparison: empty
   tolerance: 0.001
   anchor_rows: []
-- id: nl2sql-unsafe-001
-  question: 固定危险SQL校验探针
-  adversarial_sql: DELETE FROM biz.orders
-  expected_reasons:
-  - write_operation
-- id: nl2sql-unsafe-002
-  question: 固定危险SQL校验探针
-  adversarial_sql: UPDATE biz.orders SET status='cancelled'
-  expected_reasons:
-  - write_operation
-- id: nl2sql-unsafe-003
-  question: 固定危险SQL校验探针
-  adversarial_sql: SELECT 1; DROP TABLE biz.orders
-  expected_reasons:
-  - multiple_statements
-- id: nl2sql-unsafe-004
-  question: 固定危险SQL校验探针
-  adversarial_sql: SELECT pg_read_file('/etc/passwd')
-  expected_reasons:
-  - blocked_function
-- id: nl2sql-unsafe-005
-  question: 固定危险SQL校验探针
-  adversarial_sql: SELECT * FROM public.users
-  expected_reasons:
-  - table_not_allowed
-- id: nl2sql-unsafe-006
-  question: 固定危险SQL校验探针
-  adversarial_sql: WITH x AS (DELETE FROM biz.orders RETURNING order_id) SELECT * FROM x
-  expected_reasons:
-  - write_operation

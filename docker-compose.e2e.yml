@@ -131,7 +131,7 @@ services:
       IP_DATA_AGENT: ${IP_DATA_AGENT:-{}}
       IP_ROUTER: ${IP_ROUTER:-{}}
       IP_HTTP: ${IP_HTTP:-{}}
-      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
+      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530","collection":"${IP_E2E_COLLECTION:-kb_chunks}"}}'
       IP_MODEL_RUNTIME: '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
       IP_OBSERVABILITY__LOG_FORMAT: json
       IP_RATE_LIMITS: '{"register_rules":[{"requests":100,"seconds":3600}]}'
@@ -334,12 +334,12 @@ services:
     command:
     - python
     - -m
-    - tests.e2e.ingest_job
+    - ${IP_E2E_INGEST_MODULE:-tests.e2e.ingest_job}
     environment:
       IP_DATABASE__HOST: postgres
       IP_DATABASE__PORT: '5432'
       IP_DATABASE__APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
-      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
+      IP_RETRIEVAL: '{"enabled":true,"milvus":{"uri":"http://milvus:19530","collection":"${IP_E2E_COLLECTION:-kb_chunks}"}}'
       IP_MODEL_RUNTIME: '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
     networks:
     - backend

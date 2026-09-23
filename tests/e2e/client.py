@@ -1,6 +1,8 @@
 """Typed real HTTP session and request-specific observation assertions."""
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -95,3 +97,31 @@ class Session:
                 ):
                     return
                 await asyncio.sleep(0.1)
+
+
+@asynccontextmanager
+async def open_session(
+    stack: E2EStack, directory: Path, *, title: str = "E2E"
+) -> AsyncIterator[Session]:
+    """Create a fresh authenticated user and conversation in one isolated stack."""
+    directory.mkdir()
+    async with (
+        httpx.AsyncClient(base_url=stack.api_url, timeout=120, trust_env=False) as client,
+        httpx.AsyncClient(base_url=stack.inference_url, timeout=10, trust_env=False) as inference,
+    ):
+        credentials = {"email": f"e2e-{uuid4().hex}@example.com", "password": "E2e-password-123!"}
+        response = await client.post(
+            "/api/v1/auth/register", json={**credentials, "display_name": "E2E"}
+        )
+        assert response.status_code == HTTPStatus.CREATED, response.text
+        response = await client.post("/api/v1/auth/login", json=credentials)
+        response.raise_for_status()
+        client.headers["Authorization"] = "Bearer " + response.json()["access_token"]
+        response = await client.post("/api/v1/conversations", json={"title": title})
+        response.raise_for_status()
+        active = Session(stack, client, inference, response.json()["id"], directory)
+        try:
+            yield active
+        finally:
+            result = await active.status()
+            (directory / "final-script.json").write_text(result.model_dump_json(indent=2))

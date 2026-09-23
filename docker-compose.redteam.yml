@@ -1,0 +1,34 @@
+# Dedicated real-model red-team stack. The base API keeps its configured LLM and
+# remote embedding/reranking tunnel; only the seed job uses the E2E test image.
+services:
+  seed:
+    image: ${IP_REDTEAM_SEED_IMAGE:?required}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        BASE_IMAGE: insightpilot-api:local
+    command: [python, -m, tests.e2e.seed_job]
+  ingest:
+    image: insightpilot-api:local
+    command: [python, -m, scripts.ingest, --corpus, data/corpus/adversarial]
+    environment:
+      IP_DATABASE__HOST: postgres
+      IP_DATABASE__PORT: '5432'
+      IP_DATABASE__APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
+      IP_RETRIEVAL: ${IP_RETRIEVAL:?required}
+      IP_MODEL_RUNTIME: ${IP_MODEL_RUNTIME:?required}
+    networks: [backend, models]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      milvus: {condition: service_healthy}
+      model-tunnel: {condition: service_started}
+    healthcheck: {disable: true}
+  api:
+    environment:
+      IP_RATE_LIMITS: '{"register_rules":[{"requests":100,"seconds":3600}]}'
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      mcp: {condition: service_healthy}
+      seed: {condition: service_completed_successfully}
+      ingest: {condition: service_completed_successfully}

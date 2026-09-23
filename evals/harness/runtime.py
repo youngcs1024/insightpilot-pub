@@ -26,6 +26,7 @@ from app.services.schema_catalog import SchemaCatalogService
 from app.services.schema_tokens import SchemaTokenCounter
 from data.seed.contracts import TABLE_NAMES, Manifest, Parameters
 from evals.harness.contracts import CASES, REFERENCE_TIME, ConfigSnapshot, EvaluationError, Options
+from evals.harness.adversarial import CASES as ADVERSARIAL_CASES
 
 PROJECT = CASES.parents[3]
 
@@ -84,7 +85,10 @@ async def snapshot(ctx: RuntimeContext, options: Options) -> ConfigSnapshot:
         catalog_versions={definition.key: definition.version for definition in definitions},
         catalog_hash=digest("\n".join(d.model_dump_json() for d in definitions).encode()),
         schema_hash=digest(schema.model_dump_json().encode()),
-        dataset_hash=digest(await asyncio.to_thread(CASES.read_bytes)),
+        dataset_hash=digest(
+            (await asyncio.to_thread(CASES.read_bytes))
+            + (await asyncio.to_thread(ADVERSARIAL_CASES.read_bytes))
+        ),
         seed_manifest=manifest,
         git_sha=await asyncio.to_thread(git_value, "rev-parse", "HEAD"),
         source_dirty=bool(await asyncio.to_thread(git_value, "status", "--porcelain")),

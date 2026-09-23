@@ -83,11 +83,17 @@ class E2EStack(BaseModel):
         self.restart_api()
 
 
-@pytest.fixture(scope="session")
-def e2e_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
+def launch_stack(
+    tmp_path_factory: pytest.TempPathFactory,
+    *,
+    variant: str,
+    collection: str,
+    ingest_module: str,
+) -> Iterator[E2EStack]:
+    """Create one isolated Compose project for an authored E2E corpus."""
     docker = require_docker()
     before = foreign_snapshot(docker)
-    identifier = "insightpilot-test-e2e-" + uuid4().hex[:12]
+    identifier = "insightpilot-test-" + variant + "-" + uuid4().hex[:12]
     api_port, inference_port = free_port(), free_port()
     settings = DeploymentSettings(
         _env_file=None,
@@ -123,6 +129,8 @@ def e2e_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
             "IP_E2E_API_IMAGE": identifier + ":test",
             "IP_E2E_MCP_IMAGE": identifier + ":mcp",
             "IP_E2E_INFERENCE_PORT": str(inference_port),
+            "IP_E2E_COLLECTION": collection,
+            "IP_E2E_INGEST_MODULE": ingest_module,
         }
     )
     recorder = CommandRecorder(
@@ -181,3 +189,23 @@ def e2e_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
         )
         yield stack
     assert foreign_snapshot(docker) == before
+
+
+@pytest.fixture(scope="session")
+def e2e_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
+    yield from launch_stack(
+        tmp_path_factory,
+        variant="e2e",
+        collection="kb_chunks",
+        ingest_module="tests.e2e.ingest_job",
+    )
+
+
+@pytest.fixture(scope="session")
+def redteam_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[E2EStack]:
+    yield from launch_stack(
+        tmp_path_factory,
+        variant="redteam",
+        collection="kb_chunks_redteam",
+        ingest_module="tests.e2e.redteam_ingest_job",
+    )

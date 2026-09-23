@@ -8,10 +8,12 @@ from pydantic import TypeAdapter, ValidationError
 from app.core.errors import InvalidMetricPatchError, SchemaMetadataError
 from app.services.metric_patch_sql import canonical_filters
 from data.seed.schema_metadata_loader import check_keys
+from evals.harness.adversarial import CASES as ADVERSARIAL_CASES
+from evals.harness.adversarial import load_adversaries
 from evals.harness.contracts import CASES, Case, EvaluationError
 
 
-def load_cases(path: Path = CASES) -> list[Case]:
+def load_cases(path: Path = CASES, adversarial_path: Path = ADVERSARIAL_CASES) -> list[Case]:
     """Reject incomplete or ambiguous suites before opening a service."""
     try:
         source = path.read_text()
@@ -30,6 +32,11 @@ def load_cases(path: Path = CASES) -> list[Case]:
         InvalidMetricPatchError,
     ) as exc:
         raise EvaluationError("Invalid static evaluation dataset") from exc
+    cases.extend(
+        case.suite_a_case()
+        for case in load_adversaries(adversarial_path)
+        if case.expected_reasons
+    )
     ids = [case.id for case in cases]
     if not cases or len(set(ids)) != len(ids):
         raise EvaluationError("Empty suite or duplicate case IDs")
