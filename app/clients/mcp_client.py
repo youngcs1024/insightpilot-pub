@@ -41,6 +41,7 @@ from app.schemas.mcp import (
     QueryResultPayload,
     ValidationStatus,
 )
+from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaToolError
 
 logger = structlog.get_logger(__name__)
@@ -97,7 +98,11 @@ def decode_result(result: CallToolResult) -> QueryResultPayload:
         raise McpResultError() from exc
     match failure.code:
         case McpErrorCode.POLICY_REJECTED:
-            raise McpPolicyRejected(failure.status or ValidationStatus.UNSAFE, failure.reasons)
+            raise McpPolicyRejected(
+                failure.status or ValidationStatus.UNSAFE,
+                failure.reasons,
+                column_name=failure.column_name,
+            )
         case McpErrorCode.SQL_TIMEOUT:
             raise SqlTimeoutError()
         case McpErrorCode.SQL_EXECUTION_FAILED:
@@ -243,6 +248,29 @@ class McpClient:
     async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse:
         """Read server-rendered metadata through the existing session and retry owner."""
         return await self._with_retry(lambda: self._schema_call(args), deadline)
+
+    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment:
+        """Validate a rendered metric through the existing bounded MCP session."""
+        return await self._with_retry(lambda: self._metric_call(args), deadline)
+
+    async def _metric_call(self, args: ResolveMetricArgs) -> MetricFragment:
+        with observe("mcp_metric", TraceMetadata(tool="resolve_metric")):
+            result = await self._raw_call("resolve_metric", args)
+            if result.is_error:
+                try:
+                    failure = SchemaToolError.model_validate(result.structured_content)
+                except ValidationError:
+                    pass
+                else:
+                    if failure.code == "SCHEMA_DRIFT":
+                        raise SchemaDriftError(report=failure.report)
+                    raise SchemaMetadataError()
+                decode_result(result)
+                raise McpResultError()
+            try:
+                return MetricFragment.model_validate(result.structured_content)
+            except ValidationError as exc:
+                raise McpResultError() from exc
 
     async def _schema_call(self, args: GetSchemaArgs) -> SchemaResponse:
         with observe("mcp_schema", TraceMetadata(tool="get_schema")):

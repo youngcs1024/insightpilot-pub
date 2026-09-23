@@ -74,6 +74,10 @@ class PolicyReason(StrEnum):
     TABLE_NOT_ALLOWED = "table_not_allowed"
     NESTING_TOO_DEEP = "nesting_too_deep"
     UNSUPPORTED_SCOPE = "unsupported_scope"
+    UNKNOWN_COLUMN = "unknown_column"
+    INVALID_METRIC_BINDING = "invalid_metric_binding"
+    INVALID_PERIOD = "invalid_period"
+    PERIOD_TOO_LONG = "period_too_long"
 
 
 class ValidationOutcome(Contract):
@@ -112,5 +116,6 @@ class McpErrorPayload(Contract):
     message: str
     status: ValidationStatus | None = None
     reasons: list[PolicyReason] = Field(default_factory=list)
+    column_name: str | None = Field(default=None, max_length=127)
 
     sql_error: SqlErrorKind = SqlErrorKind.OTHER

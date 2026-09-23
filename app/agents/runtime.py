@@ -24,6 +24,7 @@ from app.schemas.knowledge import KnowledgeEvidence, KnowledgeGeneration
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.memory import FormatPreferenceContent
 from app.schemas.metric_resolution import RegionReference, RegionScope
+from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.metrics import MetricDefinition
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
 from app.schemas.schema_catalog import SchemaCatalog
@@ -57,6 +58,8 @@ class McpPort(Protocol):
     """Authenticated query execution and server-owned schema rendering."""
 
     async def get_schema(self, args: GetSchemaArgs, *, deadline: Deadline) -> SchemaResponse: ...
+
+    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment: ...
 
     async def call_tool(
         self, name: Literal["execute_readonly_query"], args: QueryArguments, *, deadline: Deadline

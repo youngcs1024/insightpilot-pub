@@ -2,11 +2,12 @@
 
 import json
 
+import sqlglot
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.contracts import MetricExamplesSnapshot
+from app.agents.contracts import MetricExamplesSnapshot, ResolvedMetricBinding
 from app.agents.data.state import DataAgentState
 from app.agents.prompts import METRIC_INTENT
 from app.agents.runtime import RuntimeContext
@@ -18,6 +19,7 @@ from app.core.errors import (
 )
 from app.core.llm_config import ModelRole
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification, MetricIntent
+from app.schemas.metric_tools import ResolveMetricArgs
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
 from app.services.metric_binding import BindingRequest, BindingResult, build_binding, merge_explicit
@@ -163,6 +165,27 @@ async def _resolve(  # noqa: PLR0913, PLR0917 -- typed node inputs, no hidden st
                     region_scope=state.region_scope,
                 ),
                 schema,
+            )
+            query = sqlglot.parse_one(result.binding.resolved_expression, read="postgres")
+            fragment = await ctx.mcp.resolve_metric(
+                ResolveMetricArgs(
+                    metric_key=definition.key,
+                    expression=query.expressions[1].this.sql(dialect="postgres"),
+                    resolved_sql=result.binding.resolved_expression,
+                    base_tables=definition.base_tables,
+                    date_field=result.binding.date_field,
+                    period_start=result.binding.period_start,
+                    period_end=result.binding.period_end,
+                    filters=result.binding.filters_applied,
+                    grain=result.binding.grain,
+                ),
+                deadline=ctx.deadline,
+            )
+            result.binding = ResolvedMetricBinding.model_validate(
+                {
+                    **result.binding.model_dump(mode="json"),
+                    "resolved_expression": fragment.normalized_sql,
+                }
             )
         except MetricNotFound:
             return _clarify(

@@ -25,10 +25,12 @@ from app.schemas.metric_resolution import (
     RegionScope,
     SelectedOverrides,
 )
+from app.schemas.metric_tools import MetricFragment
 from app.services.metric_patch_sql import canonical_filter
 from tests.agents.support import context
 from tests.fakes.chat_model import FakeChatModel
 from tests.metric_resolution_support import Catalog, override, runtime
+from tests.metric_tool_support import metric_args
 from tests.region_support import region_result
 
 
@@ -95,6 +97,27 @@ async def test_unknown_metric_requests_clarification_not_invention() -> None:
     assert clarification.metric_key == "imagined_profit"
     assert "gmv" in clarification.available_metrics
     assert "imagined_profit" not in clarification.available_metrics
+    assert [call.metric_key for call in ctx.mcp.metric_calls] == ["gmv"]
+
+
+async def test_node_persists_only_mcp_normalized_complete_sql() -> None:
+    ctx = runtime(intent())
+    original = metric_args().resolved_sql
+    normalized = original.replace(" AS o ", " o ", 1)
+    assert normalized != original
+    ctx.mcp.enqueue_metric(
+        MetricFragment(
+            select_fragment="display only",
+            from_fragment="display only",
+            where_fragment="display only",
+            group_by_fragment="",
+            normalized_sql=normalized,
+            normalized=True,
+        )
+    )
+    result = await resolve_metrics(DataAgentState(question="GMV"), Runtime(context=ctx))
+    assert result.update["metric_bindings"][0].resolved_expression == normalized
+    assert ctx.mcp.metric_calls[0].resolved_sql == original
 
 
 async def test_override_applied_as_structured_patch() -> None:

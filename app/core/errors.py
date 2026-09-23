@@ -216,10 +216,13 @@ class McpPolicyRejected(ValidationError):  # noqa: N818 -- public step contract.
     code = "MCP_POLICY_REJECTED"
     user_message = "The query was rejected by the data access policy."
 
-    def __init__(self, status: "ValidationStatus", reasons: list["PolicyReason"]) -> None:
+    def __init__(
+        self, status: "ValidationStatus", reasons: list["PolicyReason"], column_name: str | None = None
+    ) -> None:
         super().__init__()
         self.status = status
         self.reasons = reasons
+        self.column_name = column_name
 
 
 class SqlTimeoutError(DatabaseTimeoutError):

@@ -190,7 +190,7 @@ async def test_descriptor_exposes_new_tool_and_retires_internal_tool() -> None:
         )
     )
     tools = {tool.name: tool for tool in await server.list_tools()}
-    assert set(tools) == {"execute_readonly_query", "get_schema"}
+    assert set(tools) == {"execute_readonly_query", "get_schema", "resolve_metric"}
     descriptor = tools["get_schema"].model_dump(mode="json", by_alias=True)
     props = descriptor["inputSchema"]["properties"]
     assert props["include_samples"]["default"] is False

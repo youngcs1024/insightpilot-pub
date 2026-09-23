@@ -27,9 +27,11 @@ from app.core.errors import (
     SqlTimeoutError,
 )
 from app.schemas.mcp import QueryArguments
+from app.schemas.metric_tools import MetricFragment
 from app.schemas.schema_tools import GetSchemaArgs
 from tests.factories import business_schema
 from tests.factories import mcp_success as success
+from tests.metric_tool_support import metric_args
 
 TWO = 2
 
@@ -68,6 +70,64 @@ def test_invalid_result_rejected() -> None:
     bad.structured_content["row_count"] = 2
     with pytest.raises(McpResultError):
         decode_result(bad)
+
+
+async def test_metric_policy_rejection_is_not_retried_or_counted(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    session.call_tool.return_value = CallToolResult(
+        content=[],
+        is_error=True,
+        structured_content={
+            "code": "MCP_POLICY_REJECTED",
+            "message": "ignored",
+            "status": "invalid",
+            "reasons": ["unknown_column"],
+            "column_name": "imagined_amount",
+        },
+    )
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        with pytest.raises(McpPolicyRejected) as caught:
+            await client.resolve_metric(metric_args(), deadline=Deadline(time.monotonic() + 5))
+        assert caught.value.column_name == "imagined_amount"
+        assert session.call_tool.await_count == 1
+        assert client.breaker.failures == 0
+    finally:
+        await client.aclose()
+
+
+async def test_metric_client_accepts_complete_normalized_sql(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    response = MetricFragment(
+        select_fragment="SELECT ...",
+        from_fragment="FROM ...",
+        where_fragment="WHERE ...",
+        group_by_fragment="",
+        normalized_sql="SELECT 1",
+        normalized=True,
+    )
+    session.call_tool.return_value = CallToolResult(
+        content=[], structured_content=response.model_dump(mode="json")
+    )
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        args = metric_args()
+        assert await client.resolve_metric(args, deadline=Deadline(time.monotonic() + 5)) == response
+        session.call_tool.assert_awaited_once_with(
+            "resolve_metric", arguments=args.model_dump(mode="json")
+        )
+    finally:
+        await client.aclose()
 
 
 def test_breaker_recovery_single_probe() -> None:

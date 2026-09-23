@@ -5,6 +5,7 @@ import logging
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Annotated
 
 import structlog
@@ -32,6 +33,8 @@ from app.schemas.mcp import (
     SqlErrorKind,
     ValidationStatus,
 )
+from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
+from app.schemas.metrics import Grain
 from app.schemas.schema_tools import GetSchemaArgs, RequestedTable, SchemaResponse, SchemaToolError
 from mcp_server.config import McpServerSettings
 from mcp_server.db import BusinessDatabase
@@ -39,6 +42,7 @@ from mcp_server.policy.sql_validator import SQLValidator, clamp_result_cap
 from mcp_server.tools.business_schema import BusinessSchemaReader
 from mcp_server.tools.execute_query import QueryExecutor
 from mcp_server.tools.get_schema import SchemaTool
+from mcp_server.tools.resolve_metric import MetricResolver
 
 logger = structlog.get_logger(__name__)
 
@@ -75,6 +79,7 @@ def error_result(exc: InsightPilotError) -> CallToolResult:
         message=exc.user_message,
         status=exc.status if isinstance(exc, McpPolicyRejected) else None,
         reasons=exc.reasons if isinstance(exc, McpPolicyRejected) else [],
+        column_name=exc.column_name if isinstance(exc, McpPolicyRejected) else None,
     )
     return CallToolResult(
         is_error=True,
@@ -93,6 +98,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
         settings.schema_metadata.artifact_path,
         ttl_s=settings.schema_metadata.ttl_s,
     )
+    metric_resolver = MetricResolver(schema_tool, settings.metric_policy)
 
     @asynccontextmanager
     async def lifespan(server: MCPServer[None]) -> AsyncIterator[None]:
@@ -155,6 +161,40 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             )
         except InsightPilotError as exc:
             logger.exception("schema_read_failed", code=exc.code)
+            return error_result(exc)
+
+    @server.tool()
+    async def resolve_metric(
+        metric_key: Annotated[str, Field(min_length=1, max_length=64)],
+        expression: Annotated[str, Field(min_length=1, max_length=32000)],
+        resolved_sql: Annotated[str, Field(min_length=1, max_length=32000)],
+        base_tables: Annotated[list[str], Field(min_length=1, max_length=8)],
+        date_field: Annotated[str, Field(min_length=1, max_length=127)],
+        period_start: datetime,
+        period_end: datetime,
+        filters: Annotated[list[str], Field(max_length=16)],
+        grain: Grain,
+    ) -> Annotated[CallToolResult, MetricFragment]:
+        """Check a rendered metric binding against the business schema and SQL policy."""
+        try:
+            args = ResolveMetricArgs(
+                metric_key=metric_key,
+                expression=expression,
+                resolved_sql=resolved_sql,
+                base_tables=base_tables,
+                date_field=date_field,
+                period_start=period_start,
+                period_end=period_end,
+                filters=filters,
+                grain=grain,
+            )
+            result = await metric_resolver.resolve(args)
+            return CallToolResult(
+                structured_content=result.model_dump(mode="json"),
+                content=[TextContent(type="text", text=result.model_dump_json())],
+            )
+        except InsightPilotError as exc:
+            logger.warning("metric_binding_rejected", code=exc.code)
             return error_result(exc)
 
     @server.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]

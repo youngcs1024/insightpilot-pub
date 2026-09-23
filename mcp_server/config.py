@@ -37,6 +37,12 @@ class SchemaSettings(ConfigModel):
     ttl_s: float = Field(default=300, ge=1, le=3600)
 
 
+class MetricPolicySettings(ConfigModel):
+    """Bound the window accepted for a rendered metric query."""
+
+    max_period_years: int = Field(default=5, ge=1, le=10)
+
+
 class McpServerSettings(ProcessSettings):
     """Load .env.mcp, never the API's or operator's dotenv file."""
 
@@ -44,3 +50,4 @@ class McpServerSettings(ProcessSettings):
     business: BusinessSettings
     mcp: ServerSettings
     schema_metadata: SchemaSettings = Field(default_factory=SchemaSettings)
+    metric_policy: MetricPolicySettings = Field(default_factory=MetricPolicySettings)

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core.deadline import Deadline
 from app.schemas.mcp import QueryArguments, QueryResultPayload
+from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 
 
@@ -26,6 +27,7 @@ class FakeMcpClient:
         responses: Sequence[QueryResultPayload | Exception],
         *,
         schema_responses: Sequence[SchemaResponse | Exception] = (),
+        metric_responses: Sequence[MetricFragment | Exception] = (),
     ) -> None:
         self._responses = deque(
             value.model_copy(deep=True) if isinstance(value, QueryResultPayload) else value
@@ -35,6 +37,35 @@ class FakeMcpClient:
         self._schema_responses: deque[SchemaResponse | Exception] = deque()
         self._schema_calls: list[GetSchemaArgs] = []
         self.enqueue_schema(*schema_responses)
+        self._metric_responses: deque[MetricFragment | Exception] = deque(metric_responses)
+        self._metric_calls: list[ResolveMetricArgs] = []
+
+    @property
+    def metric_calls(self) -> list[ResolveMetricArgs]:
+        """Return detached metric-validation inputs."""
+        return [call.model_copy(deep=True) for call in self._metric_calls]
+
+    def enqueue_metric(self, *responses: MetricFragment | Exception) -> None:
+        """Script a validated query or a typed boundary failure."""
+        self._metric_responses.extend(responses)
+
+    async def resolve_metric(self, args: ResolveMetricArgs, *, deadline: Deadline) -> MetricFragment:
+        """Default to a faithful validated response for unrelated graph tests."""
+        deadline.check("fake_mcp_metric")
+        self._metric_calls.append(args.model_copy(deep=True))
+        if self._metric_responses:
+            response = self._metric_responses.popleft()
+            if isinstance(response, Exception):
+                raise response
+            return response.model_copy(deep=True)
+        return MetricFragment(
+            select_fragment="",
+            from_fragment="",
+            where_fragment="",
+            group_by_fragment="",
+            normalized_sql=args.resolved_sql,
+            normalized=False,
+        )
 
     def enqueue_schema(self, *responses: SchemaResponse | Exception) -> None:
         """Script metadata independently so schema reads cannot consume SQL results."""
