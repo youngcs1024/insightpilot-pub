@@ -334,7 +334,7 @@ async def test_cli_fails_on_drift_and_dependency_failure(
         check=False,
     )
     assert result.returncode == 1
-    assert any(code in result.stdout for code in ("AUTHENTICATION_ERROR", "MCP_INVALID_RESULT"))
+    assert "MCP_UNAVAILABLE" in result.stdout
     assert '"differences": []' not in result.stdout
 
 
