@@ -85,6 +85,4 @@ def invoke(
         "growth_rate": arithmetic.growth_rate,
         "share_of_total": arithmetic.share_of_total,
     }
-    return str(
-        operations[arithmetic_args.operation](arithmetic_args.first, arithmetic_args.second)
-    )
+    return str(operations[arithmetic_args.operation](arithmetic_args.first, arithmetic_args.second))
