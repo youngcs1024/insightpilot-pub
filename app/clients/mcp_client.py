@@ -193,6 +193,18 @@ def _http_failure(exc: httpx2.HTTPStatusError) -> InsightPilotError:
     return McpResultError()
 
 
+def _sdk_failure(exc: MCPError) -> InsightPilotError:
+    if exc.code == REQUEST_TIMEOUT:
+        return McpCallTimeoutError()
+    return McpUnavailableError() if exc.code == CONNECTION_CLOSED else McpResultError()
+
+
+def _socket_failure(exc: BaseException) -> InsightPilotError:
+    if isinstance(exc, (httpx2.TimeoutException, TimeoutError)):
+        return McpCallTimeoutError()
+    return McpUnavailableError()
+
+
 def transport_failure(exc: BaseException) -> InsightPilotError:
     """Unwrap transport task groups using exception types/status, never messages."""
     if isinstance(exc, BaseExceptionGroup):
@@ -201,24 +213,21 @@ def transport_failure(exc: BaseException) -> InsightPilotError:
     if isinstance(exc, InsightPilotError):
         return exc
     if isinstance(exc, MCPError):
-        if exc.code == REQUEST_TIMEOUT:
-            return McpCallTimeoutError()
-        return McpUnavailableError() if exc.code == CONNECTION_CLOSED else McpResultError()
+        return _sdk_failure(exc)
     if isinstance(exc, httpx2.HTTPStatusError):
         return _http_failure(exc)
-    if isinstance(exc, (httpx2.TimeoutException, TimeoutError)):
-        return McpCallTimeoutError()
     if isinstance(
         exc,
         (
             httpx2.TransportError,
             OSError,
+            TimeoutError,
             anyio.BrokenResourceError,
             anyio.ClosedResourceError,
             anyio.EndOfStream,
         ),
     ):
-        return McpUnavailableError()
+        return _socket_failure(exc)
     return McpResultError()
 
 
@@ -529,9 +538,7 @@ class McpClient:
             self.breaker.failed()
             raise McpCallTimeoutError() from exc
         except McpPolicyRejected as exc:
-            logger.warning(
-                "mcp_policy_rejected", reasons=[reason.value for reason in exc.reasons]
-            )
+            logger.warning("mcp_policy_rejected", reasons=[reason.value for reason in exc.reasons])
             raise
         except UpstreamUnavailableError as exc:
             if exc.retryable:

@@ -1,5 +1,7 @@
 """Real, bounded readiness probes; no business queries or persistent substitutes."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
