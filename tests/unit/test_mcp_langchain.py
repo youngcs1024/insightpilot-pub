@@ -1,7 +1,5 @@
 """Descriptor conversion and cached LangChain tools without network access."""
 
-# ruff: noqa: PLR2004 -- fixed descriptor and historical fixture bounds.
-
 import json
 import time
 from collections.abc import AsyncIterator
@@ -233,7 +231,8 @@ def test_null_primitive_numeric_bounds_and_explicit_extra_permission() -> None:
 
 def test_historical_real_descriptor_preserves_nullable_revision_bounds() -> None:
     captured = json.loads((ROOT / "tests/fixtures/get_business_schema_descriptor.json").read_text())
-    assert captured["source_sha"] and captured["sdk_version"] == "2.1.1"
+    assert captured["source_sha"]
+    assert captured["sdk_version"] == "2.1.1"
     tool = mcp_tool_to_langchain(Tool.model_validate(captured["tool"]), AsyncMock())
     assert tool._parse_input({}, None) == {}
     assert tool._parse_input({"known_revision": None}, None) == {"known_revision": None}

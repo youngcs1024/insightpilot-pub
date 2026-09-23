@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Literal, Mapping, Never, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Never, cast
 
 from langchain_core.tools import BaseTool, ToolException
-from mcp.types import Tool
 from pydantic import (
     AwareDatetime,
     BaseModel,
@@ -20,10 +19,17 @@ from pydantic import (
     create_model,
 )
 
-from app.clients.mcp_client import McpClient
 from app.core.deadline import current_deadline
 from app.core.errors import McpPolicyRejected, McpResultError, McpToolSchemaError
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from mcp.types import Tool
+
+    from app.clients.mcp_client import McpClient
+
+_NULLABLE_VARIANTS = 2
 _ANNOTATIONS = {"title", "description", "default"}
 _STRING = {"minLength", "maxLength", "pattern"}
 _ARRAY = {"minItems", "maxItems"}
@@ -73,7 +79,7 @@ def _check_keywords(schema: Mapping[str, object], allowed: set[str], tool: str, 
         _fail(tool, path, sorted(unsupported)[0])
 
 
-def _field(schema: Mapping[str, object], required: bool) -> Any:
+def _field(schema: Mapping[str, object], required: bool) -> Any:  # noqa: ANN401
     options: dict[str, Any] = {
         key: schema[key] for key in ("description", "title") if key in schema
     }
@@ -86,7 +92,7 @@ def _field(schema: Mapping[str, object], required: bool) -> Any:
     return Field(default_factory=lambda: None, **options)
 
 
-def _constrained(annotation: Any, schema: Mapping[str, object]) -> Any:
+def _constrained(annotation: Any, schema: Mapping[str, object]) -> Any:  # noqa: ANN401
     options: dict[str, Any] = {
         field: schema[wire] for wire, field in _FIELD_NAMES.items() if wire in schema
     }
@@ -125,10 +131,13 @@ def _object_model(  # noqa: PLR0913, PLR0917 -- recursive schema context is expl
             annotation,
             _field(field_schema, field_name in required),
         )
-    return create_model(
-        name,
-        __config__=ConfigDict(extra="allow" if additional else "forbid"),
-        **fields,
+    return cast(
+        "type[BaseModel]",
+        create_model(  # type: ignore[call-overload]
+            name,
+            __config__=ConfigDict(extra="allow" if additional else "forbid"),
+            **fields,
+        ),
     )
 
 
@@ -139,7 +148,7 @@ def _annotation(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915, PLR0917 -- b
     path: str,
     definitions: Mapping[str, object],
     ref_depth: int,
-) -> Any:
+) -> Any:  # noqa: ANN401 -- runtime JSON Schema produces dynamic annotations.
     unknown = set(schema) - _KNOWN_KEYWORDS
     if unknown:
         _fail(tool, path, sorted(unknown)[0])
@@ -164,7 +173,7 @@ def _annotation(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915, PLR0917 -- b
     if "anyOf" in schema:
         _check_keywords(schema, {"anyOf"}, tool, path)
         choices = schema["anyOf"]
-        if not isinstance(choices, list) or len(choices) != 2:
+        if not isinstance(choices, list) or len(choices) != _NULLABLE_VARIANTS:
             _fail(tool, path, "anyOf shape")
         variants = [_mapping(item, tool, f"{path}.anyOf") for item in choices]
         nulls = [item for item in variants if item.get("type") == "null"]
@@ -211,7 +220,7 @@ def _annotation(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915, PLR0917 -- b
             definitions,
             ref_depth,
         )
-        return _constrained(list[item], schema)
+        return _constrained(list[item], schema)  # type: ignore[valid-type]
     if kind == "string":
         fmt = schema.get("format")
         if fmt is None:
@@ -254,7 +263,7 @@ class McpLangChainTool(BaseTool):
     args_schema: type[BaseModel]
     _client: McpClient = PrivateAttr()
 
-    def __init__(self, *, client: McpClient, **data: Any) -> None:
+    def __init__(self, *, client: McpClient, **data: Any) -> None:  # noqa: ANN401
         super().__init__(**data)
         self._client = client
 
@@ -267,7 +276,7 @@ class McpLangChainTool(BaseTool):
             raise McpResultError()
         return self.args_schema.model_validate(tool_input).model_dump(exclude_unset=True)
 
-    async def _arun(self, **kwargs: Any) -> str:
+    async def _arun(self, **kwargs: Any) -> str:  # noqa: ANN401 -- BaseTool override.
         arguments = self.args_schema.model_validate(kwargs)
         try:
             result = await self._client.invoke_discovered_tool(
@@ -278,7 +287,7 @@ class McpLangChainTool(BaseTool):
             raise ToolException(json.dumps(refusal, sort_keys=True)) from exc
         return result.text
 
-    def _run(self, **kwargs: Any) -> str:
+    def _run(self, **kwargs: Any) -> str:  # noqa: ANN401 -- BaseTool override.
         raise NotImplementedError("MCP LangChain tools are async only")
 
 

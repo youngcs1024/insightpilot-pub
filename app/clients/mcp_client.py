@@ -29,9 +29,8 @@ from mcp.types import (
 )
 from pydantic import BaseModel, JsonValue, TypeAdapter, ValidationError
 
+from app.clients.mcp_langchain import mcp_tool_to_langchain
 from app.core.background import spawn
-from app.core.config_models import MCPSettings
-from app.core.deadline import Deadline
 from app.core.errors import (
     AuthenticationError,
     InsightPilotError,
@@ -59,6 +58,9 @@ from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaToolEr
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
+
+    from app.core.config_models import MCPSettings
+    from app.core.deadline import Deadline
 
 logger = structlog.get_logger(__name__)
 BREAKER_FAILURES = 5
@@ -326,8 +328,6 @@ class McpClient:
 
     async def refresh_tools(self, *, deadline: Deadline) -> tuple[BaseTool, ...]:
         """Build a full replacement cache before making descriptors available."""
-        from app.clients.mcp_langchain import mcp_tool_to_langchain
-
         async with self._refresh_lock:
             descriptors = await self.list_tools(deadline=deadline)
             by_name = {tool.name: tool for tool in descriptors}
@@ -364,20 +364,7 @@ class McpClient:
                 raise_metric_error(result)
             payload = result.structured_content
             if payload is not None:
-                try:
-                    if name == "execute_readonly_query":
-                        text = QueryResultPayload.model_validate(payload).model_dump_json()
-                    elif name == "get_schema":
-                        text = SchemaResponse.model_validate(payload).model_dump_json()
-                    elif name == "resolve_metric":
-                        text = MetricFragment.model_validate(payload).model_dump_json()
-                    else:
-                        text = json.dumps(
-                            TypeAdapter(JsonValue).validate_python(payload), allow_nan=False
-                        )
-                except (ValidationError, TypeError, ValueError) as exc:
-                    raise McpResultError() from exc
-                return DiscoveredToolResult(text=text)
+                return DiscoveredToolResult(text=self._render_structured(name, payload))
             if name in {"execute_readonly_query", "get_schema", "resolve_metric"}:
                 raise McpResultError()
             texts = [item.text for item in result.content if isinstance(item, TextContent)]
@@ -387,6 +374,19 @@ class McpClient:
             if not text:
                 raise McpResultError()
             return DiscoveredToolResult(text=text)
+
+    @staticmethod
+    def _render_structured(name: str, payload: object) -> str:
+        try:
+            if name == "execute_readonly_query":
+                return QueryResultPayload.model_validate(payload).model_dump_json()
+            if name == "get_schema":
+                return SchemaResponse.model_validate(payload).model_dump_json()
+            if name == "resolve_metric":
+                return MetricFragment.model_validate(payload).model_dump_json()
+            return json.dumps(TypeAdapter(JsonValue).validate_python(payload), allow_nan=False)
+        except (ValidationError, TypeError, ValueError) as exc:
+            raise McpResultError() from exc
 
     async def call_tool(
         self,
