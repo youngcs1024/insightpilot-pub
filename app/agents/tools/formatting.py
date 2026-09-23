@@ -1,6 +1,6 @@
 """Presentation helpers; evidence retains its exact original numeric values."""
 
-from decimal import Decimal, ROUND_HALF_UP, localcontext
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 from app.agents.tools.arithmetic import Number, finite_decimal
 

@@ -75,14 +75,16 @@ def invoke(
     if name not in allowed:
         raise NativeToolError("Native capability is not available for this turn.")
     if name == "resolve_period":
-        args = ResolvePeriodArgs.model_validate_json(arguments)
+        period_args = ResolvePeriodArgs.model_validate_json(arguments)
         return periods.resolve_period(
-            args.expression, now=now, reference_period=reference_period
+            period_args.expression, now=now, reference_period=reference_period
         ).model_dump_json()
-    args = ArithmeticArgs.model_validate_json(arguments)
+    arithmetic_args = ArithmeticArgs.model_validate_json(arguments)
     operations = {
         "percentage_change": arithmetic.percentage_change,
         "growth_rate": arithmetic.growth_rate,
         "share_of_total": arithmetic.share_of_total,
     }
-    return str(operations[args.operation](args.first, args.second))
+    return str(
+        operations[arithmetic_args.operation](arithmetic_args.first, arithmetic_args.second)
+    )

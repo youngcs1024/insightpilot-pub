@@ -1,21 +1,28 @@
 """Data-only model tool calls retain the existing SQL evidence boundary."""
 
-from typing import cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
 
 from langchain_core.messages import ToolMessage
-from pydantic import BaseModel
 
 from app.agents.data.graph import RECURSION_LIMIT, build
 from app.agents.data.state import DataAgentInput, DataAgentOutput, DataAgentState
 from app.agents.failures import FailureKind
 from app.agents.knowledge.graph import topology as knowledge_topology
-from app.agents.runtime import RuntimeContext
 from app.schemas.metric_resolution import MetricIntent
-from app.services.llm.contracts import FunctionCall, ToolCall
 from app.services.graph import serializer
+from app.services.llm.contracts import FunctionCall, ToolCall
 from tests.agents.support import context, metric_intent, sql_candidate
-from tests.fakes.chat_model import FakeChatModel
-from tests.fakes.mcp_client import FakeMcpClient
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    from app.agents.runtime import RuntimeContext
+    from tests.fakes.chat_model import FakeChatModel
+    from tests.fakes.mcp_client import FakeMcpClient
+
+TWO_CALLS = 2
 
 
 def _call(name: str, arguments: str, identifier: str = "native-1") -> ToolCall:
@@ -71,12 +78,11 @@ async def test_native_tool_error_becomes_tool_message() -> None:
                 "calculate_percentage",
                 '{"operation":"percentage_change","first":"0","second":"15"}',
             ),
-            "no_tools",
             sql_candidate(),
         ]
     )
     assert output.failure is None
-    messages = cast("FakeChatModel", ctx.llm).calls[3].messages
+    messages = cast("FakeChatModel", ctx.llm).calls[2].messages
     errors = [item for item in messages if isinstance(item, ToolMessage)]
     assert len(errors) == 1
     assert errors[0].status == "error"
@@ -89,12 +95,11 @@ async def test_invalid_native_arguments_become_error_tool_message() -> None:
         [
             intent,
             _call("calculate_percentage", '{"operation":"growth_rate","first":"10"}'),
-            "no_tools",
             sql_candidate(),
         ]
     )
     assert output.failure is None
-    messages = cast("FakeChatModel", ctx.llm).calls[3].messages
+    messages = cast("FakeChatModel", ctx.llm).calls[2].messages
     errors = [item for item in messages if isinstance(item, ToolMessage)]
     assert len(errors) == 1
     assert errors[0].status == "error"
@@ -131,7 +136,7 @@ async def test_native_tool_calls_are_bounded_and_reuse_deadline() -> None:
     )
     assert output.failure is None
     calls = cast("FakeChatModel", ctx.llm).calls
-    assert len([call for call in calls if call.tool_names]) == 2
+    assert len([call for call in calls if call.tool_names]) == TWO_CALLS
     assert len([call for call in calls if call.schema_name == "SqlGeneratorOutput"]) == 1
     assert {call.deadline_at for call in calls} == {ctx.deadline.at}
 
@@ -140,7 +145,7 @@ async def test_default_intent_adds_no_tool_model_call() -> None:
     output, ctx = await _invoke([MetricIntent.model_validate(metric_intent()), sql_candidate()])
     assert output.failure is None
     calls = cast("FakeChatModel", ctx.llm).calls
-    assert len(calls) == 2
+    assert len(calls) == TWO_CALLS
     assert all(not call.tool_names for call in calls)
 
 

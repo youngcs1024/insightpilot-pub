@@ -103,4 +103,6 @@ async def native_tools(state: DataAgentState, runtime: Runtime[RuntimeContext]) 
         reply = ToolMessage(content=content, tool_call_id=call.id, status=status)
         exchange.extend((assistant, reply))
         messages.extend((assistant, reply))
+        if status == "error":
+            break
     return Command(update={"messages": [*state.messages, *exchange]})

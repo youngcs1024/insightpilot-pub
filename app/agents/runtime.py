@@ -32,12 +32,16 @@ from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse
 from app.services.llm.contracts import ToolCall, ToolDefinition
 
 
-class LlmPort(Protocol):
-    """Existing LlmService's structured output boundary."""
+class StructuredLlmPort(Protocol):
+    """The model contract shared by routing and specialist services."""
 
     async def generate_structured[T: BaseModel](
         self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
     ) -> T: ...
+
+
+class LlmPort(StructuredLlmPort, Protocol):
+    """Specialist model contract, including optional native tool calls."""
 
     async def call_with_tools(
         self,
@@ -53,7 +57,7 @@ class LlmPort(Protocol):
 class RoutingRuntime:
     """Minimal ephemeral projection shared by the graph node and diagnostic CLI."""
 
-    llm: LlmPort
+    llm: StructuredLlmPort
     settings: RouterSettings
     deadline: Deadline
 

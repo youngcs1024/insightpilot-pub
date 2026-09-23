@@ -2,7 +2,8 @@
 
 from datetime import datetime
 
-from app.services.periods import Period, resolve_period as _resolve_period
+from app.services.periods import Period
+from app.services.periods import resolve_period as _resolve_period
 
 
 def resolve_period(
