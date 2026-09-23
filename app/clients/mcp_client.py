@@ -6,7 +6,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from http import HTTPStatus
-from typing import Literal
+from typing import Literal, cast
 
 import anyio
 import httpx2
@@ -15,7 +15,7 @@ from asgi_correlation_id import correlation_id
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
-from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT, CallToolResult
+from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT, CallToolResult, RequestParamsMeta
 from pydantic import ValidationError
 
 from app.core.background import spawn
@@ -360,10 +360,12 @@ class McpClient:
             if request_id is None:
                 result = await session.call_tool(name, arguments=args.model_dump(mode="json"))
             else:
+                # The SDK permits extra _meta keys; mypy does not honor TypedDict extra_items.
+                meta = cast(RequestParamsMeta, {"insightpilot/request_id": request_id})
                 result = await session.call_tool(
                     name,
                     arguments=args.model_dump(mode="json"),
-                    meta={_CORRELATION_META: request_id},
+                    meta=meta,
                 )
         except asyncio.CancelledError:
             # End the session after cancellation; late responses cannot poison its reuse.
