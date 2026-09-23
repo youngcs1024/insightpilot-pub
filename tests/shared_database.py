@@ -119,6 +119,7 @@ def pg_container(tmp_path_factory: pytest.TempPathFactory) -> Iterator[TestPostg
         IP_BOOTSTRAP_APP_PASSWORD=app_password,
         IP_BOOTSTRAP_ETL_PASSWORD=secrets.token_urlsafe(32),
         IP_BOOTSTRAP_MCP_PASSWORD=secrets.token_urlsafe(32),
+        IP_BOOTSTRAP_AUDIT_PASSWORD=secrets.token_urlsafe(32),
     )
     container.with_volume_mapping(
         str(ROOT / "docker/postgres/init"), "/docker-entrypoint-initdb.d", "ro"

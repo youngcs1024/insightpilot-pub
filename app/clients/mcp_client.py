@@ -1,6 +1,7 @@
 """Long-lived MCP v2 client with one retry owner and a concurrency-safe breaker."""
 
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -10,6 +11,7 @@ from typing import Literal
 import anyio
 import httpx2
 import structlog
+from asgi_correlation_id import correlation_id
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
@@ -47,8 +49,24 @@ from app.schemas.schema_tools import GetSchemaArgs, SchemaResponse, SchemaToolEr
 logger = structlog.get_logger(__name__)
 BREAKER_FAILURES = 5
 BREAKER_RECOVERY_S = 30
+_CORRELATION_META = "insightpilot/request_id"
 
 type SessionFactory = Callable[[], AbstractAsyncContextManager[ClientSession]]
+
+
+async def attach_correlation_header(request: httpx2.Request) -> None:
+    """Copy the current call's metadata into its own HTTP POST, without shared headers."""
+    if request.method != "POST":
+        return
+    try:
+        payload = json.loads(request.content)
+    except (ValueError, httpx2.RequestNotRead):
+        return
+    if payload.get("method") != "tools/call":
+        return
+    value = payload.get("params", {}).get("_meta", {}).get(_CORRELATION_META)
+    if isinstance(value, str):
+        request.headers["X-Request-ID"] = value
 
 
 class CircuitBreaker:
@@ -174,6 +192,7 @@ class McpClient:
         async with (
             httpx2.AsyncClient(
                 headers={"Authorization": "Bearer " + self.settings.auth_token.get_secret_value()},
+                event_hooks={"request": [attach_correlation_header]},
                 timeout=self.settings.timeout_s,
                 trust_env=False,
             ) as http,
@@ -337,7 +356,11 @@ class McpClient:
     async def _raw_call(self, name: str, args: Contract) -> CallToolResult:
         try:
             session = await self._get_session()
-            result = await session.call_tool(name, arguments=args.model_dump(mode="json"))
+            request_id = correlation_id.get()
+            options = {"meta": {_CORRELATION_META: request_id}} if request_id is not None else {}
+            result = await session.call_tool(
+                name, arguments=args.model_dump(mode="json"), **options
+            )
         except asyncio.CancelledError:
             # End the session after cancellation; late responses cannot poison its reuse.
             self._stop.set()

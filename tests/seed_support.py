@@ -46,7 +46,7 @@ def seed_database_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Da
         db_host_port=port,
         postgres_superuser_password=secrets.token_urlsafe(32),
         bootstrap=BootstrapSecrets(
-            **{f"{role}_password": secrets.token_urlsafe(32) for role in ("app", "etl", "mcp")}
+            **{f"{role}_password": secrets.token_urlsafe(32) for role in ("app", "etl", "mcp", "audit")}
         ),
     )
     call = Invocation(

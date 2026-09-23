@@ -9,6 +9,7 @@ services:
       IP_BOOTSTRAP_APP_PASSWORD: ${IP_BOOTSTRAP__APP_PASSWORD:?required}
       IP_BOOTSTRAP_ETL_PASSWORD: ${IP_BOOTSTRAP__ETL_PASSWORD:?required}
       IP_BOOTSTRAP_MCP_PASSWORD: ${IP_BOOTSTRAP__MCP_PASSWORD:?required}
+      IP_BOOTSTRAP_AUDIT_PASSWORD: ${IP_BOOTSTRAP__AUDIT_PASSWORD:?required}
     volumes:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - pgdata:/var/lib/postgresql/data
@@ -68,6 +69,8 @@ services:
     environment:
       IP_BUSINESS__HOST: postgres
       IP_BUSINESS__PASSWORD: ${IP_BOOTSTRAP__MCP_PASSWORD:?required}
+      IP_AUDIT__HOST: postgres
+      IP_AUDIT__PASSWORD: ${IP_BOOTSTRAP__AUDIT_PASSWORD:?required}
       IP_MCP__AUTH_TOKEN: ${IP_MCP_AUTH_TOKEN:-}
     networks: [backend]
     depends_on:

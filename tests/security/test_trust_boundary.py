@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from tests.database_support import DatabaseStack
 
 pytestmark = pytest.mark.integration
-Role = Literal["postgres", "app_rw", "etl_rw", "mcp_ro"]
+Role = Literal["postgres", "app_rw", "etl_rw", "mcp_ro", "mcp_audit"]
 Database = Literal["insightpilot_app", "insightpilot_business"]
 
 
@@ -38,6 +38,7 @@ async def connection(
         "app_rw": settings.bootstrap.app_password,
         "etl_rw": settings.bootstrap.etl_password,
         "mcp_ro": settings.bootstrap.mcp_password,
+        "mcp_audit": settings.bootstrap.audit_password,
     }[role]
     conn = await asyncpg.connect(
         host="127.0.0.1",
@@ -58,6 +59,16 @@ async def test_app_role_cannot_connect_to_business_db(database_stack: DatabaseSt
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
         async with connection(database_stack, "app_rw"):
             pytest.fail("app_rw connected to the business database")
+
+
+async def test_audit_role_is_confined_to_mcp_schema(database_stack: DatabaseStack) -> None:
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        async with connection(database_stack, "mcp_audit", "insightpilot_app"):
+            pytest.fail("mcp_audit connected to the application database")
+    async with connection(database_stack, "mcp_audit") as conn:
+        assert await conn.fetchval("SELECT has_schema_privilege(current_user, 'mcp', 'USAGE')")
+        assert not await conn.fetchval("SELECT has_schema_privilege(current_user, 'biz', 'USAGE')")
+        assert not await conn.fetchval("SELECT has_schema_privilege(current_user, 'mcp', 'CREATE')")
 
 
 async def test_mcp_role_can_select_from_biz(database_stack: DatabaseStack) -> None:
@@ -190,10 +201,10 @@ async def test_runtime_roles_cannot_assume_owners(database_stack: DatabaseStack)
     async with connection(database_stack, "postgres") as conn:
         assert not await conn.fetch("""
             SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
-            WHERE r.rolname IN ('app_rw', 'etl_rw', 'mcp_ro')
+            WHERE r.rolname IN ('app_rw', 'etl_rw', 'mcp_ro', 'mcp_audit')
         """)
         assert not await conn.fetch("""
-            SELECT 1 FROM pg_roles WHERE rolname IN ('app_rw', 'etl_rw', 'mcp_ro', 'app_owner', 'biz_owner')
+            SELECT 1 FROM pg_roles WHERE rolname IN ('app_rw', 'etl_rw', 'mcp_ro', 'mcp_audit', 'app_owner', 'biz_owner')
             AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
         """)
         assert not await conn.fetch(

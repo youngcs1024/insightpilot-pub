@@ -59,7 +59,7 @@ def include_business_name(
     parent_names: NameFilterParentNames,
 ) -> bool:
     """Reflect only the business and migration-owned operational schemas."""
-    return type_ != "schema" or name in {"biz", "ops"}
+    return type_ != "schema" or name in {"biz", "ops", "mcp"}
 
 
 def configure_context(

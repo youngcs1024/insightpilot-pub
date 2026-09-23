@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 
 import httpx2
 import pytest
+from asgi_correlation_id import correlation_id
 from mcp import ClientSession
 from mcp.shared.exceptions import MCPError
 from mcp.types import CONNECTION_CLOSED, CallToolResult
@@ -175,6 +176,34 @@ async def test_session_reused_and_closed_same_task(settings: MCPSettings) -> Non
         await client.aclose()
     assert len(owners) == TWO
     assert owners[0] is owners[1]
+
+
+async def test_request_id_is_sent_per_tool_call(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    session.call_tool.return_value = success()
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        for value in ("a" * 32, "b" * 32):
+            token = correlation_id.set(value)
+            try:
+                await client.call_tool(
+                    "execute_readonly_query",
+                    QueryArguments(sql="SELECT 1"),
+                    deadline=Deadline(time.monotonic() + 5),
+                )
+            finally:
+                correlation_id.reset(token)
+        assert [call.kwargs["meta"]["insightpilot/request_id"] for call in session.call_tool.await_args_list] == [
+            "a" * 32,
+            "b" * 32,
+        ]
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.parametrize("code", ["MCP_POLICY_REJECTED", "SQL_TIMEOUT"])

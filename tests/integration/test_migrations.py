@@ -99,7 +99,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
             }
             assert (
                 await connection.scalar(text("SELECT version_num FROM biz.alembic_version_biz"))
-                == "0001_business_schema"
+                == "0002_mcp_audit_log"
             )
     finally:
         await business.dispose()

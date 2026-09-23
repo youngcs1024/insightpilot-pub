@@ -111,6 +111,7 @@ def test_service_secret_allowlists(deployment_settings: DeploymentSettings) -> N
         "IP_BOOTSTRAP_APP_PASSWORD",
         "IP_BOOTSTRAP_ETL_PASSWORD",
         "IP_BOOTSTRAP_MCP_PASSWORD",
+        "IP_BOOTSTRAP_AUDIT_PASSWORD",
     }
     assert "IP_COMPOSE_PROJECT_NAME" not in env
 

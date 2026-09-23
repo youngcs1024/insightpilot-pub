@@ -56,12 +56,12 @@ async def test_bootstrap_provides_all_roles_and_databases(db_session: AsyncSessi
         (
             await db_session.scalars(
                 text(
-                    "SELECT rolname FROM pg_roles WHERE rolname IN ('app_owner', 'biz_owner', 'app_rw', 'etl_rw', 'mcp_ro')"
+                    "SELECT rolname FROM pg_roles WHERE rolname IN ('app_owner', 'biz_owner', 'app_rw', 'etl_rw', 'mcp_ro', 'mcp_audit')"
                 )
             )
         ).all()
     )
-    assert roles == {"app_owner", "biz_owner", "app_rw", "etl_rw", "mcp_ro"}
+    assert roles == {"app_owner", "biz_owner", "app_rw", "etl_rw", "mcp_ro", "mcp_audit"}
     databases = set(
         (
             await db_session.scalars(

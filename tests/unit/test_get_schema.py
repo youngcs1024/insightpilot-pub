@@ -186,7 +186,7 @@ async def test_invalid_artifact_never_reads_database(tmp_path: Path, corrupt: bo
 async def test_descriptor_exposes_new_tool_and_retires_internal_tool() -> None:
     server = create_server(
         McpServerSettings(
-            _env_file=None, business={"password": "test-only"}, mcp={"auth_token": "test-only"}
+            _env_file=None, business={"password": "test-only"}, audit={"password": "test-only"}, mcp={"auth_token": "test-only"}
         )
     )
     tools = {tool.name: tool for tool in await server.list_tools()}
@@ -206,7 +206,7 @@ async def test_stale_artifact_reported_in_ready(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("mcp_server.server.BusinessSchemaReader", Mock(return_value=reader))
     server = create_server(
         McpServerSettings(
-            _env_file=None, business={"password": "test-only"}, mcp={"auth_token": "test-only"}
+            _env_file=None, business={"password": "test-only"}, audit={"password": "test-only"}, mcp={"auth_token": "test-only"}
         )
     )
     async with httpx.AsyncClient(

@@ -282,6 +282,7 @@ jobs:
           IP_BOOTSTRAP_APP_PASSWORD: ci-only-app
           IP_BOOTSTRAP_ETL_PASSWORD: ci-only-etl
           IP_BOOTSTRAP_MCP_PASSWORD: ci-only-mcp
+          IP_BOOTSTRAP_AUDIT_PASSWORD: ci-only-audit
         ports:
           - 5432/tcp
         options: >-

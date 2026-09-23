@@ -3,17 +3,22 @@
 import asyncio
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 from mcp.server import MCPServer
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
-from mcp.types import CallToolResult, TextContent
+from mcp.server.mcpserver.context import Context
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import ValidationError as PydanticValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from structlog.types import EventDict, WrappedLogger
@@ -29,6 +34,7 @@ from app.schemas.mcp import (
     McpErrorCode,
     McpErrorPayload,
     PositiveRows,
+    PolicyReason,
     QueryResultPayload,
     SqlErrorKind,
     ValidationStatus,
@@ -36,6 +42,15 @@ from app.schemas.mcp import (
 from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.metrics import Grain
 from app.schemas.schema_tools import GetSchemaArgs, RequestedTable, SchemaResponse, SchemaToolError
+from mcp_server.audit import (
+    AuditEvent,
+    AuditOutcome,
+    AuditWriter,
+    classify_result,
+    correlation_header,
+    elapsed_ms,
+    hash_arguments,
+)
 from mcp_server.config import McpServerSettings
 from mcp_server.db import BusinessDatabase
 from mcp_server.policy.sql_validator import SQLValidator, clamp_result_cap
@@ -57,7 +72,55 @@ class StaticTokenVerifier:
         """Authenticate a single internal service principal."""
         if not secrets.compare_digest(token.encode(), self._token.get_secret_value().encode()):
             return None
-        return AccessToken(token=token, client_id="insightpilot-api", scopes=["query"])
+        return AccessToken(
+            token=token, client_id="insightpilot-api", subject="insightpilot-api", scopes=["query"]
+        )
+
+
+class AuditedMCPServer(MCPServer[None]):
+    """Audit authenticated tool dispatch, including SDK argument validation failures."""
+
+    audit: AuditWriter
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], context: Context[None, Any] | None = None
+    ) -> CallToolResult | InputRequiredResult:
+        """Write an audit row once after the tool outcome is known."""
+        started = time.monotonic()
+        result: CallToolResult | InputRequiredResult | None = None
+        failure: BaseException | None = None
+        try:
+            result = await super().call_tool(name, arguments, context)
+            return result
+        except BaseException as exc:
+            failure = exc
+            raise
+        finally:
+            outcome = AuditOutcome.EXECUTION_ERROR
+            reasons: list[str] | None = None
+            rows: int | None = None
+            if isinstance(result, CallToolResult):
+                outcome, reasons, rows = classify_result(name, result)
+            elif isinstance(failure, ToolError) and isinstance(
+                failure.__cause__, PydanticValidationError
+            ):
+                outcome = AuditOutcome.POLICY_REJECTED
+                reasons = [PolicyReason.INVALID_ARGUMENTS.value]
+            token = get_access_token()
+            raw_sql = arguments.get("sql") if name == "execute_readonly_query" else None
+            await self.audit.record(
+                AuditEvent(
+                    caller=(token.subject or token.client_id) if token is not None else "internal",
+                    correlation_id=correlation_header(context.headers if context else None),
+                    tool=name,
+                    arguments_sha256=hash_arguments(arguments),
+                    sql_text=raw_sql if isinstance(raw_sql, str) else None,
+                    outcome=outcome,
+                    reject_reasons=reasons,
+                    rows_returned=rows,
+                    duration_ms=elapsed_ms(started),
+                )
+            )
 
 
 def error_result(exc: InsightPilotError) -> CallToolResult:
@@ -129,6 +192,7 @@ def register_metric_tool(server: MCPServer[None], resolver: MetricResolver) -> N
 def create_server(settings: McpServerSettings) -> MCPServer[None]:
     """Build the supported tools and their pool; imports never open a connection."""
     database = BusinessDatabase(settings.business)
+    audit = AuditWriter(settings.audit)
     executor = QueryExecutor(database)
     validator = SQLValidator()
     schema_tool = SchemaTool(
@@ -140,14 +204,18 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
 
     @asynccontextmanager
     async def lifespan(server: MCPServer[None]) -> AsyncIterator[None]:
-        await database.start()
         try:
+            await database.start()
+            await audit.start()
             yield
         finally:
             async with asyncio.timeout(settings.mcp.shutdown_timeout_s):
-                await database.aclose()
+                try:
+                    await audit.aclose()
+                finally:
+                    await database.aclose()
 
-    server: MCPServer[None] = MCPServer(
+    server: AuditedMCPServer = AuditedMCPServer(
         "insightpilot-business",
         log_level="WARNING",
         lifespan=lifespan,
@@ -158,6 +226,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             required_scopes=["query"],
         ),
     )
+    server.audit = audit
     register_metric_tool(server, metric_resolver)
 
     @server.tool()
@@ -204,7 +273,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
 
     @server.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]
     async def health(request: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok"})
+        return JSONResponse({"status": "ok", "audit_write_failures_total": audit.write_failures_total})
 
     @server.custom_route("/ready", methods=["GET"])  # type: ignore[untyped-decorator]
     async def ready(request: Request) -> JSONResponse:

@@ -73,6 +73,7 @@ def database_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Databas
             app_password=secrets.token_urlsafe(32) + "@:/+'$\\\" space",
             etl_password=secrets.token_urlsafe(32) + "@:/+'$\\\"",
             mcp_password=secrets.token_urlsafe(32) + "@:/+'$\\\"",
+            audit_password=secrets.token_urlsafe(32) + "@:/+'$\\\"",
         ),
     )
     call = Invocation(

@@ -186,6 +186,7 @@ def milvus_stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MilvusSta
             app_password=secrets.token_urlsafe(24),
             etl_password=secrets.token_urlsafe(24),
             mcp_password=secrets.token_urlsafe(24),
+            audit_password=secrets.token_urlsafe(24),
         ),
         minio=MinioSettings(user="step31test", password=secrets.token_urlsafe(24)),
     )

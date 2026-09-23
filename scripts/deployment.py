@@ -45,6 +45,7 @@ class BootstrapSecrets(BaseModel):
     app_password: Secret
     etl_password: Secret
     mcp_password: Secret
+    audit_password: Secret
 
 
 class MinioSettings(BaseModel):
@@ -126,6 +127,7 @@ class DeploymentSettings(BaseSettings):
             "IP_BOOTSTRAP__APP_PASSWORD": self.bootstrap.app_password.get_secret_value(),
             "IP_BOOTSTRAP__ETL_PASSWORD": self.bootstrap.etl_password.get_secret_value(),
             "IP_BOOTSTRAP__MCP_PASSWORD": self.bootstrap.mcp_password.get_secret_value(),
+            "IP_BOOTSTRAP__AUDIT_PASSWORD": self.bootstrap.audit_password.get_secret_value(),
         }
 
 
@@ -407,6 +409,7 @@ def execute(docker: str, settings: DeploymentSettings, call: Invocation) -> str:
                 "IP_BOOTSTRAP_APP_PASSWORD": settings.bootstrap.app_password.get_secret_value(),
                 "IP_BOOTSTRAP_ETL_PASSWORD": settings.bootstrap.etl_password.get_secret_value(),
                 "IP_BOOTSTRAP_MCP_PASSWORD": settings.bootstrap.mcp_password.get_secret_value(),
+                "IP_BOOTSTRAP_AUDIT_PASSWORD": settings.bootstrap.audit_password.get_secret_value(),
             }
         )
         command = [
@@ -419,6 +422,8 @@ def execute(docker: str, settings: DeploymentSettings, call: Invocation) -> str:
             "IP_BOOTSTRAP_ETL_PASSWORD",
             "-e",
             "IP_BOOTSTRAP_MCP_PASSWORD",
+            "-e",
+            "IP_BOOTSTRAP_AUDIT_PASSWORD",
             "postgres",
             "psql",
             "-X",

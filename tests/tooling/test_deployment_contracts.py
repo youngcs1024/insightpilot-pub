@@ -54,6 +54,7 @@ def test_missing_and_extra_keys_are_independently_reported(service: str) -> None
     "credential",
     [
         "IP_BUSINESS__PASSWORD",
+        "IP_AUDIT__PASSWORD",
         "IP_MIGRATION",
         "IP_BOOTSTRAP__APP_PASSWORD",
         "IP_SEED",

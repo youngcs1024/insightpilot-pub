@@ -49,13 +49,22 @@ SERVICE_ENVIRONMENT_KEYS = MappingProxyType(
             }
         ),
         "api": API_ENVIRONMENT_KEYS,
-        "mcp": frozenset({"IP_BUSINESS__HOST", "IP_BUSINESS__PASSWORD", "IP_MCP__AUTH_TOKEN"}),
+        "mcp": frozenset(
+            {
+                "IP_BUSINESS__HOST",
+                "IP_BUSINESS__PASSWORD",
+                "IP_AUDIT__HOST",
+                "IP_AUDIT__PASSWORD",
+                "IP_MCP__AUTH_TOKEN",
+            }
+        ),
         "postgres": frozenset(
             {
                 "POSTGRES_PASSWORD",
                 "IP_BOOTSTRAP_APP_PASSWORD",
                 "IP_BOOTSTRAP_ETL_PASSWORD",
                 "IP_BOOTSTRAP_MCP_PASSWORD",
+                "IP_BOOTSTRAP_AUDIT_PASSWORD",
             }
         ),
         "migrate": frozenset(
@@ -83,6 +92,7 @@ def forbidden_api_keys(keys: set[str]) -> list[str]:
     """Forbid business/operator credentials even if the allowlist is edited incorrectly."""
     prefixes = (
         "IP_BUSINESS",
+        "IP_AUDIT",
         "IP_MIGRATION",
         "IP_BOOTSTRAP",
         "IP_SEED",

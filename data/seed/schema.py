@@ -231,6 +231,34 @@ sa.Index("ix_refunds_requested_at", REFUNDS.c.requested_at)
 sa.Index("ix_refunds_status", REFUNDS.c.status)
 sa.Index("ix_inventory_warehouse", INVENTORY.c.warehouse)
 
+MCP_AUDIT_LOG = sa.Table(
+    "audit_log",
+    BUSINESS_METADATA,
+    sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+    sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    sa.Column("caller", sa.Text, nullable=False),
+    sa.Column("correlation_id", sa.Text),
+    sa.Column("tool", sa.Text, nullable=False),
+    sa.Column("arguments_sha256", sa.Text, nullable=False),
+    sa.Column("sql_text", sa.Text),
+    sa.Column("outcome", sa.Text, nullable=False),
+    sa.Column("reject_reasons", JSONB),
+    sa.Column("rows_returned", sa.Integer),
+    sa.Column("duration_ms", sa.Integer),
+    sa.CheckConstraint(
+        "outcome IN ('ok','policy_rejected','execution_error','timeout')",
+        name=sa.schema.conv("ck_audit_log_outcome"),
+    ),
+    schema="mcp",
+)
+sa.Index("ix_audit_occurred", MCP_AUDIT_LOG.c.occurred_at.desc())
+sa.Index(
+    "ix_audit_outcome",
+    MCP_AUDIT_LOG.c.outcome,
+    postgresql_where=MCP_AUDIT_LOG.c.outcome != "ok",
+)
+sa.Index("ix_audit_corr", MCP_AUDIT_LOG.c.correlation_id)
+
 SEED_MANIFEST = sa.Table(
     "seed_manifest",
     BUSINESS_METADATA,

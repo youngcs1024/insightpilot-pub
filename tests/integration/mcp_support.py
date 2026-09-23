@@ -28,6 +28,11 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="module")
 def business_tables(database_stack: DatabaseStack) -> None:
     """Use the real business migration rather than a policy-exempt probe relation."""
+    migrate_business(database_stack)
+
+
+def migrate_business(database_stack: DatabaseStack) -> None:
+    """Bring the shared isolated business DB to the current migration head."""
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("IP_ENVIRONMENT", "test")
         patch.setenv("IP_MIGRATION__HOST", "127.0.0.1")
@@ -60,6 +65,7 @@ async def business(
 
 @pytest.fixture(scope="module")
 def mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
+    migrate_business(database_stack)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -70,6 +76,9 @@ def mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
             "IP_BUSINESS__HOST": "127.0.0.1",
             "IP_BUSINESS__PORT": str(database_stack.settings.db_host_port),
             "IP_BUSINESS__PASSWORD": database_stack.settings.bootstrap.mcp_password.get_secret_value(),
+            "IP_AUDIT__HOST": "127.0.0.1",
+            "IP_AUDIT__PORT": str(database_stack.settings.db_host_port),
+            "IP_AUDIT__PASSWORD": database_stack.settings.bootstrap.audit_password.get_secret_value(),
             "IP_MCP__HOST": "127.0.0.1",
             "IP_MCP__PORT": str(port),
             "IP_MCP__AUTH_TOKEN": token,
