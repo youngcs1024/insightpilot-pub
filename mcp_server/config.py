@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr, field_validator
+from pydantic_core import PydanticCustomError
 
 from app.core.settings_base import ConfigModel, ProcessSettings, Secret
 
@@ -41,6 +42,16 @@ class ServerSettings(ConfigModel):
     host: str = Field(default="0.0.0.0", min_length=1)  # noqa: S104 -- private container network.
     port: int = Field(default=8001, ge=1, le=65535)
     shutdown_timeout_s: float = Field(default=5, ge=0.01, le=30)
+
+    @field_validator("auth_token")
+    @classmethod
+    def check_auth_token_length(cls, value: SecretStr) -> SecretStr:
+        """Reject weak or placeholder credentials before opening server resources."""
+        if len(value.get_secret_value()) < 32:
+            raise PydanticCustomError(
+                "mcp_token_length", "MCP bearer token must contain at least 32 characters"
+            )
+        return value
 
 
 class SchemaSettings(ConfigModel):

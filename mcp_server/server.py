@@ -15,7 +15,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver.context import Context
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic import ValidationError as PydanticValidationError
@@ -26,6 +26,8 @@ from structlog.types import EventDict, WrappedLogger
 from app.core.errors import (
     InsightPilotError,
     McpPolicyRejected,
+    McpRateLimitError,
+    McpResultError,
     SchemaDriftError,
     SchemaMetadataError,
     SqlExecutionError,
@@ -36,6 +38,8 @@ from app.schemas.mcp import (
     PolicyReason,
     PositiveRows,
     QueryResultPayload,
+    QueryWarning,
+    RESULT_CEILING,
     SqlErrorKind,
     ValidationStatus,
 )
@@ -54,12 +58,14 @@ from mcp_server.audit import (
 from mcp_server.config import McpServerSettings
 from mcp_server.db import BusinessDatabase
 from mcp_server.policy.sql_validator import SQLValidator, clamp_result_cap
+from mcp_server.rate_limit import ToolCallLimiter
 from mcp_server.tools.business_schema import BusinessSchemaReader
 from mcp_server.tools.execute_query import QueryExecutor
 from mcp_server.tools.get_schema import SchemaTool
 from mcp_server.tools.resolve_metric import MetricResolver
 
 logger = structlog.get_logger(__name__)
+MCP_REQUEST_BODY_LIMIT = 64 * 1024
 
 
 class StaticTokenVerifier:
@@ -81,6 +87,7 @@ class AuditedMCPServer(MCPServer[None]):
     """Audit authenticated tool dispatch, including SDK argument validation failures."""
 
     audit: AuditWriter
+    limiter: ToolCallLimiter
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any], context: Context[None, Any] | None = None
@@ -88,29 +95,50 @@ class AuditedMCPServer(MCPServer[None]):
         """Write an audit row once after the tool outcome is known."""
         started = time.monotonic()
         result: CallToolResult | InputRequiredResult | None = None
-        failure: BaseException | None = None
+        token = get_access_token()
+        caller = (token.subject or token.client_id) if token is not None else "internal"
         try:
+            if not self.limiter.admit(caller):
+                result = error_result(McpRateLimitError())
+                return result
             result = await super().call_tool(name, arguments, context)
             return result
-        except BaseException as exc:
-            failure = exc
-            raise
+        except ToolError as exc:
+            if not isinstance(exc, UnexpectedToolError) and isinstance(
+                exc.__cause__, PydanticValidationError
+            ):
+                logger.warning("mcp_tool_arguments_rejected", tool=name)
+                result = error_result(
+                    McpPolicyRejected(ValidationStatus.INVALID, [PolicyReason.INVALID_ARGUMENTS])
+                )
+            else:
+                logger.exception(
+                    "mcp_tool_dispatch_failed",
+                    tool=name,
+                    error_type=type(exc).__name__,
+                    exc_info=False,
+                )
+                result = error_result(McpResultError())
+            return result
+        except Exception as exc:
+            logger.exception(
+                "mcp_tool_dispatch_failed",
+                tool=name,
+                error_type=type(exc).__name__,
+                exc_info=False,
+            )
+            result = error_result(McpResultError())
+            return result
         finally:
             outcome = AuditOutcome.EXECUTION_ERROR
             reasons: list[str] | None = None
             rows: int | None = None
             if isinstance(result, CallToolResult):
                 outcome, reasons, rows = classify_result(name, result)
-            elif isinstance(failure, ToolError) and isinstance(
-                failure.__cause__, PydanticValidationError
-            ):
-                outcome = AuditOutcome.POLICY_REJECTED
-                reasons = [PolicyReason.INVALID_ARGUMENTS.value]
-            token = get_access_token()
             raw_sql = arguments.get("sql") if name == "execute_readonly_query" else None
             await self.audit.record(
                 AuditEvent(
-                    caller=(token.subject or token.client_id) if token is not None else "internal",
+                    caller=caller,
                     correlation_id=correlation_header(context.headers if context else None),
                     tool=name,
                     arguments_sha256=hash_arguments(arguments),
@@ -227,6 +255,7 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
         ),
     )
     server.audit = audit
+    server.limiter = ToolCallLimiter()
     register_metric_tool(server, metric_resolver)
 
     @server.tool()
@@ -245,6 +274,8 @@ def create_server(settings: McpServerSettings) -> MCPServer[None]:
             result = await executor.execute(
                 outcome.rewritten_sql, max_rows=cap, limit_applied=outcome.limit_applied
             )
+            if max_rows > RESULT_CEILING:
+                result.warnings.append(QueryWarning.ROW_CAP_CLAMPED)
             return CallToolResult(
                 structured_content=result.model_dump(mode="json"),
                 content=[TextContent(type="text", text=result.model_dump_json())],
@@ -314,6 +345,7 @@ def main() -> None:
         port=settings.mcp.port,
         streamable_http_path="/mcp",
         stateless_http=False,
+        max_request_body_size=MCP_REQUEST_BODY_LIMIT,
     )
 
 

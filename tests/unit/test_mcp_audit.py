@@ -44,6 +44,15 @@ def test_policy_and_timeout_are_typed() -> None:
     )
 
 
+def test_rate_limit_has_its_own_audit_outcome() -> None:
+    limited = CallToolResult(
+        content=[],
+        is_error=True,
+        structured_content={"code": "MCP_RATE_LIMITED", "message": "safe"},
+    )
+    assert classify_result("get_schema", limited) == (AuditOutcome.RATE_LIMITED, None, None)
+
+
 def test_unstructured_error_cannot_be_misclassified_as_success() -> None:
     result = CallToolResult(content=[], is_error=True)
     assert classify_result("get_schema", result) == (AuditOutcome.EXECUTION_ERROR, None, None)

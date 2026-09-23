@@ -20,6 +20,7 @@ class FailureKind(StrEnum):
     SQL_CORRECTION_EXHAUSTED = "sql_correction_exhausted"
     MCP_UNAVAILABLE = "mcp_unavailable"
     MCP_POLICY_REJECTED = "mcp_policy_rejected"
+    MCP_RATE_LIMITED = "mcp_rate_limited"
     RETRIEVAL_UNAVAILABLE = "retrieval_unavailable"
     RETRIEVAL_NO_EVIDENCE = "retrieval_no_evidence"
     MODEL_RUNTIME_UNAVAILABLE = "model_runtime_unavailable"

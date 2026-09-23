@@ -29,6 +29,7 @@ class AuditOutcome(StrEnum):
     POLICY_REJECTED = "policy_rejected"
     EXECUTION_ERROR = "execution_error"
     TIMEOUT = "timeout"
+    RATE_LIMITED = "rate_limited"
 
 
 class AuditEvent(BaseModel):
@@ -89,6 +90,8 @@ def _classify_error(content: object) -> tuple[AuditOutcome, list[str] | None, in
         return AuditOutcome.POLICY_REJECTED, [reason.value for reason in error.reasons], None
     if error.code is McpErrorCode.SQL_TIMEOUT:
         return AuditOutcome.TIMEOUT, None, None
+    if error.code is McpErrorCode.RATE_LIMITED:
+        return AuditOutcome.RATE_LIMITED, None, None
     return AuditOutcome.EXECUTION_ERROR, None, None
 
 

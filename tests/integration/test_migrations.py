@@ -99,7 +99,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
             }
             assert (
                 await connection.scalar(text("SELECT version_num FROM biz.alembic_version_biz"))
-                == "0002_mcp_audit_log"
+                == "0003_mcp_rate_limit_outcome"
             )
     finally:
         await business.dispose()
@@ -128,6 +128,63 @@ def test_registry_migration_roundtrip(migrated: MigrationSettings) -> None:
     finally:
         command.upgrade(config, "head")
     asyncio.run(inspect_registry(True))
+
+
+def test_rate_limit_audit_migration_preserves_rows(migrated: MigrationSettings) -> None:
+    """The old constraint can return only while every audit row remains valid."""
+    config = migration_config(MigrationTarget.BUSINESS)
+    marker = uuid4().hex
+
+    async def write_outcome(outcome: str) -> None:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
+        try:
+            async with resource.begin() as connection:
+                await connection.execute(
+                    text("""
+                        INSERT INTO mcp.audit_log
+                            (caller, correlation_id, tool, arguments_sha256, outcome)
+                        VALUES ('migration-test', :marker, 'get_schema', :hash, :outcome)
+                    """),
+                    {"marker": marker, "hash": "0" * 64, "outcome": outcome},
+                )
+        finally:
+            await resource.dispose()
+
+    async def stored_outcomes() -> list[str]:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
+        try:
+            async with resource.connect() as connection:
+                rows = await connection.execute(
+                    text("SELECT outcome FROM mcp.audit_log WHERE correlation_id = :marker"),
+                    {"marker": marker},
+                )
+                return list(rows.scalars())
+        finally:
+            await resource.dispose()
+
+    async def clean_rows() -> None:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
+        try:
+            async with resource.begin() as connection:
+                await connection.execute(
+                    text("DELETE FROM mcp.audit_log WHERE correlation_id = :marker"),
+                    {"marker": marker},
+                )
+        finally:
+            await resource.dispose()
+
+    try:
+        asyncio.run(write_outcome("ok"))
+        command.downgrade(config, "0002_mcp_audit_log")
+        assert asyncio.run(stored_outcomes()) == ["ok"]
+        command.upgrade(config, "head")
+        asyncio.run(write_outcome("rate_limited"))
+        with pytest.raises(MigrationError):
+            command.downgrade(config, "0002_mcp_audit_log")
+        assert sorted(asyncio.run(stored_outcomes())) == ["ok", "rate_limited"]
+    finally:
+        asyncio.run(clean_rows())
+        command.upgrade(config, "head")
 
 
 async def inspect_base(migrated: MigrationSettings, target: MigrationTarget) -> None:

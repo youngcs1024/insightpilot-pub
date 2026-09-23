@@ -18,6 +18,7 @@ from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT, CallToolResult, ListTo
 from pydantic import SecretStr
 from structlog.testing import capture_logs
 
+from app.agents.degradation import public_failure
 from app.agents.failures import FailureKind
 from app.agents.nodes.common import node_failure
 from app.clients.mcp_client import (
@@ -34,6 +35,7 @@ from app.core.errors import (
     McpAuthenticationError,
     McpCallTimeoutError,
     McpPolicyRejected,
+    McpRateLimitError,
     McpResultError,
     McpUnavailableError,
     SchemaDriftError,
@@ -72,6 +74,7 @@ def failure(code: str) -> CallToolResult:
         ("MCP_POLICY_REJECTED", McpPolicyRejected),
         ("SQL_TIMEOUT", SqlTimeoutError),
         ("MCP_UNAVAILABLE", McpUnavailableError),
+        ("MCP_RATE_LIMITED", McpRateLimitError),
     ],
 )
 def test_error_mapping(code: str, exception: type[Exception]) -> None:
@@ -111,6 +114,33 @@ async def test_metric_policy_rejection_is_not_retried_or_counted(settings: MCPSe
         assert caught.value.column_name == "imagined_amount"
         assert session.call_tool.await_count == 1
         assert client.breaker.failures == 0
+    finally:
+        await client.aclose()
+
+
+async def test_rate_limit_is_not_retried_or_counted(settings: MCPSettings) -> None:
+    session = AsyncMock(spec=ClientSession)
+    session.call_tool.return_value = failure("MCP_RATE_LIMITED")
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[ClientSession]:
+        yield session
+
+    client = McpClient(settings, session_factory=factory)
+    try:
+        with pytest.raises(McpRateLimitError) as caught:
+            await client.call_tool(
+                "execute_readonly_query",
+                QueryArguments(sql="SELECT 1"),
+                deadline=Deadline(time.monotonic() + 5),
+            )
+        assert session.call_tool.await_count == 1
+        assert client.breaker.failures == 0
+        assert client.breaker.opened_at is None
+        node = node_failure("query", caught.value)
+        assert node.kind is FailureKind.MCP_RATE_LIMITED
+        assert not node.retryable
+        assert public_failure(node.kind) == "业务数据查询次数已达上限，请稍后重试。"
     finally:
         await client.aclose()
 

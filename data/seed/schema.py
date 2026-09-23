@@ -248,7 +248,7 @@ MCP_AUDIT_LOG = sa.Table(
     sa.Column("rows_returned", sa.Integer),
     sa.Column("duration_ms", sa.Integer),
     sa.CheckConstraint(
-        "outcome IN ('ok','policy_rejected','execution_error','timeout')",
+        "outcome IN ('ok','policy_rejected','execution_error','timeout','rate_limited')",
         name=sa.schema.conv("ck_audit_log_outcome"),
     ),
     schema="mcp",

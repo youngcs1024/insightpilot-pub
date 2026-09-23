@@ -19,6 +19,7 @@ MAX_EXCERPT_CHARS = 2000
 FAILURE_MESSAGES = {
     FailureKind.MCP_UNAVAILABLE: "数据源当前不可用，未能核对实际订单数据。",
     FailureKind.MCP_POLICY_REJECTED: "业务数据查询被权限策略拒绝。",
+    FailureKind.MCP_RATE_LIMITED: "业务数据查询次数已达上限，请稍后重试。",
     FailureKind.SQL_TIMEOUT: "业务数据查询超时。",
     FailureKind.SQL_GENERATION_FAILED: "业务数据查询生成失败。",
     FailureKind.SQL_VALIDATION_FAILED: "业务数据查询未通过校验。",

@@ -5,6 +5,7 @@ import secrets
 import socket
 import time
 from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from subprocess import DEVNULL, Popen, TimeoutExpired
 
@@ -63,8 +64,9 @@ async def business(
         await db.aclose()
 
 
-@pytest.fixture(scope="module")
-def mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
+@contextmanager
+def running_mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
+    """Start an independently authenticated MCP subprocess for one test scope."""
     migrate_business(database_stack)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -109,6 +111,13 @@ def mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
         except TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+
+@pytest.fixture(scope="module")
+def mcp_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
+    """Share one real MCP process within a module's ordinary integration cases."""
+    with running_mcp_endpoint(database_stack) as endpoint:
+        yield endpoint
 
 
 @pytest.fixture

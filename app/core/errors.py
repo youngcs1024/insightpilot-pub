@@ -288,6 +288,13 @@ class McpResultError(InsightPilotError):
     user_message = "The data source returned an unsupported result."
 
 
+class McpRateLimitError(RateLimitError):
+    """The authenticated MCP caller exhausted its server-side tool quota."""
+
+    code = "MCP_RATE_LIMITED"
+    user_message = "The data source tool limit was reached. Please try again later."
+
+
 class McpToolSchemaError(InsightPilotError):
     """A discovered MCP input schema cannot be represented without losing validation."""
 

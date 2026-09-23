@@ -9,7 +9,6 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
 from structlog.testing import capture_logs
 
 from app.core.errors import (
@@ -18,6 +17,7 @@ from app.core.errors import (
     SchemaMetadataError,
     SqlTimeoutError,
 )
+from app.schemas.mcp import McpErrorPayload, PolicyReason
 from app.schemas.schema_catalog import BUSINESS_TABLES
 from app.schemas.schema_tools import GetSchemaArgs
 from mcp_server.config import McpServerSettings
@@ -189,7 +189,7 @@ async def test_descriptor_exposes_new_tool_and_retires_internal_tool() -> None:
             _env_file=None,
             business={"password": "test-only"},
             audit={"password": "test-only"},
-            mcp={"auth_token": "test-only"},
+            mcp={"auth_token": "test-only-mcp-token-with-32-characters"},
         )
     )
     tools = {tool.name: tool for tool in await server.list_tools()}
@@ -200,8 +200,10 @@ async def test_descriptor_exposes_new_tool_and_retires_internal_tool() -> None:
     assert props["refresh"]["default"] is False
     assert props["tables"]["default"] is None
     assert descriptor["outputSchema"]["properties"]["rejected"]
-    with pytest.raises(ToolError):
-        await server.call_tool("get_schema", {"tables": []})
+    refusal = await server.call_tool("get_schema", {"tables": []})
+    assert refusal.is_error
+    payload = McpErrorPayload.model_validate(refusal.structured_content)
+    assert payload.reasons == [PolicyReason.INVALID_ARGUMENTS]
 
 
 async def test_stale_artifact_reported_in_ready(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -212,7 +214,7 @@ async def test_stale_artifact_reported_in_ready(monkeypatch: pytest.MonkeyPatch)
             _env_file=None,
             business={"password": "test-only"},
             audit={"password": "test-only"},
-            mcp={"auth_token": "test-only"},
+            mcp={"auth_token": "test-only-mcp-token-with-32-characters"},
         )
     )
     async with httpx.AsyncClient(

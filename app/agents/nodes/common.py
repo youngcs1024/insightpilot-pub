@@ -14,6 +14,7 @@ from app.core.errors import (
     McpAuthenticationError,
     McpCallTimeoutError,
     McpPolicyRejected,
+    McpRateLimitError,
     McpUnavailableError,
     RetrievalUnavailableError,
     SqlCorrectionExhaustedError,
@@ -37,6 +38,7 @@ def node_failure(node: str, exc: InsightPilotError) -> NodeFailure:
     kinds: dict[type[InsightPilotError], FailureKind] = {
         LlmStructuredOutputError: FailureKind.LLM_STRUCTURED_OUTPUT_FAILED,
         McpPolicyRejected: FailureKind.MCP_POLICY_REJECTED,
+        McpRateLimitError: FailureKind.MCP_RATE_LIMITED,
         McpAuthenticationError: FailureKind.MCP_UNAVAILABLE,
         McpCallTimeoutError: FailureKind.MCP_UNAVAILABLE,
         McpUnavailableError: FailureKind.MCP_UNAVAILABLE,

@@ -36,6 +36,7 @@ from app.core.errors import (
     McpAuthenticationError,
     McpCallTimeoutError,
     McpPolicyRejected,
+    McpRateLimitError,
     McpResultError,
     McpUnavailableError,
     OperationTimeoutError,
@@ -166,6 +167,8 @@ def decode_result(result: CallToolResult) -> QueryResultPayload:
             raise McpUnavailableError()
         case McpErrorCode.INVALID_RESULT:
             raise McpResultError()
+        case McpErrorCode.RATE_LIMITED:
+            raise McpRateLimitError()
 
 
 def raise_metric_error(result: CallToolResult) -> None:

@@ -44,6 +44,12 @@ class ColumnSpec(Contract):
     type: str
 
 
+class QueryWarning(StrEnum):
+    """Safe, machine-readable notices about server-side query bounds."""
+
+    ROW_CAP_CLAMPED = "ROW_CAP_CLAMPED"
+
+
 class QueryResultPayload(Contract):
     """Rows returned by the executor, excluding the truncation sentinel."""
 
@@ -56,6 +62,7 @@ class QueryResultPayload(Contract):
     rows: list[list[SqlValue]] = Field(max_length=RESULT_CEILING)
     row_count: int = Field(ge=0, le=RESULT_CEILING)
     result_truncated: bool
+    warnings: list[QueryWarning] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def check_shape(self) -> Self:
@@ -110,6 +117,7 @@ class McpErrorCode(StrEnum):
     SQL_EXECUTION_FAILED = "SQL_EXECUTION_FAILED"
     UNAVAILABLE = "MCP_UNAVAILABLE"
     INVALID_RESULT = "MCP_INVALID_RESULT"
+    RATE_LIMITED = "MCP_RATE_LIMITED"
 
 
 class SqlErrorKind(StrEnum):
