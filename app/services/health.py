@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
 
 import structlog
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.core.config_models import HealthSettings
 from app.core.errors import HealthProbeError, HealthProbeTimeoutError
-from app.db.session import Database
 
 logger = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.clients.mcp_client import McpClient
+    from app.core.config_models import HealthSettings
+    from app.db.session import Database
 
 
 class HealthChecks(BaseModel):
