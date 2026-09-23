@@ -31,6 +31,7 @@ __all__ = [
     "table_row",
 ]
 CORPUS_ROOT = Path(__file__).resolve().parent / "corpus"
+ADVERSARIAL_ROOT = CORPUS_ROOT / "adversarial"
 
 
 def validate_predecessors(documents: list[CorpusDocument]) -> None:
@@ -67,6 +68,7 @@ def load_corpus(root: Path = CORPUS_ROOT) -> list[CorpusDocument]:
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
         if path.is_file() or path.is_symlink()
+        if root != CORPUS_ROOT.resolve() or not path.is_relative_to(ADVERSARIAL_ROOT)
     }
     if actual != expected:
         raise CorpusValidationError(

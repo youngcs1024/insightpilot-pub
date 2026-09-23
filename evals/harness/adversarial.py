@@ -35,7 +35,9 @@ class AdversarialCase(Contract):
     def one_outcome(self) -> "AdversarialCase":
         """A safe rewrite cannot silently enter the rejection denominator."""
         rejecting = self.id.startswith("nl2sql-unsafe-")
-        if rejecting != bool(self.expected_reasons) or rejecting == (self.expected_limit is not None):
+        if rejecting != bool(self.expected_reasons) or rejecting == (
+            self.expected_limit is not None
+        ):
             raise EvaluationError("Ambiguous adversarial SQL expectation")
         if not rejecting and (self.database_read_only or self.expected_limit != self.max_rows + 1):
             raise EvaluationError("Invalid safe rewrite expectation")
@@ -87,9 +89,10 @@ def load_adversaries(path: Path = CASES) -> list[AdversarialCase]:
     ids = [case.id for case in cases]
     if len(ids) != len(set(ids)):
         raise EvaluationError("Duplicate adversarial SQL case")
-    if sum(bool(case.expected_reasons) for case in cases) < MIN_REJECTIONS or sum(
-        case.expected_limit is not None for case in cases
-    ) < MIN_REWRITES:
+    if (
+        sum(bool(case.expected_reasons) for case in cases) < MIN_REJECTIONS
+        or sum(case.expected_limit is not None for case in cases) < MIN_REWRITES
+    ):
         raise EvaluationError("Incomplete adversarial SQL dataset")
     return cases
 
@@ -99,7 +102,9 @@ def _outer_limit(sql: str) -> int | None:
     parsed = sqlglot.parse_one(sql, dialect="postgres")
     limit = parsed.args.get("limit")
     expression = limit.expression if isinstance(limit, exp.Limit) else None
-    return int(expression.this) if isinstance(expression, exp.Literal) and expression.is_int else None
+    if isinstance(expression, exp.Literal) and expression.is_int:
+        return int(expression.this)
+    return None
 
 
 def evaluate(cases: list[AdversarialCase], path: Path = CASES) -> AdversarialReport:

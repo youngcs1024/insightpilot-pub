@@ -9,10 +9,10 @@ from app.schemas.mcp import PolicyReason, ValidationStatus
 from evals.harness.adversarial import AdversarialCase, load_adversaries
 from mcp_server.db import BusinessDatabase
 from mcp_server.tools.execute_query import QueryExecutor
-from tests.integration.mcp_support import business, client, mcp_endpoint, query
+from tests.integration.mcp_support import business, business_tables, client, mcp_endpoint, query
 
 pytestmark = pytest.mark.integration
-__all__ = ["business", "client", "mcp_endpoint"]
+__all__ = ["business", "business_tables", "client", "mcp_endpoint"]
 
 CASES = load_adversaries()
 REJECTIONS = [case for case in CASES if case.expected_reasons]

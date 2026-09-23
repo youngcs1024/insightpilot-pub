@@ -19,8 +19,8 @@ from app.schemas.model_runtime import (
 )
 from app.services.llm.contracts import CompletionRequest
 from tests.e2e.contracts import Scenario, ScriptRequest, ScriptStatus
-from tests.e2e.scripts import Script
 from tests.e2e.redteam_scripts import RedTeamScript
+from tests.e2e.scripts import Script
 
 RED_TEAM = {
     Scenario.RED_SQL,

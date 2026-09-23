@@ -116,6 +116,14 @@ def test_extra_file_fails(one_source: Path) -> None:
         load_corpus(one_source)
 
 
+def test_redteam_corpus_is_excluded_from_normal_inventory() -> None:
+    ordinary = load_corpus()
+    adversarial = load_corpus(ROOT / "data/corpus/adversarial")
+    assert ordinary
+    assert len(adversarial) == 3
+    assert all(not document.entry.path.startswith("adversarial/") for document in ordinary)
+
+
 def test_invalid_utf8_fails(one_source: Path) -> None:
     (one_source / "rule.md").write_bytes(b"\xff\xfe\x00")
     with pytest.raises(CorpusValidationError):

@@ -30,7 +30,10 @@ E2E_ENVIRONMENT_KEYS = {
     ),
 }
 MODEL_CONFIG = '{"base_url":"http://inference:8100","auth_token":"e2e-synthetic-only"}'
-RETRIEVAL_CONFIG = '{"enabled":true,"milvus":{"uri":"http://milvus:19530"}}'
+RETRIEVAL_CONFIG = (
+    '{"enabled":true,"milvus":{"uri":"http://milvus:19530",'
+    '"collection":"${IP_E2E_COLLECTION:-kb_chunks}"}}'
+)
 
 
 class Service(BaseModel):

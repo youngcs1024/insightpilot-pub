@@ -40,6 +40,109 @@ async def run(options: Options) -> Report:
         return await run_suite(cases, options, config, generate, canonical)
 
 
+def run_injection(args: dict[str, object], parser: argparse.ArgumentParser) -> int:
+    """Validate and execute the isolated real-model injection suite."""
+    if any(
+        args[key] is not None
+        for key in (
+            "threshold_block_rate",
+            "threshold_result_accuracy",
+            "threshold_accuracy",
+            "split",
+        )
+    ):
+        parser.error("unrelated evaluation options supplied to injection")
+    selected = injection.Options.model_validate(
+        {
+            "api_url": args["api_url"],
+            "model_label": args["model_label"],
+            "model_config_path": args["model_config"],
+            "collection": args["collection"],
+            "report": args["report"],
+            **({"repeats": args["repeats"]} if args["repeats"] is not None else {}),
+            **(
+                {"threshold_resistance": args["threshold_resistance"]}
+                if args["threshold_resistance"] is not None
+                else {}
+            ),
+            **({"timeout_s": args["timeout_s"]} if args["timeout_s"] is not None else {}),
+        }
+    )
+    result = asyncio.run(injection.run(selected))
+    target = injection.write_report(result, selected.report)
+    print(f"Report: {target}")
+    return injection.exit_code(result, selected.threshold_resistance)
+
+
+def run_adversarial(args: dict[str, object], parser: argparse.ArgumentParser) -> int:
+    """Apply the offline SQL block and safe rewrite gates."""
+    threshold = args["threshold_block_rate"]
+    if threshold is None:
+        parser.error("--threshold-block-rate is required for adversarial")
+    if not isinstance(threshold, float) or not 0 <= threshold <= 1:
+        parser.error("--threshold-block-rate must be between zero and one")
+    if any(
+        args[key] is not None
+        for key in (
+            "threshold_result_accuracy",
+            "threshold_accuracy",
+            "threshold_resistance",
+            "repeats",
+            "split",
+            "api_url",
+            "model_label",
+            "model_config",
+            "collection",
+            "timeout_s",
+        )
+    ):
+        parser.error("unrelated evaluation options supplied to adversarial")
+    result = evaluate_adversarial(load_adversaries())
+    directory = args["report"]
+    if not isinstance(directory, Path):
+        parser.error("--report must be a path")
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"adversarial_{result.run_id}.json"
+    target.write_text(result.model_dump_json(indent=2) + "\n")
+    print(f"Report: {target}")
+    return adversarial_exit_code(result, threshold)
+
+
+def run_standard(args: dict[str, object], parser: argparse.ArgumentParser) -> int:
+    """Preserve the existing routing and ordinary NL2SQL CLI contracts."""
+    if args.pop("threshold_block_rate") is not None:
+        parser.error("--threshold-block-rate applies only to adversarial")
+    if any(
+        args.pop(key) is not None
+        for key in (
+            "threshold_resistance",
+            "api_url",
+            "model_label",
+            "model_config",
+            "collection",
+            "timeout_s",
+        )
+    ):
+        parser.error("injection options apply only to injection")
+    if args["suite"] == "routing":
+        if args.pop("threshold_result_accuracy") is not None:
+            parser.error("--threshold-result-accuracy applies only to nl2sql")
+        args.pop("seed_manifest")
+        return routing_cli.run(
+            routing.Options.model_validate(
+                {key: value for key, value in args.items() if value is not None}
+            )
+        )
+    if args.pop("threshold_accuracy") is not None or args.pop("split") is not None:
+        parser.error("--threshold-accuracy and --split apply only to routing")
+    args["repeats"] = args["repeats"] if args["repeats"] is not None else 1
+    selected = Options.model_validate(args)
+    result = asyncio.run(run(selected))
+    write_report(result, selected.report)
+    print(f"Report: {selected.report / 'nl2sql_latest.md'}")
+    return exit_code(result, selected.threshold_result_accuracy)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Write reports before applying gates; failures never print secret inputs."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -72,82 +175,10 @@ def main(argv: list[str] | None = None) -> int:
         if command_name == "select-routing":
             return routing_cli.select(args["measurements"])
         if args["suite"] == "injection":
-            if any(
-                args[key] is not None
-                for key in (
-                    "threshold_block_rate", "threshold_result_accuracy",
-                    "threshold_accuracy", "split",
-                )
-            ):
-                parser.error("unrelated evaluation options supplied to injection")
-            options = injection.Options.model_validate(
-                {
-                    "api_url": args["api_url"],
-                    "model_label": args["model_label"],
-                    "model_config_path": args["model_config"],
-                    "collection": args["collection"],
-                    "report": args["report"],
-                    **({"repeats": args["repeats"]} if args["repeats"] is not None else {}),
-                    **(
-                        {"threshold_resistance": args["threshold_resistance"]}
-                        if args["threshold_resistance"] is not None
-                        else {}
-                    ),
-                    **({"timeout_s": args["timeout_s"]} if args["timeout_s"] is not None else {}),
-                }
-            )
-            report = asyncio.run(injection.run(options))
-            target = injection.write_report(report, options.report)
-            print(f"Report: {target}")
-            return injection.exit_code(report, options.threshold_resistance)
+            return run_injection(args, parser)
         if args["suite"] == "adversarial":
-            if args["threshold_block_rate"] is None:
-                parser.error("--threshold-block-rate is required for adversarial")
-            if not 0 <= args["threshold_block_rate"] <= 1:
-                parser.error("--threshold-block-rate must be between zero and one")
-            if any(
-                args[key] is not None
-                for key in (
-                    "threshold_result_accuracy", "threshold_accuracy", "threshold_resistance",
-                    "repeats", "split", "api_url", "model_label", "model_config",
-                    "collection", "timeout_s",
-                )
-            ):
-                parser.error("unrelated evaluation options supplied to adversarial")
-            report = evaluate_adversarial(load_adversaries())
-            directory = args["report"]
-            directory.mkdir(parents=True, exist_ok=True)
-            target = directory / f"adversarial_{report.run_id}.json"
-            target.write_text(report.model_dump_json(indent=2) + "\n")
-            print(f"Report: {target}")
-            return adversarial_exit_code(report, args["threshold_block_rate"])
-        if args.pop("threshold_block_rate") is not None:
-            parser.error("--threshold-block-rate applies only to adversarial")
-        if any(
-            args.pop(key) is not None
-            for key in (
-                "threshold_resistance", "api_url", "model_label", "model_config",
-                "collection", "timeout_s",
-            )
-        ):
-            parser.error("injection options apply only to injection")
-        if args["suite"] == "routing":
-            if args.pop("threshold_result_accuracy") is not None:
-                parser.error("--threshold-result-accuracy applies only to nl2sql")
-            args.pop("seed_manifest")
-            return routing_cli.run(
-                routing.Options.model_validate(
-                    {key: value for key, value in args.items() if value is not None}
-                )
-            )
-        if args.pop("threshold_accuracy") is not None or args.pop("split") is not None:
-            parser.error("--threshold-accuracy and --split apply only to routing")
-        args["repeats"] = args["repeats"] if args["repeats"] is not None else 1
-        options = Options.model_validate(args)
-        report = asyncio.run(run(options))
-        write_report(report, options.report)
-        print(f"Report: {options.report / 'nl2sql_latest.md'}")
-        return exit_code(report, options.threshold_result_accuracy)
+            return run_adversarial(args, parser)
+        return run_standard(args, parser)
     except (InsightPilotError, ValidationError, OSError):
         print("Evaluation could not produce valid evidence; check configuration and services.")
         return 2

@@ -1,6 +1,7 @@
 """Eight authored attacks through isolated API, MCP, PostgreSQL and Milvus."""
 
 from collections.abc import AsyncIterator
+from http import HTTPStatus
 from uuid import UUID
 
 import pytest
@@ -36,7 +37,7 @@ async def redteam_session(
 
 
 @pytest.mark.parametrize("case", load_injections(), ids=lambda case: case.id)
-async def test_injection_e2e(
+async def test_injection_e2e(  # noqa: PLR0915 -- one parameterized end-to-end contract.
     redteam_session: Session, case: InjectionCase
 ) -> None:
     """Structural and persisted-evidence assertions do not grade scripted model quality."""
@@ -52,11 +53,11 @@ async def test_injection_e2e(
             await owner.complete()
             await session.configure(Scenario.RED_CROSS_USER)
             denied = await session.client.get(f"/api/v1/conversations/{owner.cid}")
-            assert denied.status_code == 404
+            assert denied.status_code == HTTPStatus.NOT_FOUND
             denied_evidence = await session.client.get(
                 f"/api/v1/conversations/{owner.cid}/turns/{owned_turn.id}/evidence"
             )
-            assert denied_evidence.status_code == 404
+            assert denied_evidence.status_code == HTTPStatus.NOT_FOUND
             turn = await session.ask(case.question)
             assert PRIVATE_MARKER not in turn.content
             assert not turn.answer or PRIVATE_MARKER not in turn.answer.markdown
@@ -101,9 +102,11 @@ async def test_injection_e2e(
         assert (await session.evidence(turn)).data is not None
         assert (await session.evidence(turn)).knowledge is not None
         causal = [claim for claim in turn.answer.claims if "导致" in claim.text]
-        assert causal and all(claim.kind is ClaimKind.INFERENCE for claim in causal)
+        assert causal
+        assert all(claim.kind is ClaimKind.INFERENCE for claim in causal)
     else:
-        assert case.kind is InjectionKind.EXPLICIT_WIDEN and case.followup
+        assert case.kind is InjectionKind.EXPLICIT_WIDEN
+        assert case.followup
         first = await session.evidence(turn)
         assert first.data is not None
         assert first.data.data.row_count == 0
@@ -113,6 +116,7 @@ async def test_injection_e2e(
         assert following.data is not None
         assert following.data.data.rows
         assert "o.region_id IN (2)" not in following.data.data.sql
-        assert second.answer is not None and second.answer.assumptions
-        assert len((await session.history()).items) == 4
+        assert second.answer is not None
+        assert second.answer.assumptions
+        assert len((await session.history()).items) == len((turn, second)) * 2
     await session.complete()

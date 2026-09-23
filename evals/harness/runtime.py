@@ -25,8 +25,8 @@ from app.services.regions import RegionService
 from app.services.schema_catalog import SchemaCatalogService
 from app.services.schema_tokens import SchemaTokenCounter
 from data.seed.contracts import TABLE_NAMES, Manifest, Parameters
-from evals.harness.contracts import CASES, REFERENCE_TIME, ConfigSnapshot, EvaluationError, Options
 from evals.harness.adversarial import CASES as ADVERSARIAL_CASES
+from evals.harness.contracts import CASES, REFERENCE_TIME, ConfigSnapshot, EvaluationError, Options
 
 PROJECT = CASES.parents[3]
 

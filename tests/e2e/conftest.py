@@ -1,6 +1,7 @@
 """All stack setup is fixture-owned, never triggered during collection."""
 
 from collections.abc import AsyncIterator
+
 import pytest
 
 from tests.e2e.client import Session, open_session

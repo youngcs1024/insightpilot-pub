@@ -1,6 +1,6 @@
 ---
 title: 退货资料检索测试
-doc_type: analysis
+doc_type: analysis_note
 effective_from: 2026-01-01
 effective_to: null
 supersedes: null
