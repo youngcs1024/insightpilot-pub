@@ -10,12 +10,17 @@ from typing import TYPE_CHECKING, Literal
 from urllib.parse import quote_plus
 
 import asyncpg
+import psycopg
 import pytest
 from psycopg import sql
 from pydantic import SecretStr
 
+from app.core.errors import SqlExecutionError
+from mcp_server.db import BusinessDatabase
+from mcp_server.tools.execute_query import QueryExecutor
 from scripts.deployment import Command, execute
 from scripts.deployment_contracts import environment_issues
+from tests.integration.mcp_support import business, business_tables
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -23,6 +28,7 @@ if TYPE_CHECKING:
     from tests.database_support import DatabaseStack
 
 pytestmark = pytest.mark.integration
+__all__ = ["business", "business_tables"]
 Role = Literal["postgres", "app_rw", "etl_rw", "mcp_ro", "mcp_audit"]
 Database = Literal["insightpilot_app", "insightpilot_business"]
 
@@ -83,6 +89,48 @@ async def test_mcp_role_cannot_insert(database_stack: DatabaseStack) -> None:
             (asyncpg.ReadOnlySQLTransactionError, asyncpg.InsufficientPrivilegeError)
         ):
             await conn.execute("CREATE TABLE biz.t(i int)")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO biz.regions(region_id) VALUES (99)",
+        "UPDATE biz.regions SET region_id = 99",
+        "DELETE FROM biz.regions",
+        "CREATE TABLE biz.boundary_forbidden(value integer)",
+    ],
+)
+async def test_mcp_role_cannot_insert_update_delete_create(
+    database_stack: DatabaseStack, business_tables: None, statement: str
+) -> None:
+    """The login's read-only default rejects all four write shapes."""
+    async with connection(database_stack, "mcp_ro") as conn:
+        with pytest.raises(asyncpg.ReadOnlySQLTransactionError):
+            await conn.execute(statement)
+
+
+async def test_mcp_role_read_only_transaction_enforced(database_stack: DatabaseStack) -> None:
+    """A new transaction inherits the role restriction before any MCP policy runs."""
+    async with connection(database_stack, "mcp_ro") as conn:
+        transaction = conn.transaction()
+        await transaction.start()
+        try:
+            assert await conn.fetchval("SHOW transaction_read_only") == "on"
+            with pytest.raises(asyncpg.ReadOnlySQLTransactionError):
+                await conn.execute("CREATE TABLE biz.boundary_forbidden(value integer)")
+        finally:
+            await transaction.rollback()
+
+
+async def test_executor_called_directly_still_rejected(business: BusinessDatabase) -> None:
+    """Bypass SQLValidator: the actual executor and database still reject INSERT."""
+    executor = QueryExecutor(business)
+    before = await executor.execute("SELECT count(*) AS n FROM biz.regions WHERE region_id = 99")
+    with pytest.raises(SqlExecutionError) as caught:
+        await executor.execute("INSERT INTO biz.regions(region_id) VALUES (99)")
+    assert isinstance(caught.value.__cause__, psycopg.errors.ReadOnlySqlTransaction)
+    after = await executor.execute("SELECT count(*) AS n FROM biz.regions WHERE region_id = 99")
+    assert after.rows == before.rows
 
 
 async def test_mcp_role_statement_timeout_is_set(database_stack: DatabaseStack) -> None:

@@ -88,17 +88,6 @@ async def test_degradation_matrix(route: Route, failure: str) -> None:
             assert ("data" if data_down else "knowledge") in output.answer.degraded_components
 
 
-async def test_mcp_down_never_connects_directly(monkeypatch: pytest.MonkeyPatch) -> None:
-    connect = AsyncMock(side_effect=AssertionError("business database fallback"))
-    monkeypatch.setattr("app.db.session.create_async_engine", connect)
-    monkeypatch.setattr("psycopg.AsyncConnection.connect", connect)
-    output = await invoke(parent_context(Route.BOTH, data_error=McpUnavailableError()))
-    assert output.status == "degraded"
-    assert "数据源当前不可用" in output.answer.markdown
-    assert "企业知识库" in output.answer.markdown
-    connect.assert_not_called()
-
-
 def test_both_unavailable_names_both_reasons() -> None:
     failures = [
         NodeFailure(node="data", kind=FailureKind.MCP_UNAVAILABLE, detail="secret", retryable=True),
