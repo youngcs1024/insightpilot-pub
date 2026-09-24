@@ -27,8 +27,9 @@ def identity() -> TurnIdentity:
     return TurnIdentity(user_id=uuid4(), conversation_id=uuid4(), turn_id=uuid4())
 
 
-@pytest.mark.parametrize("status", [TurnStatus.FAILED, TurnStatus.ABSTAINED,
-                                   TurnStatus.DEGRADED, TurnStatus.RUNNING])
+@pytest.mark.parametrize(
+    "status", [TurnStatus.FAILED, TurnStatus.ABSTAINED, TurnStatus.DEGRADED, TurnStatus.RUNNING]
+)
 async def test_ineligible_turn_never_calls_model(status: TurnStatus) -> None:
     llm = FakeChatModel([])
     assert not (await extract(extraction_input(status=status), llm, deadline=deadline())).candidates
@@ -93,23 +94,33 @@ async def test_durable_preference_stored(settings: Settings) -> None:
     assert llm.calls[0].role is ModelRole.MEMORY_EXTRACT
 
 
-@pytest.mark.parametrize("quote", ["按申请时间算", "助手说的偏好", " ", "以后退款率 都按退款申请时间算"])
+@pytest.mark.parametrize(
+    "quote", ["按申请时间算", "助手说的偏好", " ", "以后退款率 都按退款申请时间算"]
+)
 async def test_quote_not_in_message_rejected(quote: str) -> None:
     llm = FakeChatModel([MemoryExtraction(candidates=[candidate(evidence_quote=quote)])])
     with capture_logs() as logs:
         result = await extract(extraction_input(), llm, deadline=deadline())
     assert not result.candidates
-    assert any(event.get("reason") == "evidence_quote" and event["log_level"] == "warning"
-               for event in logs)
+    assert any(
+        event.get("reason") == "evidence_quote" and event["log_level"] == "warning"
+        for event in logs
+    )
     assert DURABLE not in str(logs)
 
 
-@pytest.mark.parametrize("update", [
-    {"evidence_quote": ""}, {"memory_type": "world_fact"},
-    {"memory_type": "region_focus"}, {"confidence": float("nan")},
-    {"confidence": 1.1}, {"summary": "x" * 201},
-    {"content": {"metric_key": "refund_rate", "patch": {"expression": "x" * 2001}}},
-])
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"evidence_quote": ""},
+        {"memory_type": "world_fact"},
+        {"memory_type": "region_focus"},
+        {"confidence": float("nan")},
+        {"confidence": 1.1},
+        {"summary": "x" * 201},
+        {"content": {"metric_key": "refund_rate", "patch": {"expression": "x" * 2001}}},
+    ],
+)
 def test_invalid_candidate_schema(update: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         candidate(**update)
@@ -134,7 +145,7 @@ async def test_extraction_failure_does_not_fail_turn(settings: Settings) -> None
     service._write = AsyncMock()
     counter = Mock()
     with pytest.MonkeyPatch.context() as patch, capture_logs() as logs:
-        patch.setattr(background, "_failures", counter)
+        patch.setattr("app.services.memory.extract._failures", counter)
         task = background.spawn(service.run(identity()), name="extract-turn-memory")
         with pytest.raises(MemoryExtractionError):
             await task

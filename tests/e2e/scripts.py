@@ -17,6 +17,7 @@ from app.agents.contracts import (
 from app.core.deadline import Deadline
 from app.core.llm_config import ModelRole
 from app.schemas.knowledge import KnowledgeDraft, KnowledgePassage
+from app.schemas.memory_extraction import MemoryExtraction, MemoryExtractionInput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
 from app.schemas.synthesis import (
     CellReference,
@@ -94,6 +95,16 @@ def data_claim(view: DataGenerationView, *, refund: bool) -> Claim:
     )
 
 
+def memory_response(inputs: list[str]) -> MemoryExtraction:
+    """Ordinary fixture questions are transient; reject malformed completion envelopes."""
+    source = MemoryExtractionInput.model_validate_json(inputs[0])
+    assert source.role == "assistant"
+    assert source.status == "succeeded"
+    assert not source.answer.abstained
+    assert not source.answer.degraded_components
+    return MemoryExtraction()
+
+
 class Script:
     """No live fallback; a schema can be consumed only the declared number of times."""
 
@@ -102,6 +113,8 @@ class Script:
         self.status = ScriptStatus()
         self.counts: Counter[str] = Counter()
         self.expected = Counter({"RouteDecision": 1})
+        if scenario in {Scenario.DATA, Scenario.FOLLOWUP, Scenario.BOTH, Scenario.KNOWLEDGE}:
+            self.expected["MemoryExtraction"] = 1
         if scenario in {Scenario.DATA, Scenario.FOLLOWUP, Scenario.BOTH, Scenario.CHAOS}:
             self.expected.update({"MetricIntent": 1, "SqlGeneratorOutput": 1})
         if scenario in {Scenario.DATA, Scenario.FOLLOWUP}:
@@ -125,10 +138,17 @@ class Script:
         assert self.counts[name] < self.expected[name], "Unexpected schema"
         self.counts[name] += 1
         self.status.calls.append(name)
-        response = self.response(name, human_inputs(request))
+        inputs = human_inputs(request)
+        response = (
+            memory_response(inputs) if name == "MemoryExtraction" else self.response(name, inputs)
+        )
         fake = FakeChatModel([response])
         validated = await fake.generate_structured(
-            ModelRole.ROUTER if name == "RouteDecision" else ModelRole.SYNTHESIS,
+            ModelRole.ROUTER
+            if name == "RouteDecision"
+            else ModelRole.MEMORY_EXTRACT
+            if name == "MemoryExtraction"
+            else ModelRole.SYNTHESIS,
             [HumanMessage(content=content) for content in human_inputs(request)],
             type(response),
             deadline=Deadline(time.monotonic() + 10),

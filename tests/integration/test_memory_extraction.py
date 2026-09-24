@@ -38,15 +38,18 @@ async def test_background_persists_owned_provenance(
     llm = FakeChatModel([MemoryExtraction(candidates=[candidate()])])
     await MemoryExtractionService(extraction_db, settings, llm).run(identity)
     async with extraction_db.session() as session:
-        stored = await MemoryRepository(session, identity.user_id).list_active(MemoryType.METRIC_OVERRIDE)
+        stored = await MemoryRepository(session, identity.user_id).list_active(
+            MemoryType.METRIC_OVERRIDE
+        )
     assert len(stored) == 1
     assert stored[0].source_turn_id == identity.turn_id
     assert stored[0].content == candidate().content
     assert "以后退款率都按退款申请时间算" in llm.calls[0].messages[1].content
 
 
-@pytest.mark.parametrize("status", [TurnStatus.FAILED, TurnStatus.ABSTAINED,
-                                   TurnStatus.DEGRADED, TurnStatus.RUNNING])
+@pytest.mark.parametrize(
+    "status", [TurnStatus.FAILED, TurnStatus.ABSTAINED, TurnStatus.DEGRADED, TurnStatus.RUNNING]
+)
 async def test_persisted_status_gate(
     extraction_db: Database, settings: Settings, status: TurnStatus
 ) -> None:
@@ -55,7 +58,9 @@ async def test_persisted_status_gate(
     await MemoryExtractionService(extraction_db, settings, llm).run(identity)
     assert not llm.calls
     async with extraction_db.session() as session:
-        assert not await MemoryRepository(session, identity.user_id).list_active(MemoryType.METRIC_OVERRIDE)
+        assert not await MemoryRepository(session, identity.user_id).list_active(
+            MemoryType.METRIC_OVERRIDE
+        )
 
 
 async def test_existing_active_memory_is_preserved(
@@ -67,23 +72,30 @@ async def test_existing_active_memory_is_preserved(
     service = MemoryExtractionService(extraction_db, settings, llm)
     await service.run(first)
     async with extraction_db.session() as session:
-        original = await MemoryRepository(session, first.user_id).list_history(MemoryType.METRIC_OVERRIDE)
+        original = await MemoryRepository(session, first.user_id).list_history(
+            MemoryType.METRIC_OVERRIDE
+        )
     await service.run(second)
     async with extraction_db.session() as session:
-        assert await MemoryRepository(session, first.user_id).list_history(MemoryType.METRIC_OVERRIDE) == original
+        assert (
+            await MemoryRepository(session, first.user_id).list_history(MemoryType.METRIC_OVERRIDE)
+            == original
+        )
 
 
-async def test_same_batch_first_candidate_wins(
-    extraction_db: Database, settings: Settings
-) -> None:
+async def test_same_batch_first_candidate_wins(extraction_db: Database, settings: Settings) -> None:
     identity = await source_pair(extraction_db, extraction_input())
     changed = candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
-    service = MemoryExtractionService(extraction_db, settings, FakeChatModel([
-        MemoryExtraction(candidates=[candidate(), changed])
-    ]))
+    service = MemoryExtractionService(
+        extraction_db,
+        settings,
+        FakeChatModel([MemoryExtraction(candidates=[candidate(), changed])]),
+    )
     await service.run(identity)
     async with extraction_db.session() as session:
-        stored = await MemoryRepository(session, identity.user_id).list_active(MemoryType.METRIC_OVERRIDE)
+        stored = await MemoryRepository(session, identity.user_id).list_active(
+            MemoryType.METRIC_OVERRIDE
+        )
     assert len(stored) == 1
     assert stored[0].content == candidate().content
 
@@ -112,7 +124,9 @@ async def test_cross_session_concurrent_writes_have_one_active_memory(
     async with asyncio.timeout(10):
         await asyncio.gather(service.run(first), service.run(second))
     async with extraction_db.session() as session:
-        stored = await MemoryRepository(session, first.user_id).list_history(MemoryType.METRIC_OVERRIDE)
+        stored = await MemoryRepository(session, first.user_id).list_history(
+            MemoryType.METRIC_OVERRIDE
+        )
     assert len(stored) == 1
     assert stored[0].source_turn_id in {first.turn_id, second.turn_id}
 
@@ -122,9 +136,11 @@ async def test_other_users_memory_does_not_block_write(
 ) -> None:
     first = await source_pair(extraction_db, extraction_input())
     other = await source_pair(extraction_db, extraction_input())
-    service = MemoryExtractionService(extraction_db, settings, FakeChatModel([
-        MemoryExtraction(candidates=[candidate()]) for _ in range(2)
-    ]))
+    service = MemoryExtractionService(
+        extraction_db,
+        settings,
+        FakeChatModel([MemoryExtraction(candidates=[candidate()]) for _ in range(2)]),
+    )
     await service.run(first)
     await service.run(other)
     async with extraction_db.session() as session:
@@ -161,16 +177,20 @@ async def test_write_batch_failure_rolls_back_all_candidates(
         return await original(repo, value)
 
     monkeypatch.setattr(MemoryRepository, "create", fail_second)
-    service = MemoryExtractionService(extraction_db, settings, FakeChatModel([
-        MemoryExtraction(candidates=[candidate(), other_type])
-    ]))
+    service = MemoryExtractionService(
+        extraction_db,
+        settings,
+        FakeChatModel([MemoryExtraction(candidates=[candidate(), other_type])]),
+    )
     with pytest.raises(MemoryExtractionError):
         await service.run(identity)
     async with extraction_db.session() as session:
         repo = MemoryRepository(session, identity.user_id)
         assert not await repo.list_history(MemoryType.METRIC_OVERRIDE)
         assert not await repo.list_history(MemoryType.TERMINOLOGY)
-        turn = await TurnRepository(session, identity.user_id).get(identity.conversation_id, identity.turn_id)
+        turn = await TurnRepository(session, identity.user_id).get(
+            identity.conversation_id, identity.turn_id
+        )
         assert turn.status is TurnStatus.SUCCEEDED
 
 

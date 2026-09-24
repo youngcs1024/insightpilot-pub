@@ -9,8 +9,8 @@ import pytest
 from app.core.config_models import Settings
 from app.core.errors import LlmUnavailableError
 from app.core.llm_config import ModelRole
-from scripts import dev_extract
 from app.schemas.memory_extraction import MemoryExtraction
+from scripts import dev_extract
 from tests.memory_extraction_support import DURABLE, TRANSIENT, candidate
 
 
@@ -46,7 +46,10 @@ async def test_preview_failure_closes_client(
 
 @pytest.mark.parametrize("show", [False, True])
 def test_preview_cli_output(
-    settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], show: bool
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    show: bool,
 ) -> None:
     config = dev_extract.ExtractionProcessSettings(_env_file=None, llm=settings.llm)
     monkeypatch.setattr(dev_extract.ExtractionProcessSettings, "load", lambda: config)
@@ -61,7 +64,10 @@ def test_preview_cli_output(
 
 @pytest.mark.parametrize("error", [LlmUnavailableError("private-upstream-detail"), TimeoutError()])
 def test_preview_cli_failure_is_nonzero_and_safe(
-    settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], error: Exception
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
 ) -> None:
     config = dev_extract.ExtractionProcessSettings(_env_file=None, llm=settings.llm)
     monkeypatch.setattr(dev_extract.ExtractionProcessSettings, "load", lambda: config)

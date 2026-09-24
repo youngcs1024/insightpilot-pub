@@ -5,6 +5,7 @@ from time import monotonic
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
+from opentelemetry import metrics
 from pydantic import ValidationError as PydanticValidationError
 
 from app.agents.contracts import Answer, TurnIdentity
@@ -29,6 +30,7 @@ from app.schemas.memory_extraction import MemoryExtraction, MemoryExtractionInpu
 
 logger = structlog.get_logger(__name__)
 MIN_CONFIDENCE = 0.7
+_failures = metrics.get_meter(__name__).create_counter("memory_extraction_failures")
 
 
 def eligible(inputs: MemoryExtractionInput) -> bool:
@@ -69,7 +71,10 @@ async def extract(
     for candidate in result.candidates:
         if candidate.confidence < MIN_CONFIDENCE:
             logger.info("memory_candidate_rejected", reason="confidence")
-        elif not candidate.evidence_quote.strip() or candidate.evidence_quote not in inputs.user_message:
+        elif (
+            not candidate.evidence_quote.strip()
+            or candidate.evidence_quote not in inputs.user_message
+        ):
             logger.warning("memory_candidate_rejected", reason="evidence_quote")
         else:
             accepted.candidates.append(candidate)
@@ -91,16 +96,22 @@ class MemoryExtractionService:
         deadline = Deadline(monotonic() + self.timeout_s)
         try:
             with observe("memory_extract", TraceMetadata(turn_id=str(identity.turn_id))):
-                async with asyncio.timeout(deadline.remaining()):
-                    inputs = await self._load(identity)
-                    if inputs is None:
-                        return
-                    result = await extract(inputs, self.llm, deadline=deadline)
-                    if result.candidates:
-                        await self._write(identity, result)
+                await self._process(identity, deadline)
         except Exception:
-            logger.exception("memory_extraction_failed", turn_id=str(identity.turn_id), exc_info=False)
+            _failures.add(1)
+            logger.exception(
+                "memory_extraction_failed", turn_id=str(identity.turn_id), exc_info=False
+            )
             raise MemoryExtractionError() from None
+
+    async def _process(self, identity: TurnIdentity, deadline: Deadline) -> None:
+        async with asyncio.timeout(deadline.remaining()):
+            inputs = await self._load(identity)
+            if inputs is None:
+                return
+            result = await extract(inputs, self.llm, deadline=deadline)
+            if result.candidates:
+                await self._write(identity, result)
 
     async def _load(self, identity: TurnIdentity) -> MemoryExtractionInput | None:
         async with (
@@ -112,7 +123,9 @@ class MemoryExtractionService:
             if turn is None:
                 raise NotFoundError()
             if turn.role is not TurnRole.ASSISTANT or turn.status is not TurnStatus.SUCCEEDED:
-                logger.info("memory_extraction_rejected", reason="turn_status", status=turn.status.value)
+                logger.info(
+                    "memory_extraction_rejected", reason="turn_status", status=turn.status.value
+                )
                 return None
             if turn.answer is None or turn.reply_to_turn_id is None:
                 raise ConflictError("Memory extraction requires completed turn provenance")
@@ -126,9 +139,7 @@ class MemoryExtractionService:
                 answer=Answer.model_validate(turn.answer),
             )
 
-    async def _write(
-        self, identity: TurnIdentity, result: MemoryExtraction
-    ) -> list[StoredMemory]:
+    async def _write(self, identity: TurnIdentity, result: MemoryExtraction) -> list[StoredMemory]:
         saved: list[StoredMemory] = []
         async with (
             asyncio.timeout(self.database_timeout_s),

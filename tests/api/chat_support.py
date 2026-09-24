@@ -18,12 +18,12 @@ from app.agents.runtime import RuntimeContext
 from app.agents.state import GraphOutput
 from app.api.dependencies import get_current_user
 from app.application import create_app
-from app.core.config_models import Settings
 from app.core.background import shutdown
-from app.schemas.memory_extraction import MemoryExtraction
+from app.core.config_models import Settings
 from app.db.models import TurnStatus
 from app.db.session import Database
 from app.schemas.auth import UserResponse
+from app.schemas.memory_extraction import MemoryExtraction
 from tests.agents.support import invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.factories import business_schema
@@ -124,7 +124,9 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
         response = await client.post("/api/v1/conversations", json={})
         assert response.status_code == CREATED, response.text
         try:
-            yield Harness(application, client, graph, auth_database, user, UUID(response.json()["id"]))
+            yield Harness(
+                application, client, graph, auth_database, user, UUID(response.json()["id"])
+            )
         finally:
             await shutdown(settings.http.shutdown_timeout_s)
 

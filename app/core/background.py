@@ -5,10 +5,8 @@ from collections.abc import Coroutine
 from typing import Any
 
 import structlog
-from opentelemetry import metrics
 
 logger = structlog.get_logger(__name__)
-_failures = metrics.get_meter(__name__).create_counter("background_task_failures")
 _tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -19,7 +17,6 @@ def _completed(task: asyncio.Task[Any]) -> None:
     try:
         task.result()
     except Exception:
-        _failures.add(1)
         logger.exception("background_task_failed", task_name=task.get_name())
 
 

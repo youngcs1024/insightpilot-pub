@@ -36,7 +36,6 @@ from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
 from app.services.auth import AuthService
 from app.services.chat import ChatService
-from app.services.memory.extract import MemoryExtractionService
 from app.services.clarification_capabilities import ClarificationCapabilityService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
@@ -44,6 +43,7 @@ from app.services.graph import GraphService
 from app.services.health import HealthService, MCPProbe, PostgreSQLProbe
 from app.services.knowledge_generation import KnowledgeGenerationService
 from app.services.llm.service import LlmService
+from app.services.memory.extract import MemoryExtractionService
 from app.services.metrics import MetricService
 from app.services.schema_catalog import SchemaCatalogService
 from app.services.schema_tokens import SchemaTokenCounter

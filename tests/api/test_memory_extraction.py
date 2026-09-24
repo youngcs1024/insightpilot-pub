@@ -38,7 +38,9 @@ async def test_commit_precedes_background_and_response_does_not_wait(
 
     async def blocked(identity: TurnIdentity) -> None:
         async with chat.database.session() as session:
-            turn = await TurnRepository(session, identity.user_id).get(identity.conversation_id, identity.turn_id)
+            turn = await TurnRepository(session, identity.user_id).get(
+                identity.conversation_id, identity.turn_id
+            )
             assert turn.status is TurnStatus.SUCCEEDED
             assert turn.answer is not None
         seen.append(identity)
@@ -48,11 +50,15 @@ async def test_commit_precedes_background_and_response_does_not_wait(
     monkeypatch.setattr(chat.app.state.chat.memory, "run", blocked)
     try:
         async with asyncio.timeout(10):
-            response = await chat.client.post(chat.url, json={"content": DURABLE}, headers={"Idempotency-Key": "memory"})
+            response = await chat.client.post(
+                chat.url, json={"content": DURABLE}, headers={"Idempotency-Key": "memory"}
+            )
             await entered.wait()
         assert response.status_code == HTTPStatus.OK
         assert not release.is_set()
-        replay = await chat.client.post(chat.url, json={"content": DURABLE}, headers={"Idempotency-Key": "memory"})
+        replay = await chat.client.post(
+            chat.url, json={"content": DURABLE}, headers={"Idempotency-Key": "memory"}
+        )
         assert replay.json()["replayed"]
         assert len(seen) == 1
     finally:
@@ -66,7 +72,9 @@ async def test_chat_background_reads_original_message_and_persists(chat: Harness
     assert response.status_code == HTTPStatus.OK
     await wait_for_memory()
     async with chat.database.session() as session:
-        stored = await MemoryRepository(session, chat.user.id).list_active(MemoryType.METRIC_OVERRIDE)
+        stored = await MemoryRepository(session, chat.user.id).list_active(
+            MemoryType.METRIC_OVERRIDE
+        )
     assert len(stored) == 1
     assert str(stored[0].source_turn_id) == response.json()["id"]
     assert str(stored[0].source_turn_id) != response.json()["reply_to_turn_id"]
@@ -77,7 +85,7 @@ async def test_background_failure_preserves_persisted_answer(
 ) -> None:
     chat.app.state.chat.memory.llm = FakeChatModel([LlmUnavailableError()])
     counter = Mock()
-    monkeypatch.setattr(background, "_failures", counter)
+    monkeypatch.setattr("app.services.memory.extract._failures", counter)
     response = await chat.client.post(chat.url, json={"content": DURABLE})
     assert response.status_code == HTTPStatus.OK
     await wait_for_memory()

@@ -33,7 +33,19 @@ class Session:
         return ScriptStatus.model_validate_json(response.content)
 
     async def complete(self) -> ScriptStatus:
-        status = await self.status()
+        # Wait for the declared post-answer call and its observed task completion
+        # before changing scripts, restarting services or freezing span snapshots.
+        async with asyncio.timeout(10):
+            while True:
+                status = await self.status()
+                spans = (await self.observations()).spans
+                pending = any(
+                    span.name == "memory_extract" and span.metadata.status is None
+                    for span in spans
+                )
+                if status.errors or (not any(status.remaining.values()) and not pending):
+                    break
+                await asyncio.sleep(0.05)
         (self.directory / (uuid4().hex + "-inference.json")).write_text(
             status.model_dump_json(indent=2)
         )

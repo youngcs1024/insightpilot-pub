@@ -5,13 +5,16 @@ from http import HTTPStatus
 
 # ruff: noqa: PLR2004 -- exact vector dimensions and independent small-fixture oracle.
 import httpx
+import pytest
 
 from app.agents.contracts import RouteDecision
+from app.schemas.memory_extraction import MemoryExtraction
 from app.schemas.model_runtime import EmbedResult, RerankResult
 from data.seed.validation import validate
 from tests.e2e.contracts import DATA_QUESTION
 from tests.e2e.dataset import business
 from tests.e2e.inference import application
+from tests.memory_extraction_support import extraction_input
 
 
 def router_request(question: str) -> dict[str, object]:
@@ -87,3 +90,44 @@ def test_fixture_totals_are_independent_of_generated_sql() -> None:
     assert (
         sum(row.gross_amount - row.discount_amount for row in eligible if row.region_id == 2) == 300
     )
+
+
+@pytest.mark.parametrize(
+    ("scenario", "allowed"),
+    [
+        ("data", 1),
+        ("knowledge", 1),
+        ("both", 1),
+        ("followup", 1),
+        ("clarify", 0),
+        ("chaos", 0),
+        ("red_sql", 0),
+        ("red_credential", 0),
+        ("red_cross_user", 0),
+        ("red_document", 1),
+        ("red_citation", 1),
+        ("red_false_policy", 1),
+        ("red_causality", 1),
+        ("red_widen", 2),
+    ],
+)
+async def test_memory_calls_are_explicitly_scripted_and_bounded(scenario: str, allowed: int) -> None:
+    request = router_request(DATA_QUESTION)
+    request["messages"] = [{"role": "user", "content": extraction_input().model_dump_json()}]
+    request["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {"schema": MemoryExtraction.model_json_schema()},
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application()), base_url="http://test"
+    ) as client:
+        await client.post("/_e2e/script", json={"scenario": scenario})
+        for _ in range(allowed):
+            response = await client.post("/v1/chat/completions", json=request)
+            assert response.status_code == HTTPStatus.OK, response.text
+            parsed = MemoryExtraction.model_validate_json(
+                response.json()["choices"][0]["message"]["content"]
+            )
+            assert parsed.candidates == []
+        excess = await client.post("/v1/chat/completions", json=request)
+        assert excess.status_code == HTTPStatus.BAD_REQUEST

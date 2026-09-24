@@ -20,11 +20,11 @@ from app.db.models import Turn
 from app.db.session import Database
 from app.repositories.turns import TurnRepository
 from app.services import chat_stream
-from app.services.memory.extract import MemoryExtractionService
 from app.services.chat import AdmittedTurn, ChatService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
 from app.services.graph import GraphService
+from app.services.memory.extract import MemoryExtractionService
 from tests.agents.parent_support import parent_context
 from tests.api.chat_support import Harness, chat, events
 from tests.integration.checkpoint_support import admitted, checkpoint_setup, graph_database
@@ -92,7 +92,9 @@ async def test_completed_pending_writes_survive_deadline(
     await graph.start()
     ctx = replace(ctx, deadline=Deadline(time.monotonic() + 2))
     service = ChatService(
-        database, ctx.settings, graph,
+        database,
+        ctx.settings,
+        graph,
         memory=MemoryExtractionService(database, ctx.settings, ctx.llm),
     )
     claim = AdmittedTurn(identity=ctx.identity, result=await service.read(ctx.identity))
@@ -149,7 +151,9 @@ async def test_finalization_failure_never_commits_answer(
     await graph.start()
     ctx = replace(ctx, deadline=Deadline(time.monotonic() + 2))
     service = ChatService(
-        database, ctx.settings, graph,
+        database,
+        ctx.settings,
+        graph,
         memory=MemoryExtractionService(database, ctx.settings, ctx.llm),
     )
     try:

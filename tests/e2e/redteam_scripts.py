@@ -56,6 +56,13 @@ class RedTeamScript(Script):
         self.expected = Counter({"RouteDecision": 2 if scenario is Scenario.RED_WIDEN else 1})
         if scenario in {Scenario.RED_SQL, Scenario.RED_CAUSALITY}:
             self.expected.update({"MetricIntent": 1, "SqlGeneratorOutput": 1})
+        if scenario in {
+            Scenario.RED_DOCUMENT,
+            Scenario.RED_FALSE_POLICY,
+            Scenario.RED_CITATION,
+            Scenario.RED_CAUSALITY,
+        }:
+            self.expected["MemoryExtraction"] = 1
         if scenario is Scenario.RED_CAUSALITY:
             self.expected["SynthesisOutput"] = 1
         if scenario in {
@@ -65,7 +72,14 @@ class RedTeamScript(Script):
         }:
             self.expected["KnowledgeDraft"] = 2 if scenario is Scenario.RED_CITATION else 1
         if scenario is Scenario.RED_WIDEN:
-            self.expected.update({"MetricIntent": 2, "SqlGeneratorOutput": 2, "DataAnswerDraft": 1})
+            self.expected.update(
+                {
+                    "MetricIntent": 2,
+                    "SqlGeneratorOutput": 2,
+                    "DataAnswerDraft": 1,
+                    "MemoryExtraction": 2,
+                }
+            )
 
     def response(  # noqa: C901, PLR0911, PLR0912 -- one closed fixture dispatch.
         self, name: str, inputs: list[str]

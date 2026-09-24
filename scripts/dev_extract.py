@@ -46,9 +46,7 @@ async def run(message: str, settings: ExtractionProcessSettings) -> MemoryExtrac
     try:
         async with asyncio.timeout(settings.timeout_s):
             await llm.start()
-            return await extract(
-                inputs, llm, deadline=Deadline(monotonic() + settings.timeout_s)
-            )
+            return await extract(inputs, llm, deadline=Deadline(monotonic() + settings.timeout_s))
     finally:
         async with asyncio.timeout(10):
             await llm.aclose()
