@@ -34,7 +34,11 @@ IMAGE_LIMIT = 500_000_000
     ("service", "base"),
     [
         ("etcd", "quay.io/coreos/etcd:v3.5.18"),
-        ("minio", "quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z"),
+        (
+            "minio",
+            "ghcr.io/youngcs1024/insightpilot-pub/minio:RELEASE.2024-05-28T17-19-04Z"
+            "@sha256:648817f3b321ec7a2f86c594ba468fa19eff8ee3ac17a07c03acf7a8a35fda33",
+        ),
         ("milvus", "milvusdb/milvus:v2.6.4"),
     ],
 )
