@@ -78,7 +78,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
         assert str(clarification["type"]) == "JSONB"
         assert (
             await connection.scalar(text("SELECT version_num FROM alembic_version_app"))
-            == "0011_evidence_audit"
+            == "0012_memories"
         )
     business = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
     try:
@@ -678,3 +678,35 @@ def test_evidence_audit_backfill_preserves_original_records(migrated: MigrationS
         assert asyncio.run(inspect_evidence(seed=False, upgraded=False)) == before
     finally:
         command.upgrade(config, "head")
+
+
+def test_memory_migration_roundtrip(migrated: MigrationSettings) -> None:
+    """The new table and its narrow runtime grants survive downgrade/re-upgrade."""
+    config = migration_config(MigrationTarget.APP)
+
+    async def inspect_memories(*, present: bool) -> None:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with resource.connect() as connection:
+                tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
+                assert ("memories" in tables) is present
+                assert {"users", "turns", "data_evidence", "knowledge_evidence"} <= set(tables)
+                if present:
+                    await connection.run_sync(assert_empty_diff, MigrationTarget.APP)
+                    assert not await connection.scalar(
+                        text("SELECT has_table_privilege('app_rw', 'memories', 'UPDATE,DELETE')")
+                    )
+                    assert await connection.scalar(
+                        text(
+                            "SELECT has_column_privilege('app_rw', 'memories', 'updated_at', 'UPDATE')"
+                        )
+                    )
+        finally:
+            await resource.dispose()
+
+    command.downgrade(config, "0011_evidence_audit")
+    try:
+        asyncio.run(inspect_memories(present=False))
+    finally:
+        command.upgrade(config, "head")
+    asyncio.run(inspect_memories(present=True))

@@ -1,4 +1,4 @@
-"""Typed memory projections reserved for Phase 6; no storage or retrieval behavior."""
+"""Typed memory content, write inputs and durable read projections."""
 
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -54,12 +54,10 @@ class FormatPreferenceContent(Contract):
     decimals: int = Field(ge=0, le=4)
 
 
-class Memory(Contract):
-    """A provenance-carrying Pydantic projection, not an ORM object or memory store."""
+class MemoryCreate(Contract):
+    """Validated new content; identity and lifecycle fields belong to the repository."""
 
     schema_version: Literal[1] = 1
-    id: UUID
-    user_id: UUID
     source_turn_id: UUID
     memory_type: MemoryType
     content: (
@@ -67,9 +65,6 @@ class Memory(Contract):
     )
     summary: str = Field(max_length=200)
     confidence: float = Field(ge=0, le=1)
-    is_active: bool = True
-    superseded_by: UUID | None = None
-    superseded_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def content_matches_type(self) -> Self:
@@ -85,3 +80,20 @@ class Memory(Contract):
                 "memory_content_type", "Memory content does not match its type"
             )
         return self
+
+
+class Memory(MemoryCreate):
+    """A provenance-carrying projection compatible with existing graph checkpoints."""
+
+    id: UUID
+    user_id: UUID
+    is_active: bool = True
+    superseded_by: UUID | None = None
+    superseded_at: AwareDatetime | None = None
+
+
+class StoredMemory(Memory):
+    """Repository result with database-generated audit timestamps."""
+
+    created_at: AwareDatetime
+    updated_at: AwareDatetime

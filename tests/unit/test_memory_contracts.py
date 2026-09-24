@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.agents.state import TurnContext
-from app.schemas.memory import Memory, MemoryType
+from app.schemas.memory import Memory, MemoryCreate, MemoryType
 from tests.agents.state_support import finalized, memory
 
 
@@ -69,3 +69,30 @@ def test_unresolved_scope_is_explicit_and_missing_field_is_rejected() -> None:
     payload.pop("time_scope")
     with pytest.raises(ValidationError):
         TurnContext.model_validate(payload)
+
+
+@pytest.mark.parametrize("field", ["id", "user_id", "is_active", "superseded_by", "superseded_at"])
+def test_memory_create_rejects_caller_owned_lifecycle_fields(field: str) -> None:
+    original = memory().model_dump(mode="json")
+    payload = {key: original[key] for key in MemoryCreate.model_fields}
+    payload[field] = original[field]
+    with pytest.raises(ValidationError):
+        MemoryCreate.model_validate(payload)
+
+
+def test_existing_memory_wire_fields_are_unchanged() -> None:
+    original = memory()
+    assert set(original.model_dump()) == {
+        "schema_version",
+        "id",
+        "user_id",
+        "source_turn_id",
+        "memory_type",
+        "content",
+        "summary",
+        "confidence",
+        "is_active",
+        "superseded_by",
+        "superseded_at",
+    }
+    assert Memory.model_validate_json(original.model_dump_json()) == original
