@@ -8,9 +8,7 @@ from scripts.ingest import IngestionProcessSettings, run
 
 def main() -> None:
     raise SystemExit(
-        asyncio.run(
-            run(IngestionProcessSettings.load(), Path("data/corpus/adversarial"))
-        )
+        asyncio.run(run(IngestionProcessSettings.load(), Path("data/corpus/adversarial")))
     )
 
 

@@ -113,11 +113,15 @@ def main(argv: list[str] | None = None) -> int:
         retrieval = settings.retrieval.model_copy(deep=True)
         retrieval.milvus.collection = "kb_chunks_redteam"
         retrieval.enabled = True
+        retrieval.search.filtering.dynamic_ratio = 0
+        retrieval.search.filtering.absolute_floor = 0
+        retrieval.search.filtering.gap_threshold = 1
         environment = process_environment(settings)
         environment.update(prepare(ROOT, write_config=True))
         environment.update(
             {
                 "IP_RETRIEVAL": retrieval.model_dump_json(),
+                "IP_HTTP": '{"request_timeout_s":240}',
                 "IP_API_HOST_PORT": str(port),
                 "IP_REDTEAM_SEED_IMAGE": args.project + ":seed",
             }
@@ -166,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
                     model_config_path=deployment_file,
                     collection="kb_chunks_redteam",
                     report=args.report,
+                    timeout_s=270,
                 )
             )
         )

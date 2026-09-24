@@ -241,9 +241,20 @@ def test_offline_adversarial_gate_covers_all_rejections_and_rewrites(tmp_path: P
     assert report.blocked.passed == report.blocked.total == 22
     assert report.rewrites.passed == report.rewrites.total == 2
     assert adversarial_exit_code(report, 1.0) == 0
-    assert cli.main(
-        ["run", "--suite", "adversarial", "--threshold-block-rate", "1.0", "--report", str(tmp_path)]
-    ) == 0
+    assert (
+        cli.main(
+            [
+                "run",
+                "--suite",
+                "adversarial",
+                "--threshold-block-rate",
+                "1.0",
+                "--report",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
     assert len(list(tmp_path.glob("adversarial_*.json"))) == 1
     failed = report.model_copy(deep=True)
     failed.results[0].passed = False

@@ -125,7 +125,8 @@ def _corpus_resource(path: PurePosixPath) -> bool:
         path.parts[:2] == ("data", "corpus")
         and not any(part.startswith(".") for part in path.parts)
         and (
-            path.as_posix() in {
+            path.as_posix()
+            in {
                 "data/corpus/MANIFEST.yaml",
                 "data/corpus/adversarial/MANIFEST.yaml",
             }

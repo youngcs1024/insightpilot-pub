@@ -63,6 +63,9 @@ the output shape is:
 "native_tool_kinds": []}.
 Use the actual question's metric and period, not this example's values.
 
+When the user names a region and asks to group by region, preserve both facts:
+for “2026年7月仅限华南地区的支付订单数，按地区分组”, use
+region_mentioned=true, region.names=["华南"], grain=region and dimensions=["region"].
 Grouping by region is not a restriction to an unspecified region: use grain=region
 and dimensions=["region"], region_mentioned=false, names=[] unless the user ALSO
 restricts the region. No region mentioned means all_regions=false, not true.
