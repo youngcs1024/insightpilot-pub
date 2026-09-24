@@ -111,7 +111,9 @@ def test_fixture_totals_are_independent_of_generated_sql() -> None:
         ("red_widen", 2),
     ],
 )
-async def test_memory_calls_are_explicitly_scripted_and_bounded(scenario: str, allowed: int) -> None:
+async def test_memory_calls_are_explicitly_scripted_and_bounded(
+    scenario: str, allowed: int
+) -> None:
     request = router_request(DATA_QUESTION)
     request["messages"] = [{"role": "user", "content": extraction_input().model_dump_json()}]
     request["response_format"] = {

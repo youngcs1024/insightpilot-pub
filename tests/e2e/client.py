@@ -40,8 +40,7 @@ class Session:
                 status = await self.status()
                 spans = (await self.observations()).spans
                 pending = any(
-                    span.name == "memory_extract" and span.metadata.status is None
-                    for span in spans
+                    span.name == "memory_extract" and span.metadata.status is None for span in spans
                 )
                 if status.errors or (not any(status.remaining.values()) and not pending):
                     break
