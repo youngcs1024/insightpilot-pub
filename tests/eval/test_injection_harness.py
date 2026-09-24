@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.schemas.retrieval import RangeTimeScope
 from app.services.knowledge_time import needs_history, parse_time
 from evals.harness.contracts import EvaluationError, Score
 from evals.harness.injection import (
@@ -135,3 +136,6 @@ def test_injection_questions_keep_explicit_policy_time_scope() -> None:
         resolution = parse_time(case.question, now=datetime(2026, 9, 23, tzinfo=UTC))
         assert resolution.clarification is None
         assert resolution.scope is not None
+        if case.kind is InjectionKind.UNSUPPORTED_CAUSALITY:
+            assert isinstance(resolution.scope, RangeTimeScope)
+            assert len(resolution.scope.periods) == 2
