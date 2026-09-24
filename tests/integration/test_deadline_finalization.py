@@ -20,6 +20,7 @@ from app.db.models import Turn
 from app.db.session import Database
 from app.repositories.turns import TurnRepository
 from app.services import chat_stream
+from app.services.memory.extract import MemoryExtractionService
 from app.services.chat import AdmittedTurn, ChatService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
@@ -90,7 +91,10 @@ async def test_completed_pending_writes_survive_deadline(
     graph = GraphService(settings)
     await graph.start()
     ctx = replace(ctx, deadline=Deadline(time.monotonic() + 2))
-    service = ChatService(database, ctx.settings, graph)
+    service = ChatService(
+        database, ctx.settings, graph,
+        memory=MemoryExtractionService(database, ctx.settings, ctx.llm),
+    )
     claim = AdmittedTurn(identity=ctx.identity, result=await service.read(ctx.identity))
     try:
         result = await service.execute(claim, ctx)
@@ -144,7 +148,10 @@ async def test_finalization_failure_never_commits_answer(
     graph = GraphService(settings)
     await graph.start()
     ctx = replace(ctx, deadline=Deadline(time.monotonic() + 2))
-    service = ChatService(database, ctx.settings, graph)
+    service = ChatService(
+        database, ctx.settings, graph,
+        memory=MemoryExtractionService(database, ctx.settings, ctx.llm),
+    )
     try:
         claim = AdmittedTurn(identity=ctx.identity, result=await service.read(ctx.identity))
         with pytest.raises((ConflictError, EvidenceIntegrityError, DeadlineExceededError)):

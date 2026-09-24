@@ -25,6 +25,7 @@ from model_tunnel.config import TunnelProcessSettings
 from scripts.deployment import DeploymentSettings
 from scripts.dev_retrieve import RetrievalProcessSettings
 from scripts.dev_route import RouteProcessSettings
+from scripts.dev_extract import ExtractionProcessSettings
 from scripts.ingest import IngestionProcessSettings
 from scripts.migration_settings import MigrationSettings
 from scripts.model_deployment_settings import ModelDeploymentSettings
@@ -137,6 +138,7 @@ def test_url_quotes_special_characters() -> None:
         (IngestionProcessSettings, ".env.ingest.example"),
         (RetrievalProcessSettings, ".env.retrieve.example"),
         (RouteProcessSettings, ".env.route.example"),
+        (ExtractionProcessSettings, ".env.extract.example"),
         (McpServerSettings, ".env.mcp.example"),
         (MigrationSettings, ".env.migration.example"),
         (Settings, ".env.api.container.example"),

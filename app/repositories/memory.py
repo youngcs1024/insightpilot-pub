@@ -4,7 +4,7 @@ from uuid import UUID
 
 import structlog
 from pydantic import ValidationError as PydanticValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.db.models.conversation import Conversation
@@ -42,6 +42,13 @@ class MemoryRepository(UserScopedRepository[MemoryRecord]):
     """Preserve original content and provenance; only explicit supersession mutates rows."""
 
     model = MemoryRecord
+
+    async def lock_writes(self) -> None:
+        """Serialize this user's memory checks/inserts, including an empty active set."""
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"memory-write:{self._user_id}"},
+        )
 
     async def create(self, value: MemoryCreate) -> StoredMemory:
         """Validate content and owned provenance before inserting any row."""

@@ -36,6 +36,7 @@ from app.retrieval.pipeline import RetrievalPipeline
 from app.retrieval.search_store import HybridSearchStore
 from app.services.auth import AuthService
 from app.services.chat import ChatService
+from app.services.memory.extract import MemoryExtractionService
 from app.services.clarification_capabilities import ClarificationCapabilityService
 from app.services.conversations import ConversationService
 from app.services.evidence import EvidenceService
@@ -202,7 +203,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
             logger.info("application_stopped")
 
     app = FastAPI(title="InsightPilot", version=__version__, lifespan=lifespan)
-    _install_chat(app, settings, database, graph_service)
+    _install_chat(app, settings, database, graph_service, llm_service)
     app.state.observability = observability
     app.state.chat.observability = observability
     app.state.graph = graph_service
@@ -250,7 +251,9 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
 
 
 def _install_chat(
-    app: FastAPI, settings: Settings, database: Database, graph: GraphService
+    app: FastAPI, settings: Settings, database: Database, graph: GraphService, llm: LlmService
 ) -> None:
     app.state.settings = settings
-    app.state.chat = ChatService(database, settings, graph)
+    app.state.chat = ChatService(
+        database, settings, graph, memory=MemoryExtractionService(database, settings, llm)
+    )

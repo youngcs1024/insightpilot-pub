@@ -500,3 +500,10 @@ class EvidenceIntegrityError(InsightPilotError):
 
     code = "EVIDENCE_INTEGRITY_ERROR"
     user_message = "The stored evidence could not be verified."
+
+
+class MemoryExtractionError(InsightPilotError):
+    """A background memory operation failed after the answer was committed."""
+
+    code = "MEMORY_EXTRACTION_FAILED"
+    user_message = "Memory extraction could not be completed."

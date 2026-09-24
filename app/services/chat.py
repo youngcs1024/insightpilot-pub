@@ -41,6 +41,7 @@ from app.services.conversations import ConversationService
 from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
 from app.services.knowledge_generation import validate_citations
+from app.services.memory.extract import MemoryExtractionService
 from app.services.turn_results import (
     BothSourcesFailedError,
     TurnFailedError,
@@ -61,7 +62,15 @@ class AdmittedTurn(BaseModel):
 class ChatService:
     """Short application transactions surround asynchronous graph execution."""
 
-    def __init__(self, database: Database, settings: Settings, graph: GraphService) -> None:
+    def __init__(
+        self,
+        database: Database,
+        settings: Settings,
+        graph: GraphService,
+        *,
+        memory: MemoryExtractionService,
+    ) -> None:
+        self.memory = memory
         self.database = database
         self.settings = settings
         self.graph = graph
@@ -192,6 +201,8 @@ class ChatService:
                 raise
             else:
                 observation.update(TraceMetadata(status=result.status.value))
+                if result.status is TurnStatus.SUCCEEDED:
+                    spawn(self.memory.run(ctx.identity), name="extract-turn-memory")
                 return result
 
     async def _execute(self, ctx: RuntimeContext, observation: Observation) -> TurnResponse:

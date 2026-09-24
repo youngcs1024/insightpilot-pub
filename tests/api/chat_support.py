@@ -19,6 +19,8 @@ from app.agents.state import GraphOutput
 from app.api.dependencies import get_current_user
 from app.application import create_app
 from app.core.config_models import Settings
+from app.core.background import shutdown
+from app.schemas.memory_extraction import MemoryExtraction
 from app.db.models import TurnStatus
 from app.db.session import Database
 from app.schemas.auth import UserResponse
@@ -91,6 +93,7 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
     )
     application = create_app(settings, database=auth_database, mcp_client=mcp)
     application.state.chat.graph = graph
+    application.state.chat.memory.llm = FakeChatModel([MemoryExtraction() for _ in range(20)])
     application.state.llm = FakeChatModel(
         [
             RouteDecision(route=Route.DATA_ONLY, confidence=1, data_intent="2026年8月GMV"),
@@ -120,7 +123,10 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
         application.dependency_overrides[get_current_user] = identity
         response = await client.post("/api/v1/conversations", json={})
         assert response.status_code == CREATED, response.text
-        yield Harness(application, client, graph, auth_database, user, UUID(response.json()["id"]))
+        try:
+            yield Harness(application, client, graph, auth_database, user, UUID(response.json()["id"]))
+        finally:
+            await shutdown(settings.http.shutdown_timeout_s)
 
 
 def events(response: httpx.Response) -> list[tuple[str, dict[str, object]]]:

@@ -54,11 +54,10 @@ class FormatPreferenceContent(Contract):
     decimals: int = Field(ge=0, le=4)
 
 
-class MemoryCreate(Contract):
-    """Validated new content; identity and lifecycle fields belong to the repository."""
+class MemoryPayload(Contract):
+    """Shared typed content validation for extraction and repository writes."""
 
     schema_version: Literal[1] = 1
-    source_turn_id: UUID
     memory_type: MemoryType
     content: (
         MetricOverrideContent | RegionFocusContent | TerminologyContent | FormatPreferenceContent
@@ -80,6 +79,12 @@ class MemoryCreate(Contract):
                 "memory_content_type", "Memory content does not match its type"
             )
         return self
+
+
+class MemoryCreate(MemoryPayload):
+    """Validated new content; identity and lifecycle fields belong to the repository."""
+
+    source_turn_id: UUID
 
 
 class Memory(MemoryCreate):
