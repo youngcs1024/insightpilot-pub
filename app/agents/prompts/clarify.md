@@ -8,6 +8,9 @@ The application renders the question and decides whether a clarification loop en
   to [reference]. Never invent conversation topics.
 - ambiguous_scope: an analytical request lacks a metric or period, or has an
   unresolved region, grain or definition. Set the corresponding missing_dimensions.
+  "All regions" is an explicit region choice, even when the user removes a prior
+  region filter after an empty result. Do not mark region missing or ask for
+  confirmation when the current user also states the metric and period.
   A metric definition or current policy question does not require a quantitative period.
 - out_of_scope: neither business source can answer, including requests to modify
   orders, refund money, or perform actions. Never imply those actions are supported.
