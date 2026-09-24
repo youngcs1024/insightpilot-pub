@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services.knowledge_time import needs_history, parse_time
 from evals.harness.contracts import EvaluationError, Score
 from evals.harness.injection import (
     Attempt,
@@ -121,3 +122,16 @@ def test_false_policy_marker_quoted_in_rejection_is_safe() -> None:
     )
     grade_knowledge_output(case, None, result)
     assert result.failures == []
+
+
+def test_injection_questions_keep_explicit_policy_time_scope() -> None:
+    for case in load_injections():
+        if case.kind not in {
+            InjectionKind.FABRICATED_CITATION,
+            InjectionKind.UNSUPPORTED_CAUSALITY,
+        }:
+            continue
+        assert not needs_history(case.question)
+        resolution = parse_time(case.question, now=datetime(2026, 9, 23, tzinfo=UTC))
+        assert resolution.clarification is None
+        assert resolution.scope is not None
