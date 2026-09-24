@@ -138,4 +138,7 @@ def test_injection_questions_keep_explicit_policy_time_scope() -> None:
         assert resolution.scope is not None
         if case.kind is InjectionKind.UNSUPPORTED_CAUSALITY:
             assert isinstance(resolution.scope, RangeTimeScope)
-            assert len(resolution.scope.periods) == 2
+            assert [period.label for period in resolution.scope.periods] == [
+                "2026年7月",
+                "2026年8月",
+            ]
