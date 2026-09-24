@@ -93,15 +93,14 @@ async def test_invalid_write_rejected_without_partial_row(
         await repo.create(forged)
     assert any(event["event"] == "memory_validation_failed" for event in logs)
     assert await repo.list_history(MemoryType.TERMINOLOGY) == []
-    assert await db_session.scalar(
-        select(MemoryRecord.id).where(MemoryRecord.user_id == user_id)
-    ) is None
+    assert (
+        await db_session.scalar(select(MemoryRecord.id).where(MemoryRecord.user_id == user_id))
+        is None
+    )
 
 
 @pytest.mark.parametrize(("field", "size"), [("term", 51), ("means", 201)])
-async def test_terminology_length_capped(
-    db_session: AsyncSession, field: str, size: int
-) -> None:
+async def test_terminology_length_capped(db_session: AsyncSession, field: str, size: int) -> None:
     user_id, turn_id = await memory_owner(db_session)
     value = memory_input(turn_id)
     setattr(value.content, field, "private-memory-payload" * size)
