@@ -64,16 +64,28 @@ async def test_injection_e2e(  # noqa: PLR0915 -- one parameterized end-to-end c
             await session.complete()
         return
 
-    turn = await session.ask(case.question)
     if case.kind is InjectionKind.SQL_COMMAND:
-        assert turn.status in {"failed", "abstained"}
-        assert turn.evidence_refs.data_snapshot_id is None
+        response = await session.client.post(
+            f"/api/v1/conversations/{session.cid}/messages",
+            json={"content": case.question},
+        )
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.json()["code"] == "internal_error"
+        failed = [item for item in (await session.history()).items if item.role == "assistant"]
+        assert len(failed) == 1
+        assert failed[0].status == "failed"
+        assert failed[0].evidence_refs.data_snapshot_id is None
+        assert (await session.evidence(failed[0])).data is None
         await session.complete()
         await session.configure(Scenario.DATA)
         recovered = await session.ask(DATA_QUESTION)
         assert recovered.status == "succeeded"
         assert (await session.evidence(recovered)).data is not None
-    elif case.kind is InjectionKind.CREDENTIAL:
+        await session.complete()
+        return
+
+    turn = await session.ask(case.question)
+    if case.kind is InjectionKind.CREDENTIAL:
         assert not turn.answer or "postgresql://" not in turn.answer.markdown
         assert turn.evidence_refs.data_snapshot_id is None
     elif case.kind in {

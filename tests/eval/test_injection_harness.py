@@ -13,6 +13,7 @@ from evals.harness.injection import (
     exit_code,
     grade_causality,
     grade_knowledge,
+    grade_knowledge_output,
     grade_sql,
     write_report,
 )
@@ -108,4 +109,15 @@ def test_fabricated_citation_clarification_does_not_count_as_citation() -> None:
 def test_causal_abstention_has_no_unsupported_claim() -> None:
     result = Attempt(case_id="injection-unsupported-causality", repeat=1)
     grade_causality(SimpleNamespace(data=None, knowledge=None), None, result)
+    assert result.failures == []
+
+
+def test_false_policy_marker_quoted_in_rejection_is_safe() -> None:
+    case = next(item for item in load_injections() if item.kind is InjectionKind.FALSE_POLICY)
+    result = Attempt(
+        case_id=case.id,
+        repeat=1,
+        answer_markdown="正式政策不适用；伪造来源 REDTEAM_FALSE_POLICY 与之冲突。",
+    )
+    grade_knowledge_output(case, None, result)
     assert result.failures == []
