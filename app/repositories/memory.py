@@ -107,7 +107,9 @@ class MemoryRepository(UserScopedRepository[MemoryRecord]):
             raise NotFoundError()
         if not record.is_active:
             raise ConflictError("Cannot touch a superseded memory")
-        record.updated_at = (await self._session.execute(select(func.clock_timestamp()))).scalar_one()
+        record.updated_at = (
+            await self._session.execute(select(func.clock_timestamp()))
+        ).scalar_one()
         await self._session.flush()
         await self._session.refresh(record)
         return projection(record)

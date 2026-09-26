@@ -87,7 +87,9 @@ async def test_duplicate_preserves_content_and_touches_timestamp(
         )
 
 
-async def test_same_batch_last_conflicting_candidate_wins(extraction_db: Database, settings: Settings) -> None:
+async def test_same_batch_last_conflicting_candidate_wins(
+    extraction_db: Database, settings: Settings
+) -> None:
     identity = await source_pair(extraction_db, extraction_input())
     changed = candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
     service = MemoryExtractionService(

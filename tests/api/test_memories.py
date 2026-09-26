@@ -27,11 +27,15 @@ async def seed(chat: Harness) -> list[str]:
     identity = await source_pair(chat.database, extraction_input(), owner=owner)
     outcomes = await chat.app.state.chat.memory._write(
         identity,
-        MemoryExtraction(candidates=[
-            candidate(),
-            candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "paid_at"}}),
-            candidate(memory_type="terminology", content={"term": "大促", "means": "618"}),
-        ]),
+        MemoryExtraction(
+            candidates=[
+                candidate(),
+                candidate(
+                    content={"metric_key": "refund_rate", "patch": {"date_field": "paid_at"}}
+                ),
+                candidate(memory_type="terminology", content={"term": "大促", "means": "618"}),
+            ]
+        ),
     )
     return [str(result.memory_id) for result in outcomes]
 
@@ -41,8 +45,10 @@ async def test_active_default_and_history_chain(chat: Harness) -> None:
     response = await chat.client.get(URL)
     assert response.status_code == HTTPStatus.OK
     body = response.json()
-    assert body["schema_version"] == 1 and body["request_id"]
-    assert body["limit"] == 20 and body["offset"] == 0
+    assert body["schema_version"] == 1
+    assert body["request_id"]
+    assert body["limit"] == 20
+    assert body["offset"] == 0
     assert {row["id"] for row in body["items"]} == set(identifiers[1:])
     response = await chat.client.get(URL, params={"include_superseded": "true"})
     rows = response.json()["items"]
@@ -52,8 +58,10 @@ async def test_active_default_and_history_chain(chat: Harness) -> None:
     )
     by_id = {row["id"]: row for row in rows}
     old, new = by_id[identifiers[0]], by_id[identifiers[1]]
-    assert old["superseded_by"] == new["id"] and old["superseded_at"]
-    assert not old["is_active"] and new["is_active"]
+    assert old["superseded_by"] == new["id"]
+    assert old["superseded_at"]
+    assert not old["is_active"]
+    assert new["is_active"]
     assert all(row["source_turn_id"] and row["created_at"] and row["updated_at"] for row in rows)
 
 
@@ -89,10 +97,16 @@ async def test_history_is_user_scoped(chat: Harness) -> None:
     assert response.json()["items"] == []
 
 
-@pytest.mark.parametrize("query", [
-    {"limit": 0}, {"limit": 101}, {"offset": -1},
-    {"memory_type": "unknown"}, {"include_superseded": "maybe"},
-])
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"limit": 0},
+        {"limit": 101},
+        {"offset": -1},
+        {"memory_type": "unknown"},
+        {"include_superseded": "maybe"},
+    ],
+)
 async def test_invalid_query_is_rejected(chat: Harness, query: dict[str, object]) -> None:
     response = await chat.client.get(URL, params=query)
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -102,7 +116,9 @@ async def test_invalid_query_is_rejected(chat: Harness, query: dict[str, object]
 @pytest.mark.parametrize("reverse", [False, True])
 async def test_all_quotas_apply_per_user_in_separate_bucket(chat: Harness, reverse: bool) -> None:
     rules = [RateRule(requests=1, seconds=60), RateRule(requests=10, seconds=3600)]
-    chat.app.state.auth_limiter.settings.memories_rules = list(reversed(rules)) if reverse else rules
+    chat.app.state.auth_limiter.settings.memories_rules = (
+        list(reversed(rules)) if reverse else rules
+    )
     assert (await chat.client.get(URL)).status_code == HTTPStatus.OK
     limited = await chat.client.get(URL)
     assert limited.status_code == HTTPStatus.TOO_MANY_REQUESTS

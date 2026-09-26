@@ -2,8 +2,6 @@
 
 from uuid import UUID
 
-import structlog
-
 from app.core.errors import ConflictError
 from app.repositories.memory import MemoryRepository
 from app.schemas.memory import MemoryCreate
@@ -11,12 +9,8 @@ from app.schemas.memory_extraction import MemoryCandidate
 from app.schemas.memory_write import WriteOutcome, WriteStatus
 from app.services.memory.dedup import MemoryMatch, compare
 
-logger = structlog.get_logger(__name__)
 
-
-async def write(
-    candidate: MemoryCandidate, repo: MemoryRepository, turn_id: UUID
-) -> WriteOutcome:
+async def write(candidate: MemoryCandidate, repo: MemoryRepository, turn_id: UUID) -> WriteOutcome:
     """Touch a duplicate or append a version; the caller owns locking and rollback."""
     existing = await repo.list_active(candidate.memory_type)
     matches = [(row, compare(candidate, row)) for row in existing]
@@ -38,13 +32,4 @@ async def write(
         return WriteOutcome(status=WriteStatus.CREATED, memory_id=new.id)
     old = matches[0][0]
     await repo.supersede(old.id, by=new.id)
-    if old.source_turn_id == turn_id:
-        logger.warning(
-            "memory_same_turn_conflict",
-            turn_id=str(turn_id),
-            old_memory_id=str(old.id),
-            new_memory_id=str(new.id),
-        )
-    return WriteOutcome(
-        status=WriteStatus.SUPERSEDED, memory_id=new.id, superseded_id=old.id
-    )
+    return WriteOutcome(status=WriteStatus.SUPERSEDED, memory_id=new.id, superseded_id=old.id)

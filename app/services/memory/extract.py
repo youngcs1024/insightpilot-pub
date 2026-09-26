@@ -150,7 +150,15 @@ class MemoryExtractionService:
             repo = MemoryRepository(session, identity.user_id)
             await repo.lock_writes()
             for candidate in result.candidates:
-                outcomes.append(await write(candidate, repo, identity.turn_id))
+                outcome = await write(candidate, repo, identity.turn_id)
+                if outcome.superseded_id in {item.memory_id for item in outcomes}:
+                    logger.warning(
+                        "memory_same_turn_conflict",
+                        turn_id=str(identity.turn_id),
+                        old_memory_id=str(outcome.superseded_id),
+                        new_memory_id=str(outcome.memory_id),
+                    )
+                outcomes.append(outcome)
         for outcome in outcomes:
             logger.info(
                 "memory_write_completed",

@@ -1,7 +1,5 @@
 """Type-specific matching, including deterministic Chinese comparison boundaries."""
 
-# ruff: noqa: PLR2004 -- fixed threshold, row-count and pagination acceptance values.
-
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,28 +15,68 @@ from tests.memory_extraction_support import candidate
 @pytest.mark.parametrize(
     ("kind", "left", "right", "expected"),
     [
-        ("metric_override", {"metric_key": "gmv", "patch": {}},
-         {"metric_key": "gmv", "patch": {"date_field": None}}, "duplicate"),
-        ("metric_override", {"metric_key": "gmv", "patch": {}},
-         {"metric_key": "refund_rate", "patch": {}}, "distinct"),
-        ("metric_override", {"metric_key": "gmv", "patch": {}},
-         {"metric_key": "gmv", "patch": {"date_field": "paid_at"}}, "conflict"),
-        ("metric_override", {"metric_key": "gmv", "patch": {"add_filters": ["a", "b"]}},
-         {"metric_key": "gmv", "patch": {"add_filters": ["b", "a"]}}, "conflict"),
+        (
+            "metric_override",
+            {"metric_key": "gmv", "patch": {}},
+            {"metric_key": "gmv", "patch": {"date_field": None}},
+            "duplicate",
+        ),
+        (
+            "metric_override",
+            {"metric_key": "gmv", "patch": {}},
+            {"metric_key": "refund_rate", "patch": {}},
+            "distinct",
+        ),
+        (
+            "metric_override",
+            {"metric_key": "gmv", "patch": {}},
+            {"metric_key": "gmv", "patch": {"date_field": "paid_at"}},
+            "conflict",
+        ),
+        (
+            "metric_override",
+            {"metric_key": "gmv", "patch": {"add_filters": ["a", "b"]}},
+            {"metric_key": "gmv", "patch": {"add_filters": ["b", "a"]}},
+            "conflict",
+        ),
         ("region_focus", {"region_ids": [1, 2, 1]}, {"region_ids": [2, 1]}, "duplicate"),
         ("region_focus", {"region_ids": [1]}, {"region_ids": [2]}, "conflict"),
-        ("terminology", {"term": " ＧＭＶ ", "means": "退款申请时间"},
-         {"term": "gmv", "means": "退款申请的时间"}, "duplicate"),
-        ("terminology", {"term": "大促", "means": "618"},
-         {"term": "小促", "means": "618"}, "distinct"),
-        ("terminology", {"term": "大促", "means": "618"},
-         {"term": "大促", "means": "双11"}, "conflict"),
-        ("format_preference", {"prefer": "table", "decimals": 2},
-         {"prefer": "table", "decimals": 2}, "duplicate"),
-        ("format_preference", {"prefer": "table", "decimals": 2},
-         {"prefer": "prose", "decimals": 2}, "conflict"),
-        ("format_preference", {"prefer": "table", "decimals": 2},
-         {"prefer": "table", "decimals": 3}, "conflict"),
+        (
+            "terminology",
+            {"term": " ＧＭＶ ", "means": "退款申请时间"},
+            {"term": "gmv", "means": "退款申请的时间"},
+            "duplicate",
+        ),
+        (
+            "terminology",
+            {"term": "大促", "means": "618"},
+            {"term": "小促", "means": "618"},
+            "distinct",
+        ),
+        (
+            "terminology",
+            {"term": "大促", "means": "618"},
+            {"term": "大促", "means": "双11"},
+            "conflict",
+        ),
+        (
+            "format_preference",
+            {"prefer": "table", "decimals": 2},
+            {"prefer": "table", "decimals": 2},
+            "duplicate",
+        ),
+        (
+            "format_preference",
+            {"prefer": "table", "decimals": 2},
+            {"prefer": "prose", "decimals": 2},
+            "conflict",
+        ),
+        (
+            "format_preference",
+            {"prefer": "table", "decimals": 2},
+            {"prefer": "table", "decimals": 3},
+            "conflict",
+        ),
     ],
 )
 def test_type_specific_comparison(
@@ -52,7 +90,10 @@ def test_type_specific_comparison(
 
 
 def test_different_types_are_distinct() -> None:
-    assert compare(candidate(), candidate(memory_type="region_focus", content={"region_ids": [1]})) is MemoryMatch.DISTINCT
+    assert (
+        compare(candidate(), candidate(memory_type="region_focus", content={"region_ids": [1]}))
+        is MemoryMatch.DISTINCT
+    )
 
 
 @pytest.mark.parametrize(
