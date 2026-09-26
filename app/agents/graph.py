@@ -23,8 +23,12 @@ type PhaseOneGraph = CompiledStateGraph[AgentState, RuntimeContext, GraphInput, 
 
 def dispatch(state: AgentState) -> list[str] | str:
     """Failures before dispatch must never schedule an arbitrary specialist."""
+    if state.memory_restart_pending:
+        return "prepare_context"
     if state.failures or state.route is None:
         return "__end__"
+    if state.context_clarification is not None:
+        return "clarify"
     match state.route.route:
         case Route.DATA_ONLY:
             return "data_agent"
@@ -61,7 +65,7 @@ def topology() -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput
     graph.add_conditional_edges(
         "finalize_context",
         dispatch,
-        path_map=["data_agent", "knowledge_agent", "clarify", "__end__"],
+        path_map=["data_agent", "knowledge_agent", "clarify", "prepare_context", "__end__"],
     )
     graph.add_edge("data_agent", "persist_evidence")
     graph.add_edge("knowledge_agent", "persist_evidence")

@@ -10,6 +10,7 @@ from asgi_correlation_id import correlation_id
 from fastapi import APIRouter, Depends, Header, Request, Response
 from fastapi.responses import JSONResponse
 
+from app.services.metric_intent import MetricIntentService
 from app.agents.runtime import RuntimeContext
 from app.api.streaming import ChatStreamingResponse
 from app.api.v1.auth import Quota
@@ -70,6 +71,8 @@ def runtime(request: Request, claim: AdmittedTurn, deadline: Deadline) -> Runtim
     response_budget: ResponseBudget = request.state.response_budget
     response_budget.allow_finalization()
     return RuntimeContext(
+        memories=request.app.state.memories,
+        metric_intents=MetricIntentService(request.app.state.llm, request.app.state.metrics),
         regions=RegionService(request.app.state.mcp),
         metrics=request.app.state.metrics,
         clarification_capabilities=request.app.state.clarification_capabilities,

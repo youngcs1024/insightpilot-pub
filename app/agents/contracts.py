@@ -13,7 +13,7 @@ from app.schemas.knowledge import Citation, KnowledgeEvidence, KnowledgePassage
 from app.schemas.knowledge_query import KnowledgeHistoryTurn
 from app.schemas.mcp import ColumnSpec, Contract, SqlValue
 from app.schemas.memory import FormatPreferenceContent, TerminologyContent
-from app.schemas.metric_resolution import BindingFieldSource, RegionScope
+from app.schemas.metric_resolution import BindingFieldSource, RegionScope, RegionReference
 from app.schemas.metrics import Grain, MetricExample
 from app.schemas.sanity import SanityFlag
 from app.schemas.synthesis import Claim, SynthesisAbstention, SynthesisOutput
@@ -312,7 +312,9 @@ class Route(StrEnum):
 class RouteDecision(Contract):
     """A bounded classification and independently scoped specialist tasks."""
 
-    schema_version: Literal[1, 2] = 2
+    schema_version: Literal[1, 2, 3] = 3
+    region_mentioned: bool | None = None
+    region: RegionReference = Field(default_factory=RegionReference)
     clarification_intent: ClarificationIntent | None = None
     route: Route
     confidence: float = Field(ge=0, le=1)

@@ -26,6 +26,8 @@ async def _invoke(
     previous = await ctx.evidence.find(ctx.identity)
     if previous is not None:
         return DataAgentOutput(evidence=previous.data)
+    if routed and state.context is not None and state.context.intent_failure is not None:
+        return DataAgentOutput(failure=state.context.intent_failure)
     project = to_data_input if routed else to_legacy_data_input
     inputs = project(state, token_counter=ctx.schema_token_counter)
     return DataAgentOutput.model_validate(await DATA_GRAPH.ainvoke(inputs, config, context=ctx))

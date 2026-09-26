@@ -122,7 +122,7 @@ async def test_checkpoint_key_is_assistant_turn(
             {"configurable": {"thread_id": str(identity.conversation_id)}}
         )
         assert actual.values["turn_id"] == identity.turn_id
-        assert actual.values["graph_version"] == "phase4-v5"
+        assert actual.values["graph_version"] == "phase6-v1"
         assert not wrong.values
         assert actual.values["messages"][-1].content == actual.values["prepared"].question
     finally:

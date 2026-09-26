@@ -96,6 +96,12 @@ class TraceMetadata(BaseModel):
     projection_specialist: Literal["data", "knowledge"] | None = None
     projection_tokens: int | None = Field(default=None, ge=0)
     projection_tokenizer: Literal["cl100k_base"] | None = None
+    memory_stage: Literal["prepare", "finalize"] | None = None
+    memory_considered: int | None = Field(default=None, ge=0)
+    memory_selected: int | None = Field(default=None, ge=0, le=5)
+    memory_tokens: int | None = Field(default=None, ge=0, le=600)
+    memory_failed: bool | None = None
+    memory_restart: Literal["read_failed", "selection_changed"] | None = None
     status: str | None = None
     degraded_components: list[str] = Field(default_factory=list)
     role: str | None = None

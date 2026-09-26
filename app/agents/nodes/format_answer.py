@@ -57,6 +57,7 @@ def _no_evidence(state: AgentState, ctx: RuntimeContext) -> Command[str]:
         trace_id=ctx.trace_id,
         format_preference=format_preference(state),
         evidence_refs=EvidenceRefs(),
+        degraded_components=list(dict.fromkeys(state.degraded_components)),
         abstained=True,
         attempted_sources=[]
         if clarification

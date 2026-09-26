@@ -1,15 +1,12 @@
 """Resolve metric meaning through injected services before any SQL generation."""
 
-import json
-
 import sqlglot
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from app.agents.contracts import MetricExamplesSnapshot, ResolvedMetricBinding
 from app.agents.data.state import DataAgentState
-from app.agents.prompts import METRIC_INTENT
 from app.agents.runtime import RuntimeContext
 from app.core.errors import (
     InvalidMetricPatchError,
@@ -18,31 +15,25 @@ from app.core.errors import (
     UnsupportedGrain,
 )
 from app.core.llm_config import ModelRole
+from app.schemas.intent import MetricIntentInput
+from app.services.metric_intent import intent_messages
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification, MetricIntent
 from app.schemas.metric_tools import ResolveMetricArgs
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
 from app.services.metric_binding import BindingRequest, BindingResult, build_binding, merge_explicit
-from app.services.metric_templates import render_catalog_block, validate_grain
-from app.services.periods import Period, build_date_context, resolve_period
+from app.services.metric_templates import validate_grain
+from app.services.periods import Period, resolve_period
 
 
 def _messages(
     state: DataAgentState, ctx: RuntimeContext, definitions: list[MetricDefinition]
 ) -> list[BaseMessage]:
-    system = "\n\n".join(
-        [METRIC_INTENT, build_date_context(now=ctx.now), render_catalog_block(definitions)]
+    return intent_messages(
+        MetricIntentInput(question=state.question, data_intent=state.data_intent,
+                          metric_hints=state.metric_hints, terminology=state.relevant_memories),
+        definitions, now=ctx.now,
     )
-    payload = json.dumps(
-        {
-            "question": state.question,
-            "data_intent": state.data_intent,
-            "metric_hints": state.metric_hints,
-            "terminology": [item.model_dump() for item in state.relevant_memories],
-        },
-        ensure_ascii=False,
-    )
-    return [SystemMessage(content=system), HumanMessage(content=payload)]
 
 
 def _clarify(
@@ -113,11 +104,13 @@ async def resolve_metrics(state: DataAgentState, runtime: Runtime[RuntimeContext
     ctx.deadline.check("resolve_metrics")
     definitions = await ctx.metrics.list_active(deadline=ctx.deadline)
     available = [item.key for item in definitions]
-    intent = await ctx.llm.generate_structured(
-        ModelRole.SQL, _messages(state, ctx, definitions), MetricIntent, deadline=ctx.deadline
-    )
+    intent = state.prepared_intent
+    if intent is None:
+        intent = await ctx.llm.generate_structured(
+            ModelRole.SQL, _messages(state, ctx, definitions), MetricIntent, deadline=ctx.deadline
+        )
     # Current explicit names replace an upstream default; bindings retain resolved IDs.
-    if intent.region.names or intent.region.all_regions:
+    if state.prepared_intent is None and (intent.region.names or intent.region.all_regions):
         region = await ctx.regions.resolve(intent.region, deadline=ctx.deadline)
         state = state.model_copy(update={"region_scope": region})
         intent = intent.model_copy(update={"region_mentioned": True})

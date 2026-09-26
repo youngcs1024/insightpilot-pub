@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Literal
 
 from app.agents.budget import SUMMARY_TOKENS, bounded_text
@@ -10,6 +9,7 @@ from app.agents.data.state import DataAgentInput
 from app.agents.knowledge.state import KnowledgeAgentInput
 from app.core.errors import ConflictError, ContextBudgetExceeded
 from app.core.observability import TraceMetadata, observe
+from app.services.memory.retrieve import memory_text
 from app.schemas.memory import MemoryType, TerminologyContent, TerminologyProjection
 
 if TYPE_CHECKING:
@@ -26,18 +26,7 @@ def _context(state: AgentState, counter: SchemaTokenPort) -> TurnContext:
     context = state.context
     # Count the combined selection, including types not destined for this specialist.
     # Identity/provenance stays in the parent; the bounded reference is content + summary.
-    memories = json.dumps(
-        [
-            {
-                "type": memory.memory_type.value,
-                "content": memory.content.model_dump(mode="json"),
-                "summary": memory.summary,
-            }
-            for memory in context.memories
-        ],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+    memories = memory_text(context.memories)
     if len(context.memories) > MEMORY_COUNT or counter.count(memories) > MEMORY_TOKENS:
         raise ContextBudgetExceeded()
     return context
@@ -78,6 +67,7 @@ def to_data_input(state: AgentState, *, token_counter: SchemaTokenPort) -> DataA
         raise ConflictError("missing route")
     inputs = DataAgentInput(
         question=state.question,
+        prepared_intent=context.prepared_intent.model_copy(deep=True) if context.prepared_intent else None,
         data_intent=route.data_intent or state.question,
         metric_hints=list(route.metric_hints),
         relevant_memories=_terminology(context),

@@ -23,6 +23,9 @@ from app.schemas.clarification import ClarificationCapabilities
 from app.schemas.knowledge import KnowledgeEvidence, KnowledgeGeneration
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.memory import FormatPreferenceContent
+from app.schemas.memory_retrieval import MemoryReadRequest, MemorySelection
+from app.schemas.intent import MetricIntentInput
+from app.schemas.metric_resolution import MetricIntent
 from app.schemas.metric_resolution import RegionReference, RegionScope
 from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.metrics import MetricDefinition
@@ -160,6 +163,18 @@ class SchemaTokenPort(Protocol):
     def count(self, text: str) -> int: ...
 
 
+class MemoryPort(Protocol):
+    async def retrieve(
+        self, request: MemoryReadRequest, *, deadline: Deadline, counter: SchemaTokenPort,
+    ) -> MemorySelection: ...
+
+
+class MetricIntentPort(Protocol):
+    async def interpret(
+        self, inputs: MetricIntentInput, *, deadline: Deadline, now: datetime,
+    ) -> MetricIntent: ...
+
+
 @dataclass(frozen=True)
 class RuntimeContext:
     """Passed through LangGraph's native runtime context, never configurable metadata."""
@@ -177,6 +192,8 @@ class RuntimeContext:
     regions: RegionPort
     metrics: MetricPort
     now: datetime
+    memories: MemoryPort | None = None
+    metric_intents: MetricIntentPort | None = None
     clarification_capabilities: ClarificationCapabilityPort | None = None
     retrieval: RetrievalPort | None = None
     knowledge_generation: KnowledgeGenerationPort | None = None

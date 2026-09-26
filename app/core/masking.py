@@ -39,6 +39,12 @@ _SAFE = frozenset(
         "projection_specialist",
         "projection_tokens",
         "projection_tokenizer",
+        "memory_stage",
+        "memory_considered",
+        "memory_selected",
+        "memory_tokens",
+        "memory_failed",
+        "memory_restart",
         "status",
         "degraded_components",
         "role",
@@ -146,7 +152,15 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key in _ROUTING | _PROJECTION:
+        if key.startswith("memory_") and key in _SAFE:
+            if key in {"memory_considered", "memory_selected", "memory_tokens"}:
+                result[key] = value if type(value) is int and value >= 0 else REDACTED
+            elif key == "memory_failed":
+                result[key] = value if type(value) is bool else REDACTED
+            else:
+                allowed = {"prepare", "finalize"} if key == "memory_stage" else {"read_failed", "selection_changed"}
+                result[key] = value if isinstance(value, str) and value in allowed else REDACTED
+        elif key in _ROUTING | _PROJECTION:
             result[key] = _routing_diagnostic(key, value)
         elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)

@@ -24,8 +24,10 @@ from app.schemas.knowledge import KnowledgeEvidence
 from app.schemas.knowledge_query import KnowledgeClarification, KnowledgeHistoryTurn
 from app.schemas.mcp import Contract
 from app.schemas.memory import FormatPreferenceContent, Memory
+from app.schemas.memory_retrieval import MemorySelection
 from app.schemas.metric_resolution import (
     MetricClarification,
+    MetricIntent,
     MetricPatches,
     RegionScope,
     SelectedOverrides,
@@ -33,7 +35,7 @@ from app.schemas.metric_resolution import (
 from app.schemas.retrieval import KnowledgeTimeScope
 from app.services.periods import Period
 
-GRAPH_VERSION: Literal["phase4-v5"] = "phase4-v5"
+GRAPH_VERSION: Literal["phase6-v1"] = "phase6-v1"
 
 
 class TurnContext(Contract):
@@ -44,7 +46,9 @@ class TurnContext(Contract):
     """
 
     model_config = ConfigDict(frozen=True, hide_input_in_errors=True)
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
+    prepared_intent: MetricIntent | None = None
+    intent_failure: NodeFailure | None = None
     recent_messages: list[AnyMessage] = Field(default_factory=list)
     summary: str = Field(default="", max_length=32_000)
     memories: list[Memory] = Field(default_factory=list, max_length=5)
@@ -62,7 +66,7 @@ class TurnContext(Contract):
 class GraphInput(TurnIdentity):
     """A question is loaded from its admitted user message, never caller-overridden."""
 
-    graph_version: Literal["phase4-v5"] = GRAPH_VERSION
+    graph_version: Literal["phase6-v1"] = GRAPH_VERSION
 
 
 class GraphOutput(Contract):
@@ -110,13 +114,17 @@ class GraphOutput(Contract):
 class AgentState(GraphInput):
     """No service, credential, runtime object or checkpoint from another turn."""
 
-    graph_version: Literal["phase4-v5"] = GRAPH_VERSION
+    graph_version: Literal["phase6-v1"] = GRAPH_VERSION
     # prepare owns the loaded question/history. GraphInput cannot supply them.
     question: str = Field(default="", max_length=32_000)
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     routing_context: RoutingContext | None = None
+    memory_preselection: MemorySelection = Field(default_factory=MemorySelection)
+    memory_disabled: bool = False
+    memory_restart_pending: bool = False
     # Reserved owners: finalize_context, router, knowledge wrapper (Steps 4.3-4.4).
     context: TurnContext | None = None
+    context_clarification: MetricClarification | None = None
     route: RouteDecision | None = None
     knowledge_evidence: KnowledgeEvidence | None = None
     knowledge_clarification: KnowledgeClarification | None = None

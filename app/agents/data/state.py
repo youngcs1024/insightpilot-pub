@@ -12,6 +12,7 @@ from app.schemas.mcp import Contract, QueryResultPayload
 from app.schemas.memory import TerminologyProjection
 from app.schemas.metric_resolution import (
     MetricClarification,
+    MetricIntent,
     MetricKey,
     MetricPatches,
     RegionScope,
@@ -26,7 +27,8 @@ from app.services.periods import Period
 class DataAgentInput(Contract):
     """Finalized turn inputs; no specialist independently retrieves preferences."""
 
-    schema_version: Literal[1, 2] = 2
+    schema_version: Literal[1, 2, 3] = 3
+    prepared_intent: MetricIntent | None = None
     question: str = Field(min_length=1, max_length=32_000)
     data_intent: str = Field(default="", max_length=32_000)
     metric_hints: list[MetricKey] = Field(default_factory=list, max_length=6)

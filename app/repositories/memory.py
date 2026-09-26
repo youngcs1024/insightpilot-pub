@@ -86,6 +86,15 @@ class MemoryRepository(UserScopedRepository[MemoryRecord]):
         )
         return [projection(record) for record in records]
 
+    async def active_candidates(self, types: list[MemoryType]) -> list[StoredMemory]:
+        """Read all requested active types in one owned statement/snapshot."""
+        records = await self._session.scalars(
+            self._scoped().where(
+                MemoryRecord.memory_type.in_(types), MemoryRecord.is_active.is_(True)
+            ).order_by(MemoryRecord.created_at, MemoryRecord.id)
+        )
+        return [projection(record) for record in records]
+
     async def list_history(self, memory_type: MemoryType) -> list[StoredMemory]:
         """Return preserved rows, including superseded versions, for an owned type."""
         records = await self._session.scalars(

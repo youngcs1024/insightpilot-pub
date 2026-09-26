@@ -15,6 +15,7 @@ logger = structlog.get_logger(__name__)
 _NAMES = frozenset(
     {
         "turn",
+        "memory_retrieve",
         "prepare",
         "prepare_context",
         "route",

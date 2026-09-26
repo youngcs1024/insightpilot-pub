@@ -70,7 +70,7 @@ def _specialist_intent(state: AgentState, source: MetricClarification) -> Clarif
 
 def source_clarification(state: AgentState) -> tuple[MetricClarification, ClarificationIntent]:
     """Map granular specialist reasons without inspecting their message text."""
-    source = state.data_clarification
+    source = state.context_clarification or state.data_clarification
     if source is None and state.knowledge_clarification is not None:
         source = MetricClarification(
             kind=ClarificationKind(state.knowledge_clarification.kind.value),
