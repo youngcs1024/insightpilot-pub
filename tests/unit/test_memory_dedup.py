@@ -1,5 +1,7 @@
 """Type-specific matching, including deterministic Chinese comparison boundaries."""
 
+# ruff: noqa: RUF001 -- intentional fullwidth input tests Unicode normalization.
+
 from pathlib import Path
 from uuid import uuid4
 
