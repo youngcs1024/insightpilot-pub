@@ -63,7 +63,7 @@ async def test_persisted_status_gate(
         )
 
 
-async def test_existing_active_memory_is_preserved(
+async def test_duplicate_preserves_content_and_touches_timestamp(
     extraction_db: Database, settings: Settings
 ) -> None:
     first = await source_pair(extraction_db, extraction_input())
@@ -77,13 +77,17 @@ async def test_existing_active_memory_is_preserved(
         )
     await service.run(second)
     async with extraction_db.session() as session:
-        assert (
-            await MemoryRepository(session, first.user_id).list_history(MemoryType.METRIC_OVERRIDE)
-            == original
+        refreshed = await MemoryRepository(session, first.user_id).list_history(
+            MemoryType.METRIC_OVERRIDE
+        )
+        assert len(refreshed) == 1
+        assert refreshed[0].updated_at > original[0].updated_at
+        assert refreshed[0].model_dump(exclude={"updated_at"}) == original[0].model_dump(
+            exclude={"updated_at"}
         )
 
 
-async def test_same_batch_first_candidate_wins(extraction_db: Database, settings: Settings) -> None:
+async def test_same_batch_last_conflicting_candidate_wins(extraction_db: Database, settings: Settings) -> None:
     identity = await source_pair(extraction_db, extraction_input())
     changed = candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
     service = MemoryExtractionService(
@@ -97,7 +101,7 @@ async def test_same_batch_first_candidate_wins(extraction_db: Database, settings
             MemoryType.METRIC_OVERRIDE
         )
     assert len(stored) == 1
-    assert stored[0].content == candidate().content
+    assert stored[0].content == changed.content
 
 
 async def test_cross_session_concurrent_writes_have_one_active_memory(

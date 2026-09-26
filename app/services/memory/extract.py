@@ -25,8 +25,9 @@ from app.db.models.turn import TurnRole, TurnStatus
 from app.db.session import Database
 from app.repositories.memory import MemoryRepository
 from app.repositories.turns import TurnRepository
-from app.schemas.memory import MemoryCreate, StoredMemory
 from app.schemas.memory_extraction import MemoryExtraction, MemoryExtractionInput
+from app.schemas.memory_write import WriteOutcome
+from app.services.memory.supersede import write
 
 logger = structlog.get_logger(__name__)
 MIN_CONFIDENCE = 0.7
@@ -139,30 +140,23 @@ class MemoryExtractionService:
                 answer=Answer.model_validate(turn.answer),
             )
 
-    async def _write(self, identity: TurnIdentity, result: MemoryExtraction) -> list[StoredMemory]:
-        saved: list[StoredMemory] = []
+    async def _write(self, identity: TurnIdentity, result: MemoryExtraction) -> list[WriteOutcome]:
+        outcomes: list[WriteOutcome] = []
         async with (
-            asyncio.timeout(self.database_timeout_s),
             self.database.session() as session,
+            asyncio.timeout(self.database_timeout_s),
             session.begin(),
         ):
             repo = MemoryRepository(session, identity.user_id)
             await repo.lock_writes()
             for candidate in result.candidates:
-                if await repo.list_active(candidate.memory_type):
-                    logger.info(
-                        "memory_candidate_rejected",
-                        reason="active_type_exists",
-                        memory_type=candidate.memory_type.value,
-                    )
-                    continue
-                value = MemoryCreate(
-                    source_turn_id=identity.turn_id,
-                    memory_type=candidate.memory_type,
-                    content=candidate.content,
-                    summary=candidate.summary,
-                    confidence=candidate.confidence,
-                )
-                saved.append(await repo.create(value))
-        logger.info("memory_write_completed", turn_id=str(identity.turn_id), created=len(saved))
-        return saved
+                outcomes.append(await write(candidate, repo, identity.turn_id))
+        for outcome in outcomes:
+            logger.info(
+                "memory_write_completed",
+                turn_id=str(identity.turn_id),
+                status=outcome.status.value,
+                memory_id=str(outcome.memory_id),
+                superseded_id=str(outcome.superseded_id) if outcome.superseded_id else None,
+            )
+        return outcomes

@@ -95,6 +95,42 @@ class MemoryRepository(UserScopedRepository[MemoryRecord]):
         )
         return [projection(record) for record in records]
 
+    async def touch(self, memory_id: UUID) -> StoredMemory:
+        """Update only the timestamp of an active owned duplicate."""
+        record = await self._session.scalar(
+            self._scoped()
+            .where(MemoryRecord.id == memory_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if record is None:
+            raise NotFoundError()
+        if not record.is_active:
+            raise ConflictError("Cannot touch a superseded memory")
+        record.updated_at = (await self._session.execute(select(func.clock_timestamp()))).scalar_one()
+        await self._session.flush()
+        await self._session.refresh(record)
+        return projection(record)
+
+    async def page(
+        self,
+        *,
+        include_superseded: bool,
+        memory_type: MemoryType | None,
+        limit: int,
+        offset: int,
+    ) -> list[StoredMemory]:
+        """Read a bounded owned history page in stable creation order."""
+        statement = self._scoped()
+        if not include_superseded:
+            statement = statement.where(MemoryRecord.is_active.is_(True))
+        if memory_type is not None:
+            statement = statement.where(MemoryRecord.memory_type == memory_type)
+        records = await self._session.scalars(
+            statement.order_by(MemoryRecord.created_at, MemoryRecord.id).limit(limit).offset(offset)
+        )
+        return [projection(record) for record in records]
+
     async def supersede(self, memory_id: UUID, *, by: UUID) -> StoredMemory:
         """Lock both versions in ID order and retire only an active owned source."""
         records = list(

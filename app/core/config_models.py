@@ -193,6 +193,9 @@ class RateLimitSettings(ConfigModel):
     conversations_rules: list[RateRule] = Field(
         default_factory=lambda: [RateRule(requests=60, seconds=60)], min_length=1, max_length=10
     )
+    memories_rules: list[RateRule] = Field(
+        default_factory=lambda: [RateRule(requests=60, seconds=60)], min_length=1, max_length=10
+    )
     messages_rules: list[RateRule] = Field(
         default_factory=lambda: [RateRule(requests=20, seconds=60)], min_length=1, max_length=10
     )

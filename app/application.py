@@ -44,6 +44,7 @@ from app.services.health import HealthService, MCPProbe, PostgreSQLProbe
 from app.services.knowledge_generation import KnowledgeGenerationService
 from app.services.llm.service import LlmService
 from app.services.memory.extract import MemoryExtractionService
+from app.services.memory.service import MemoryService
 from app.services.metrics import MetricService
 from app.services.schema_catalog import SchemaCatalogService
 from app.services.schema_tokens import SchemaTokenCounter
@@ -209,6 +210,7 @@ def create_app(  # noqa: PLR0913, PLR0915 -- explicit resources and middleware c
     app.state.graph = graph_service
     app.state.evidence = EvidenceService(database)
     app.state.conversations = ConversationService(database)
+    app.state.memories = MemoryService(database, settings.database)
     app.state.llm = llm_service
     app.state.mcp = mcp_client
     app.state.model_runtime = model_runtime_client

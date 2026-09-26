@@ -13,7 +13,7 @@ from slowapi import Limiter
 from app.core.config_models import RateLimitSettings
 from app.core.errors import QuotaExceededError
 
-AuthRoute = Literal["register", "login", "refresh", "me", "conversations", "messages"]
+AuthRoute = Literal["register", "login", "refresh", "me", "conversations", "messages", "memories"]
 
 
 class ConfiguredLimiter(Limiter):
@@ -51,6 +51,7 @@ class AuthLimiter:
             "refresh": self.settings.refresh_rules,
             "me": self.settings.me_rules,
             "conversations": self.settings.conversations_rules,
+            "memories": self.settings.memories_rules,
             "messages": self.settings.messages_rules,
         }
         for rule in rules[route]:
