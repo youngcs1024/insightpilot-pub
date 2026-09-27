@@ -1,11 +1,10 @@
 """Resolve metric meaning through injected services before any SQL generation."""
 
-import sqlglot
 from langchain_core.messages import BaseMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.contracts import MetricExamplesSnapshot, ResolvedMetricBinding
+from app.agents.contracts import MetricExamplesSnapshot
 from app.agents.data.state import DataAgentState
 from app.agents.runtime import RuntimeContext
 from app.core.errors import (
@@ -17,10 +16,10 @@ from app.core.errors import (
 from app.core.llm_config import ModelRole
 from app.schemas.intent import MetricIntentInput
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification, MetricIntent
-from app.schemas.metric_tools import ResolveMetricArgs
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
-from app.services.metric_binding import BindingRequest, BindingResult, build_binding, merge_explicit
+from app.services.metric_binding import BindingRequest, BindingResult, merge_explicit
+from app.services.metric_override import resolve_binding
 from app.services.metric_intent import intent_messages
 from app.services.metric_templates import validate_grain
 from app.services.periods import Period, resolve_period
@@ -150,7 +149,7 @@ async def _resolve(  # noqa: PLR0913, PLR0917 -- typed node inputs, no hidden st
         ctx.deadline.check("resolve_metric_binding")
         try:
             definition = await ctx.metrics.get_active(key, deadline=ctx.deadline)
-            result = build_binding(
+            result = await resolve_binding(
                 BindingRequest(
                     definition=definition,
                     period=period,
@@ -163,27 +162,8 @@ async def _resolve(  # noqa: PLR0913, PLR0917 -- typed node inputs, no hidden st
                     region_scope=state.region_scope,
                 ),
                 schema,
-            )
-            query = sqlglot.parse_one(result.binding.resolved_expression, read="postgres")
-            fragment = await ctx.mcp.resolve_metric(
-                ResolveMetricArgs(
-                    metric_key=definition.key,
-                    expression=query.expressions[1].this.sql(dialect="postgres"),
-                    resolved_sql=result.binding.resolved_expression,
-                    base_tables=definition.base_tables,
-                    date_field=result.binding.date_field,
-                    period_start=result.binding.period_start,
-                    period_end=result.binding.period_end,
-                    filters=result.binding.filters_applied,
-                    grain=result.binding.grain,
-                ),
+                ctx.mcp,
                 deadline=ctx.deadline,
-            )
-            result.binding = ResolvedMetricBinding.model_validate(
-                {
-                    **result.binding.model_dump(mode="json"),
-                    "resolved_expression": fragment.normalized_sql,
-                }
             )
         except MetricNotFound:
             return _clarify(

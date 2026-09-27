@@ -507,3 +507,17 @@ class MemoryExtractionError(InsightPilotError):
 
     code = "MEMORY_EXTRACTION_FAILED"
     user_message = "Memory extraction could not be completed."
+
+
+class MemoryWriteConflictError(ConflictError):
+    """A known rolled-back active-metric uniqueness conflict can retry its transaction."""
+
+    code = "MEMORY_WRITE_CONFLICT"
+    retryable = True
+
+
+class MemorySchemaError(InsightPilotError):
+    """The committed-memory uniqueness contract is absent or has drifted."""
+
+    code = "MEMORY_SCHEMA_INVALID"
+    user_message = "Memory storage requires an administrator migration."

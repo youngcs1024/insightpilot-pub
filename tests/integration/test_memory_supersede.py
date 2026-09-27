@@ -254,16 +254,13 @@ async def test_ambiguous_active_key_fails_without_partial_writes(
         summary="original",
         confidence=0.9,
     )
-    async with memory_db.session() as session, session.begin():
-        repo = MemoryRepository(session, identity.user_id)
-        await repo.create(value)
-        await repo.create(value)
-    original = await history(memory_db, identity)
     with pytest.raises(ConflictError):
-        await service(memory_db, settings)._write(
-            identity, MemoryExtraction(candidates=[changed()])
-        )
-    assert await history(memory_db, identity) == original
+        async with memory_db.session() as session, session.begin():
+            repo = MemoryRepository(session, identity.user_id)
+            await repo.create(value)
+            await repo.create(value)
+    assert await history(memory_db, identity) == []
+
 
 
 @pytest.mark.parametrize(

@@ -58,7 +58,7 @@ async def test_all_live_descriptors_load_and_schema_arguments(client: McpClient)
 
 
 async def test_api_lifespan_loads_every_live_descriptor(
-    settings: Settings, mcp_endpoint: MCPSettings
+    settings: Settings, mcp_endpoint: MCPSettings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings.mcp = mcp_endpoint
     mcp = McpClient(mcp_endpoint)
@@ -72,6 +72,7 @@ async def test_api_lifespan_loads_every_live_descriptor(
         graph_service=AsyncMock(spec=GraphService),
         observability=AsyncMock(spec=Observability),
     )
+    monkeypatch.setattr("app.application.validate_memory_schema", AsyncMock())
     app.state.metrics.validate_startup = AsyncMock()
     app.state.chat.reconcile = AsyncMock()
     async with app.router.lifespan_context(app):

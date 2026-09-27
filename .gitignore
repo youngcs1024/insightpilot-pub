@@ -111,3 +111,6 @@ e2e-evidence/
 
 !mcp_server/data/schema_metadata.json
 !tests/fixtures/get_business_schema_descriptor.json
+
+# Committed node interface compatibility snapshot.
+!tests/node_signatures.json

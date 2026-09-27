@@ -19,6 +19,7 @@ from app.services.graph import GraphService
 def isolated_api_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     """Restore global logging and context after each app lifecycle test."""
     monkeypatch.setattr("app.services.metrics.MetricService.validate_startup", AsyncMock())
+    monkeypatch.setattr("app.application.validate_memory_schema", AsyncMock())
     monkeypatch.setattr("app.services.chat.ChatService.reconcile", AsyncMock())
     monkeypatch.setattr("app.application.GraphService", lambda _: AsyncMock(spec=GraphService))
     monkeypatch.setattr("app.application.McpClient", lambda _: AsyncMock(spec=McpClient))

@@ -7,6 +7,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from opentelemetry import metrics
 from pydantic import ValidationError as PydanticValidationError
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.agents.contracts import Answer, TurnIdentity
 from app.agents.prompts import MEMORY_EXTRACT
@@ -17,6 +18,7 @@ from app.core.errors import (
     ConflictError,
     LlmStructuredOutputError,
     MemoryExtractionError,
+    MemoryWriteConflictError,
     NotFoundError,
 )
 from app.core.llm_config import ModelRole
@@ -112,7 +114,7 @@ class MemoryExtractionService:
                 return
             result = await extract(inputs, self.llm, deadline=deadline)
             if result.candidates:
-                await self._write(identity, result)
+                await self._write(identity, result, deadline=deadline)
 
     async def _load(self, identity: TurnIdentity) -> MemoryExtractionInput | None:
         async with (
@@ -140,7 +142,27 @@ class MemoryExtractionService:
                 answer=Answer.model_validate(turn.answer),
             )
 
-    async def _write(self, identity: TurnIdentity, result: MemoryExtraction) -> list[WriteOutcome]:
+    async def _write(
+        self, identity: TurnIdentity, result: MemoryExtraction, *, deadline: Deadline | None = None
+    ) -> list[WriteOutcome]:
+        # Only a deferred unique violation proves the entire transaction rolled back.
+        # Never repeat writes after connection loss, timeout or an uncertain commit.
+        budget = deadline or Deadline(monotonic() + self.database_timeout_s)
+        async with asyncio.timeout(budget.remaining()):
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception_type(MemoryWriteConflictError),
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=0.05, max=0.2),
+                reraise=True,
+            ):
+                with attempt:
+                    budget.check("memory_write")
+                    return await self._write_once(identity, result)
+        raise MemoryExtractionError()
+
+    async def _write_once(
+        self, identity: TurnIdentity, result: MemoryExtraction
+    ) -> list[WriteOutcome]:
         outcomes: list[WriteOutcome] = []
         async with (
             self.database.session() as session,

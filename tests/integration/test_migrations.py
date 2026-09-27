@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, c
 from alembic import command
 from app.db.base import Base
 from app.db.models import Conversation, Turn, TurnRole, TurnStatus, User
+from tests.memory_support import memory_owner
 from scripts import migration_environment
 from scripts.migrate_all import migration_config
 from scripts.migration_environment import (
@@ -78,7 +79,7 @@ async def test_upgrade_head_from_empty(migrated: MigrationSettings, engine: Asyn
         assert str(clarification["type"]) == "JSONB"
         assert (
             await connection.scalar(text("SELECT version_num FROM alembic_version_app"))
-            == "0012_memories"
+            == "0013_metric_override_unique"
         )
     business = create_async_engine(migrated.migration.url(MigrationTarget.BUSINESS))
     try:
@@ -710,3 +711,86 @@ def test_memory_migration_roundtrip(migrated: MigrationSettings) -> None:
     finally:
         command.upgrade(config, "head")
     asyncio.run(inspect_memories(present=True))
+
+
+def test_metric_override_unique_migration_roundtrip(migrated: MigrationSettings) -> None:
+    """Upgrade/downgrade preserve rows and runtime grants, and reject legacy duplicates."""
+    config = migration_config(MigrationTarget.APP)
+
+    async def inspect_constraint(*, upgraded: bool) -> None:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with resource.connect() as connection:
+                columns = await connection.run_sync(lambda conn: inspect(conn).get_columns("memories"))
+                assert ("active_metric_key" in {column["name"] for column in columns}) is upgraded
+                if upgraded:
+                    await connection.run_sync(assert_empty_diff, MigrationTarget.APP)
+                    constraint = (await connection.execute(text(
+                        "SELECT condeferrable, condeferred, convalidated FROM pg_constraint "
+                        "WHERE conrelid='memories'::regclass AND conname='uq_memories_active_metric'"
+                    ))).one()
+                    assert tuple(constraint) == (True, True, True)
+                    assert not await connection.scalar(text(
+                        "SELECT has_column_privilege('app_rw', 'memories', 'active_metric_key', 'UPDATE')"
+                    ))
+        finally:
+            await resource.dispose()
+
+    command.downgrade(config, "0012_memories")
+    try:
+        asyncio.run(inspect_constraint(upgraded=False))
+    finally:
+        command.upgrade(config, "head")
+    asyncio.run(inspect_constraint(upgraded=True))
+
+
+def test_metric_override_upgrade_rejects_legacy_duplicates(migrated: MigrationSettings) -> None:
+    """Failed upgrades leave both versions untouched; fixture repair is explicit and scoped."""
+    config = migration_config(MigrationTarget.APP)
+    old_id, new_id = uuid4(), uuid4()
+
+    async def seed_legacy() -> UUID:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with AsyncSession(resource) as session, session.begin():
+                user_id, turn_id = await memory_owner(session)
+                for memory_id in (old_id, new_id):
+                    await session.execute(text("""
+                        INSERT INTO memories (id, user_id, source_turn_id, memory_type,
+                                              content, summary, confidence)
+                        VALUES (:id, :user, :turn, 'metric_override',
+                                '{"metric_key":"refund_rate","patch":{"date_field":"o.paid_at"}}'::jsonb,
+                                'Legacy fixture', 0.9)
+                    """), {"id": memory_id, "user": user_id, "turn": turn_id})
+                return user_id
+        finally:
+            await resource.dispose()
+
+    async def check_rows(user_id: UUID, *, repair: bool = False) -> list[tuple[object, ...]]:
+        resource = create_async_engine(migrated.migration.url(MigrationTarget.APP))
+        try:
+            async with resource.begin() as connection:
+                if repair:
+                    await connection.execute(text("""
+                        UPDATE memories SET is_active=false, superseded_by=:new,
+                                            superseded_at=clock_timestamp()
+                        WHERE id=:old AND user_id=:user
+                    """), {"old": old_id, "new": new_id, "user": user_id})
+                rows = await connection.execute(text(
+                    "SELECT id, content, is_active, superseded_by FROM memories "
+                    "WHERE user_id=:user ORDER BY id"), {"user": user_id})
+                return [tuple(row) for row in rows]
+        finally:
+            await resource.dispose()
+
+    command.downgrade(config, "0012_memories")
+    user_id = asyncio.run(seed_legacy())
+    before = asyncio.run(check_rows(user_id))
+    try:
+        with pytest.raises(IntegrityError):
+            command.upgrade(config, "head")
+        assert asyncio.run(check_rows(user_id)) == before
+    finally:
+        repaired = asyncio.run(check_rows(user_id, repair=True))
+        command.upgrade(config, "head")
+    assert asyncio.run(check_rows(user_id)) == repaired

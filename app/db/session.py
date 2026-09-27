@@ -21,6 +21,7 @@ from app.core.errors import (
     DatabaseError,
     DatabaseTimeoutError,
     InsightPilotError,
+    MemoryWriteConflictError,
     UpstreamUnavailableError,
 )
 
@@ -34,6 +35,10 @@ def translate_database_error(exc: Exception) -> InsightPilotError:
     source = exc.orig if isinstance(exc, DBAPIError) else exc
     sqlstate = getattr(source, "sqlstate", None)
     if sqlstate == "23505":
+        # SQLAlchemy's asyncpg adapter retains the original structured driver cause.
+        driver = source.__cause__ or source
+        if getattr(driver, "constraint_name", None) == "uq_memories_active_metric":
+            return MemoryWriteConflictError()
         return ConflictError()
     if sqlstate == "57014":
         return DatabaseTimeoutError()
