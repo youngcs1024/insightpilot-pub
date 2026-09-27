@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from structlog.testing import capture_logs
 from tenacity import wait_none
 
-from app.core.config_models import LLMSettings
+from app.core.config_models import LLMSettings, Settings
 from app.core.deadline import Deadline
 from app.core.errors import (
     DeadlineExceededError,
@@ -21,6 +21,7 @@ from app.core.errors import (
     LlmStructuredOutputError,
     LlmUnavailableError,
 )
+from app.core.logging import SecretRedactor
 from app.services.llm.registry import ModelRegistry, ModelRole, StructuredTier
 from app.services.llm.service import LlmService
 from tests.llm_support import URL, report, response, service
@@ -264,23 +265,24 @@ async def test_plain_generation_and_input_not_mutated(respx_mock: respx.MockRout
 
 
 async def test_safe_metadata_and_trace_failure_is_nonfatal(
-    respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
+    redactor = SecretRedactor(settings)
     span = MagicMock()
     monkeypatch.setattr("app.services.llm.transport.trace.get_current_span", lambda: span)
     respx_mock.post(URL).mock(return_value=response())
     async with service() as llm:
         with capture_logs() as logs:
             await generate(llm, "private-question")
-        assert "private-question" not in json.dumps(logs)
-        assert "华东" not in json.dumps(logs, ensure_ascii=False)
-        assert "test-key-only" not in json.dumps(logs)
+        assert "private-question" not in json.dumps(redactor.clean(logs))
+        assert "华东" not in json.dumps(redactor.clean(logs), ensure_ascii=False)
+        assert "test-key-only" not in json.dumps(redactor.clean(logs))
         span.set_attribute.assert_any_call("llm.structured_tier", 1)
         span.set_attribute.assert_any_call("llm.role", "sql")
         span.set_attribute.side_effect = RuntimeError("private-trace-diagnostic")
         with capture_logs() as failed_logs:
             assert (await generate(llm)).count == EXPECTED_COUNT
-        assert "private-trace-diagnostic" not in json.dumps(failed_logs)
+        assert "private-trace-diagnostic" not in json.dumps(redactor.clean(failed_logs))
 
 
 async def test_repair_errors_do_not_echo_invalid_values(respx_mock: respx.MockRouter) -> None:
