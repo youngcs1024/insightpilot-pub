@@ -264,10 +264,14 @@ async def test_production_parallel_writes_and_fresh_turn_isolation() -> None:
         assert state.context.selected_overrides.items == []
 
 
-def test_graph_has_no_cycles() -> None:
+def test_graph_has_no_cycles_except_bounded_memory_restart() -> None:
     edges = topology().compile().get_graph().edges
     successors = {}
+    restart = ("finalize_context", "prepare_context")
+    assert sum((edge.source, edge.target) == restart for edge in edges) == 1
     for edge in edges:
+        if (edge.source, edge.target) == restart:
+            continue
         successors.setdefault(edge.source, set()).add(edge.target)
 
     def visit(node: str, ancestors: set[str]) -> None:

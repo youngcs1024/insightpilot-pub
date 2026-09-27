@@ -155,7 +155,8 @@ def select_memories(
         )
     )
     result = MemorySelection()
-    for row, score, reason in scored:
+    for row, score, gate_reason in scored:
+        reason = gate_reason
         if reason is MemoryReason.SELECTED:
             if len(result.selected) >= MAX_MEMORIES:
                 reason = MemoryReason.COUNT_LIMIT

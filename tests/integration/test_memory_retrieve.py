@@ -3,17 +3,20 @@
 import asyncio
 from collections.abc import AsyncIterator
 from time import monotonic
+from unittest.mock import AsyncMock
 
 import pytest
 
+from app.agents.contracts import Route, RouteDecision
 from app.core.deadline import Deadline
 from app.core.errors import DatabaseError, DeadlineExceededError
 from app.db.session import Database
 from app.repositories.memory import MemoryRepository
 from app.schemas.memory import MemoryType, StoredMemory
-from app.schemas.memory_retrieval import MemoryReadRequest, MemoryStage
+from app.schemas.memory_retrieval import MemoryReadRequest, MemoryReason, MemoryStage
 from app.services.memory.service import MemoryService
 from app.services.schema_tokens import SchemaTokenCounter
+from scripts import dev_memory
 from tests.memory_extraction_support import extraction_input, source_pair
 from tests.memory_support import memory_input
 from tests.shared_database import TestPostgres
@@ -158,3 +161,47 @@ async def test_command_timeout_is_degraded_but_request_expiry_propagates(
     ).failed
     with pytest.raises(DeadlineExceededError):
         await service.retrieve(request, deadline=Deadline(0), counter=SchemaTokenCounter())
+
+
+async def test_explain_reads_owned_candidates_without_writes(
+    memory_db: Database, migrated_db: TestPostgres, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owner = await source_pair(memory_db, extraction_input())
+    other = await source_pair(memory_db, extraction_input())
+    async with memory_db.session() as session, session.begin():
+        repo = MemoryRepository(session, owner.user_id)
+        term = await repo.create(memory_input(owner.turn_id))
+        metric = await repo.create(
+            memory_input(
+                owner.turn_id,
+                kind=MemoryType.METRIC_OVERRIDE,
+                content={"metric_key": "gmv", "patch": {"date_field": "paid_at"}},
+            )
+        )
+        await MemoryRepository(session, other.user_id).create(memory_input(other.turn_id))
+        before = await repo.active_candidates(list(MemoryType))
+    llm = AsyncMock()
+    monkeypatch.setattr(dev_memory, "LazyRoutingLlm", lambda settings: llm)
+    monkeypatch.setattr(
+        dev_memory,
+        "route_question",
+        AsyncMock(
+            return_value=RouteDecision(
+                route=Route.KNOWLEDGE_ONLY,
+                confidence=1,
+                knowledge_intent="大促退货政策",
+                region_mentioned=False,
+            )
+        ),
+    )
+    settings = dev_memory.MemoryProcessSettings(database=migrated_db.app, _env_file=None)
+    report = await dev_memory.run(owner.user_id, "大促退货政策是什么", settings)
+    assert [row.id for row in report.preparation.selected] == [term.id]
+    assert [row.id for row in report.final.selected] == [term.id]
+    reasons = {row.memory_id: row.reason for row in report.final.decisions}
+    assert reasons == {term.id: MemoryReason.SELECTED, metric.id: MemoryReason.WRONG_ROUTE}
+    assert not report.restart_required
+    llm.aclose.assert_awaited_once()
+    async with memory_db.session() as session:
+        after = await MemoryRepository(session, owner.user_id).active_candidates(list(MemoryType))
+    assert after == before

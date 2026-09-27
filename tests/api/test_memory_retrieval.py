@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.agents.contracts import TurnIdentity
+from app.core.config_models import RouterSettings
 from app.core.errors import DatabaseError
 from app.repositories.memory import MemoryRepository
 from app.schemas.memory import MemoryType, StoredMemory
@@ -15,6 +16,11 @@ from tests.memory_support import memory_input
 
 pytestmark = pytest.mark.integration
 __all__ = ["chat"]
+
+
+@pytest.fixture(autouse=True)
+def production_routing(chat: Harness) -> None:
+    chat.app.state.settings.router = RouterSettings()
 
 
 async def seed_format(chat: Harness) -> StoredMemory:

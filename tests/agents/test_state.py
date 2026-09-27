@@ -68,13 +68,15 @@ async def test_no_concurrent_writes_to_same_field() -> None:
     assert writes["knowledge_agent"] == {"knowledge_evidence", "assumptions"}
     assert writes["data_agent"] & writes["knowledge_agent"] == {"assumptions"}
     assert writes["prepare"] == {
-        "prepared", "question", "messages", "routing_context", "memory_preselection",
+        "prepared",
+        "question",
+        "messages",
+        "routing_context",
+        "memory_preselection",
         "degraded_components",
     }
     assert writes["router"] == {"route"}
-    assert writes["finalize_context"] == {
-        "context", "context_clarification", "memory_restart_pending", "degraded_components",
-    }
+    assert writes["finalize_context"] == {"context"}
     assert writes["finish"] == {"status"}
 
 

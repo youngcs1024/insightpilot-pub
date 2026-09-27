@@ -61,8 +61,8 @@ async def test_format_preference_applies_to_data_answer() -> None:
 async def test_explicit_format_fields_beat_saved_fields() -> None:
     ctx = memory_context()
     ctx.memories.rows = [stored(MemoryType.FORMAT_PREFERENCE, user=ctx.identity.user_id)]
-    ctx.conversations.prepare.return_value = PreparedContext(summary="", messages=[], prior_sql=[], 
-        question="2026年8月经营情况，用文字回答"
+    ctx.conversations.prepare.return_value = PreparedContext(
+        summary="", messages=[], prior_sql=[], question="2026年8月经营情况，用文字回答"
     )
     result = await invoke(ctx)
     assert result.answer.format_preference.prefer == "prose"
@@ -96,7 +96,9 @@ async def test_failed_final_read_removes_previously_used_terminology_and_reroute
     row = stored(user=ctx.identity.user_id)
     ctx.memories.rows = [row]
     ctx.memories.fail_at = 2
-    ctx.conversations.prepare.return_value = PreparedContext(summary="", messages=[], prior_sql=[], question="大促政策是什么")
+    ctx.conversations.prepare.return_value = PreparedContext(
+        summary="", messages=[], prior_sql=[], question="大促政策是什么"
+    )
     route = RouteDecision(route=Route.KNOWLEDGE_ONLY, confidence=1, knowledge_intent="查找大促政策")
     retrieval = ranked()
     llm = FakeChatModel([route, route, draft(retrieval.candidates[0].chunk_uuid)])
@@ -171,7 +173,9 @@ async def test_superseded_preroute_term_forces_memory_free_restart() -> None:
     ctx = memory_context(Route.KNOWLEDGE_ONLY)
     row = stored(user=ctx.identity.user_id)
     ctx.memories.rows = [row]
-    ctx.conversations.prepare.return_value = PreparedContext(summary="", messages=[], prior_sql=[], question="大促政策")
+    ctx.conversations.prepare.return_value = PreparedContext(
+        summary="", messages=[], prior_sql=[], question="大促政策"
+    )
     state = AgentState(**ctx.identity.model_dump())
     prepared = await prepare(state, Runtime(context=ctx))
     state = AgentState.model_validate({**state.model_dump(), **prepared.update})
@@ -225,7 +229,9 @@ async def test_budget_eviction_of_used_term_requests_one_restart() -> None:
 
     ctx = replace(ctx, schema_token_counter=Counter())
     ctx.memories.rows = [term]
-    ctx.conversations.prepare.return_value = PreparedContext(summary="", messages=[], prior_sql=[], question="GMV GMV GMV")
+    ctx.conversations.prepare.return_value = PreparedContext(
+        summary="", messages=[], prior_sql=[], question="GMV GMV GMV"
+    )
     state = AgentState(**ctx.identity.model_dump())
     prepared = await prepare(state, Runtime(context=ctx))
     state = AgentState.model_validate({**state.model_dump(), **prepared.update})

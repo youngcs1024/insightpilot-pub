@@ -11,6 +11,7 @@ from app.core.errors import ConflictError
 from app.schemas.memory import MemoryType
 from app.schemas.memory_retrieval import MemoryReadRequest, MemoryReason, MemoryStage
 from app.schemas.metric_resolution import MetricPatch, MetricPatchEntry, MetricPatches
+from app.services.memory import retrieve
 from app.services.memory.retrieve import effective_patch, memory_text, select_memories, term_present
 from app.services.schema_tokens import SchemaTokenCounter
 from tests.memory_retrieval_support import USER, stored
