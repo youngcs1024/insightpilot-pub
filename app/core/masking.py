@@ -21,6 +21,16 @@ REDACTED = "<redacted>"
 _ROUTING = frozenset(
     {"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"}
 )
+_MEMORY = frozenset(
+    {
+        "memory_stage",
+        "memory_considered",
+        "memory_selected",
+        "memory_tokens",
+        "memory_failed",
+        "memory_restart",
+    }
+)
 _PROJECTION = frozenset({"projection_specialist", "projection_tokens", "projection_tokenizer"})
 _SAFE = frozenset(
     {
@@ -147,20 +157,23 @@ def _projection_diagnostic(key: str, value: object) -> object:
     return value if isinstance(value, str) and value in allowed else REDACTED
 
 
+def _memory_diagnostic(key: str, value: object) -> object:
+    if key in {"memory_considered", "memory_selected", "memory_tokens"}:
+        return value if type(value) is int and value >= 0 else REDACTED
+    if key == "memory_failed":
+        return value if type(value) is bool else REDACTED
+    allowed = (
+        {"prepare", "finalize"} if key == "memory_stage" else {"read_failed", "selection_changed"}
+    )
+    return value if isinstance(value, str) and value in allowed else REDACTED
+
+
 def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key.startswith("memory_") and key in _SAFE:
-            if key in {"memory_considered", "memory_selected", "memory_tokens"}:
-                result[key] = value if type(value) is int and value >= 0 else REDACTED
-            elif key == "memory_failed":
-                result[key] = value if type(value) is bool else REDACTED
-            else:
-                allowed = {"prepare", "finalize"} if key == "memory_stage" else {"read_failed", "selection_changed"}
-                result[key] = value if isinstance(value, str) and value in allowed else REDACTED
-        elif key in _ROUTING | _PROJECTION:
+        if key in _ROUTING | _PROJECTION | _MEMORY:
             result[key] = _routing_diagnostic(key, value)
         elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)
@@ -180,8 +193,9 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
 
 
 def _routing_diagnostic(key: str, value: object) -> object:
-    if key in _PROJECTION:
-        return _projection_diagnostic(key, value)
+    if key in _MEMORY | _PROJECTION:
+        project = _memory_diagnostic if key in _MEMORY else _projection_diagnostic
+        return project(key, value)
     if value is None:
         return None
     if key in {"route", "original_route"}:

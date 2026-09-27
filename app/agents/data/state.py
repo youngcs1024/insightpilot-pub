@@ -43,7 +43,7 @@ class DataAgentInput(Contract):
 class DataAgentOutput(Contract):
     """Only a packaged result crosses back into the parent graph."""
 
-    schema_version: Literal[1, 2] = 2
+    schema_version: Literal[1, 2, 3] = 3
     evidence: DataEvidence | None = None
     failure: NodeFailure | None = None
     assumptions: list[str] = Field(default_factory=list)

@@ -10,7 +10,6 @@ from asgi_correlation_id import correlation_id
 from fastapi import APIRouter, Depends, Header, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.services.metric_intent import MetricIntentService
 from app.agents.runtime import RuntimeContext
 from app.api.streaming import ChatStreamingResponse
 from app.api.v1.auth import Quota
@@ -21,6 +20,7 @@ from app.schemas.chat import MessageRequest, TurnResponse
 from app.services.chat import AdmittedTurn, ChatService
 from app.services.chat_stream import stream
 from app.services.idempotency import MessageAdmission
+from app.services.metric_intent import MetricIntentService
 from app.services.regions import RegionService
 
 router = APIRouter(prefix="/conversations", tags=["chat"])

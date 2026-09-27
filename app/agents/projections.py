@@ -9,8 +9,8 @@ from app.agents.data.state import DataAgentInput
 from app.agents.knowledge.state import KnowledgeAgentInput
 from app.core.errors import ConflictError, ContextBudgetExceeded
 from app.core.observability import TraceMetadata, observe
-from app.services.memory.retrieve import memory_text
 from app.schemas.memory import MemoryType, TerminologyContent, TerminologyProjection
+from app.services.memory.retrieve import memory_text
 
 if TYPE_CHECKING:
     from app.agents.runtime import SchemaTokenPort
@@ -67,7 +67,9 @@ def to_data_input(state: AgentState, *, token_counter: SchemaTokenPort) -> DataA
         raise ConflictError("missing route")
     inputs = DataAgentInput(
         question=state.question,
-        prepared_intent=context.prepared_intent.model_copy(deep=True) if context.prepared_intent else None,
+        prepared_intent=context.prepared_intent.model_copy(deep=True)
+        if context.prepared_intent
+        else None,
         data_intent=route.data_intent or state.question,
         metric_hints=list(route.metric_hints),
         relevant_memories=_terminology(context),

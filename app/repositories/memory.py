@@ -89,9 +89,9 @@ class MemoryRepository(UserScopedRepository[MemoryRecord]):
     async def active_candidates(self, types: list[MemoryType]) -> list[StoredMemory]:
         """Read all requested active types in one owned statement/snapshot."""
         records = await self._session.scalars(
-            self._scoped().where(
-                MemoryRecord.memory_type.in_(types), MemoryRecord.is_active.is_(True)
-            ).order_by(MemoryRecord.created_at, MemoryRecord.id)
+            self._scoped()
+            .where(MemoryRecord.memory_type.in_(types), MemoryRecord.is_active.is_(True))
+            .order_by(MemoryRecord.created_at, MemoryRecord.id)
         )
         return [projection(record) for record in records]
 

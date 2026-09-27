@@ -22,9 +22,13 @@ async def prepare(state: AgentState, runtime: Runtime[RuntimeContext]) -> Comman
         memories = MemorySelection()
         if ctx.memories is not None and not state.memory_disabled:
             memories = await ctx.memories.retrieve(
-                MemoryReadRequest(user_id=ctx.identity.user_id, question=prepared.question,
-                                  stage=MemoryStage.PREPARE),
-                deadline=ctx.deadline, counter=ctx.schema_token_counter,
+                MemoryReadRequest(
+                    user_id=ctx.identity.user_id,
+                    question=prepared.question,
+                    stage=MemoryStage.PREPARE,
+                ),
+                deadline=ctx.deadline,
+                counter=ctx.schema_token_counter,
             )
         messages = [
             (HumanMessage if item.role == "user" else AIMessage)(
@@ -36,18 +40,30 @@ async def prepare(state: AgentState, runtime: Runtime[RuntimeContext]) -> Comman
             update={
                 "prepared": prepared,
                 "memory_preselection": memories,
-                "degraded_components": ["memory"] if memories.failed and "memory" not in state.degraded_components else [],
+                "degraded_components": ["memory"]
+                if memories.failed and "memory" not in state.degraded_components
+                else [],
                 "question": prepared.question,
                 "messages": [
                     *messages,
                     HumanMessage(content=prepared.question, id=f"{state.turn_id}:question"),
                 ],
                 "routing_context": RoutingContext(
-                    summary=prepared.summary, recent_messages=prepared.messages,
-                    terminology=[row.content.model_copy(deep=True) for row in memories.selected
-                                 if isinstance(row.content, TerminologyContent)],
-                    format_preference=next((row.content.model_copy(deep=True)
-                        for row in memories.selected if isinstance(row.content, FormatPreferenceContent)), None),
+                    summary=prepared.summary,
+                    recent_messages=prepared.messages,
+                    terminology=[
+                        row.content.model_copy(deep=True)
+                        for row in memories.selected
+                        if isinstance(row.content, TerminologyContent)
+                    ],
+                    format_preference=next(
+                        (
+                            row.content.model_copy(deep=True)
+                            for row in memories.selected
+                            if isinstance(row.content, FormatPreferenceContent)
+                        ),
+                        None,
+                    ),
                 ),
             },
             goto="route",

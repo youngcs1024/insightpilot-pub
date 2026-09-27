@@ -28,7 +28,7 @@ class MemoryReason(StrEnum):
     UNKNOWN_REGION = "unknown_region"
     EXPLICIT_PATCH = "explicit_patch"
     COUNT_LIMIT = "count_limit"
-    TOKEN_LIMIT = "token_limit"
+    TOKEN_LIMIT = "token_limit"  # noqa: S105 -- token-count reason, not a credential.
 
 
 class MemoryReadRequest(Contract):

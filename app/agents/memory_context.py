@@ -12,13 +12,21 @@ from app.core.errors import ConflictError, InsightPilotError
 from app.schemas.intent import MetricIntentInput
 from app.schemas.mcp import Contract
 from app.schemas.memory import (
-    FormatPreferenceContent, MetricOverrideContent, RegionFocusContent, TerminologyContent,
+    FormatPreferenceContent,
+    MetricOverrideContent,
+    RegionFocusContent,
+    TerminologyContent,
     TerminologyProjection,
 )
 from app.schemas.memory_retrieval import MemoryReadRequest, MemorySelection, MemoryStage
 from app.schemas.metric_resolution import (
-    ClarificationKind, MetricClarification, MetricIntent, MetricPatches, RegionScope,
-    SelectedMetricOverride, SelectedOverrides,
+    ClarificationKind,
+    MetricClarification,
+    MetricIntent,
+    MetricPatches,
+    RegionScope,
+    SelectedMetricOverride,
+    SelectedOverrides,
 )
 from app.services.memory.retrieve import effective_patch
 
@@ -49,12 +57,17 @@ async def _intent(state: AgentState, ctx: RuntimeContext) -> FinalMemoryContext:
         try:
             result.intent = await ctx.metric_intents.interpret(
                 MetricIntentInput(
-                    question=state.question, data_intent=route.data_intent,
+                    question=state.question,
+                    data_intent=route.data_intent,
                     metric_hints=route.metric_hints,
-                    terminology=[TerminologyProjection(term=row.content.term, means=row.content.means)
+                    terminology=[
+                        TerminologyProjection(term=row.content.term, means=row.content.means)
                         for row in state.memory_preselection.selected
-                        if isinstance(row.content, TerminologyContent)],
-                ), deadline=ctx.deadline, now=ctx.now,
+                        if isinstance(row.content, TerminologyContent)
+                    ],
+                ),
+                deadline=ctx.deadline,
+                now=ctx.now,
             )
             reference = result.intent.region
             result.region_mentioned = result.intent.region_mentioned
@@ -96,22 +109,37 @@ async def finalize_memories(state: AgentState, ctx: RuntimeContext) -> FinalMemo
         return result
     result.selection = await ctx.memories.retrieve(
         MemoryReadRequest(
-            user_id=ctx.identity.user_id, question=state.question, stage=MemoryStage.FINALIZE,
+            user_id=ctx.identity.user_id,
+            question=state.question,
+            stage=MemoryStage.FINALIZE,
             data_route=route.route in {Route.DATA_ONLY, Route.BOTH},
             clarify=route.route is Route.CLARIFY or result.clarification is not None,
             metric_keys=result.intent.metric_keys if result.intent else [],
             explicit_patch=result.intent.explicit_patch if result.intent else MetricPatches(),
             region_mentioned=result.region_mentioned,
-        ), deadline=ctx.deadline, counter=ctx.schema_token_counter,
+        ),
+        deadline=ctx.deadline,
+        counter=ctx.schema_token_counter,
     )
     for row in result.selection.selected:
         if isinstance(row.content, MetricOverrideContent):
-            explicit = result.intent.explicit_patch.for_metric(row.content.metric_key) if result.intent else None
-            result.overrides.items.append(SelectedMetricOverride(
-                id=row.id, user_id=row.user_id, created_at=row.created_at, confidence=row.confidence,
-                metric_key=row.content.metric_key,
-                patch=effective_patch(row.content.patch, explicit) if explicit else row.content.patch.model_copy(deep=True),
-            ))
+            explicit = (
+                result.intent.explicit_patch.for_metric(row.content.metric_key)
+                if result.intent
+                else None
+            )
+            result.overrides.items.append(
+                SelectedMetricOverride(
+                    id=row.id,
+                    user_id=row.user_id,
+                    created_at=row.created_at,
+                    confidence=row.confidence,
+                    metric_key=row.content.metric_key,
+                    patch=effective_patch(row.content.patch, explicit)
+                    if explicit
+                    else row.content.patch.model_copy(deep=True),
+                )
+            )
         elif isinstance(row.content, RegionFocusContent) and result.region_mentioned is False:
             result.region = RegionScope(region_ids=sorted(set(row.content.region_ids)))
         elif isinstance(row.content, FormatPreferenceContent):

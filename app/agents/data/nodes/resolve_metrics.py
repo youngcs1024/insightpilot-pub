@@ -16,12 +16,12 @@ from app.core.errors import (
 )
 from app.core.llm_config import ModelRole
 from app.schemas.intent import MetricIntentInput
-from app.services.metric_intent import intent_messages
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification, MetricIntent
 from app.schemas.metric_tools import ResolveMetricArgs
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
 from app.services.metric_binding import BindingRequest, BindingResult, build_binding, merge_explicit
+from app.services.metric_intent import intent_messages
 from app.services.metric_templates import validate_grain
 from app.services.periods import Period, resolve_period
 
@@ -30,9 +30,14 @@ def _messages(
     state: DataAgentState, ctx: RuntimeContext, definitions: list[MetricDefinition]
 ) -> list[BaseMessage]:
     return intent_messages(
-        MetricIntentInput(question=state.question, data_intent=state.data_intent,
-                          metric_hints=state.metric_hints, terminology=state.relevant_memories),
-        definitions, now=ctx.now,
+        MetricIntentInput(
+            question=state.question,
+            data_intent=state.data_intent,
+            metric_hints=state.metric_hints,
+            terminology=state.relevant_memories,
+        ),
+        definitions,
+        now=ctx.now,
     )
 
 

@@ -18,7 +18,12 @@ from app.services.periods import build_date_context
 
 class IntentLlmPort(Protocol):
     async def generate_structured[T: BaseModel](
-        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline,
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
     ) -> T: ...
 
 
@@ -27,13 +32,22 @@ class IntentCatalogPort(Protocol):
 
 
 def intent_messages(
-    inputs: MetricIntentInput, definitions: list[MetricDefinition], *, now: datetime,
+    inputs: MetricIntentInput,
+    definitions: list[MetricDefinition],
+    *,
+    now: datetime,
 ) -> list[BaseMessage]:
     """Reuse the established prompt and catalog, without saved metric/region defaults."""
     return [
-        SystemMessage(content="\n\n".join([
-            METRIC_INTENT, build_date_context(now=now), render_catalog_block(definitions),
-        ])),
+        SystemMessage(
+            content="\n\n".join(
+                [
+                    METRIC_INTENT,
+                    build_date_context(now=now),
+                    render_catalog_block(definitions),
+                ]
+            )
+        ),
         HumanMessage(content=inputs.model_dump_json()),
     ]
 
@@ -46,11 +60,17 @@ class MetricIntentService:
         self.metrics = metrics
 
     async def interpret(
-        self, inputs: MetricIntentInput, *, deadline: Deadline, now: datetime,
+        self,
+        inputs: MetricIntentInput,
+        *,
+        deadline: Deadline,
+        now: datetime,
     ) -> MetricIntent:
         deadline.check("metric_intent")
         definitions = await self.metrics.list_active(deadline=deadline)
         return await self.llm.generate_structured(
-            ModelRole.SQL, intent_messages(inputs, definitions, now=now),
-            MetricIntent, deadline=deadline,
+            ModelRole.SQL,
+            intent_messages(inputs, definitions, now=now),
+            MetricIntent,
+            deadline=deadline,
         )

@@ -60,32 +60,61 @@ async def run(user: UUID, question: str, settings: MemoryProcessSettings) -> Mem
     try:
         before = await memories.retrieve(
             MemoryReadRequest(user_id=user, question=question, stage=MemoryStage.PREPARE),
-            deadline=deadline, counter=counter,
+            deadline=deadline,
+            counter=counter,
         )
         context = RoutingContext(
-            terminology=[r.content for r in before.selected if isinstance(r.content, TerminologyContent)],
-            format_preference=next((r.content for r in before.selected if isinstance(r.content, FormatPreferenceContent)), None),
+            terminology=[
+                r.content for r in before.selected if isinstance(r.content, TerminologyContent)
+            ],
+            format_preference=next(
+                (
+                    r.content
+                    for r in before.selected
+                    if isinstance(r.content, FormatPreferenceContent)
+                ),
+                None,
+            ),
         )
-        route = await route_question(RouterInput(question=question, routing_context=context),
-                                    RoutingRuntime(llm=llm, settings=settings.router, deadline=deadline))
+        route = await route_question(
+            RouterInput(question=question, routing_context=context),
+            RoutingRuntime(llm=llm, settings=settings.router, deadline=deadline),
+        )
         request = MemoryReadRequest(
-            user_id=user, question=question, stage=MemoryStage.FINALIZE,
+            user_id=user,
+            question=question,
+            stage=MemoryStage.FINALIZE,
             data_route=route.route in {Route.DATA_ONLY, Route.BOTH},
-            clarify=route.route is Route.CLARIFY, region_mentioned=route.region_mentioned,
+            clarify=route.route is Route.CLARIFY,
+            region_mentioned=route.region_mentioned,
         )
         if route.region.names or route.region.all_regions:
             request.region_mentioned = True
         if request.data_route:
-            intent = await MetricIntentService(llm, MetricService(database, settings.database)).interpret(
-                MetricIntentInput(question=question, data_intent=route.data_intent, metric_hints=route.metric_hints,
-                                  terminology=[TerminologyProjection(**term.model_dump()) for term in context.terminology]),
-                deadline=deadline, now=datetime.now(UTC),
+            intent = await MetricIntentService(
+                llm, MetricService(database, settings.database)
+            ).interpret(
+                MetricIntentInput(
+                    question=question,
+                    data_intent=route.data_intent,
+                    metric_hints=route.metric_hints,
+                    terminology=[
+                        TerminologyProjection(**term.model_dump()) for term in context.terminology
+                    ],
+                ),
+                deadline=deadline,
+                now=datetime.now(UTC),
             )
             request.metric_keys = list(intent.metric_keys)
             request.explicit_patch = intent.explicit_patch.model_copy(deep=True)
-            request.region_mentioned = intent.region_mentioned or bool(intent.region.names) or intent.region.all_regions
-        final = (MemorySelection(failed=True, failure_code=before.failure_code) if before.failed
-                 else await memories.retrieve(request, deadline=deadline, counter=counter))
+            request.region_mentioned = (
+                intent.region_mentioned or bool(intent.region.names) or intent.region.all_regions
+            )
+        final = (
+            MemorySelection(failed=True, failure_code=before.failure_code)
+            if before.failed
+            else await memories.retrieve(request, deadline=deadline, counter=counter)
+        )
         used = {r.id for r in before.selected if isinstance(r.content, TerminologyContent)}
         kept = {r.id for r in final.selected if isinstance(r.content, TerminologyContent)}
         # This diagnostic stops before dispatch. Report the production restart decision,
@@ -93,7 +122,9 @@ async def run(user: UUID, question: str, settings: MemoryProcessSettings) -> Mem
         restart = bool(used - kept)
         if restart:
             final = final.model_copy(update={"selected": [], "tokens": 0})
-        return MemoryExplanation(route=route, preparation=before, final=final, restart_required=restart)
+        return MemoryExplanation(
+            route=route, preparation=before, final=final, restart_required=restart
+        )
     finally:
         try:
             await llm.aclose()

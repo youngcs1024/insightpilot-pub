@@ -29,15 +29,13 @@ def dispatch(state: AgentState) -> list[str] | str:
         return "__end__"
     if state.context_clarification is not None:
         return "clarify"
-    match state.route.route:
-        case Route.DATA_ONLY:
-            return "data_agent"
-        case Route.KNOWLEDGE_ONLY:
-            return "knowledge_agent"
-        case Route.BOTH:
-            return ["data_agent", "knowledge_agent"]
-        case Route.CLARIFY:
-            return "clarify"
+    destinations: dict[Route, list[str] | str] = {
+        Route.DATA_ONLY: "data_agent",
+        Route.KNOWLEDGE_ONLY: "knowledge_agent",
+        Route.BOTH: ["data_agent", "knowledge_agent"],
+        Route.CLARIFY: "clarify",
+    }
+    return destinations[state.route.route]
 
 
 def topology() -> StateGraph[AgentState, RuntimeContext, GraphInput, GraphOutput]:

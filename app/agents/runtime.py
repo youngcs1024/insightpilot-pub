@@ -20,13 +20,12 @@ from app.core.deadline import Deadline
 from app.core.errors import PeriodUnresolved
 from app.core.llm_config import ModelRole
 from app.schemas.clarification import ClarificationCapabilities
+from app.schemas.intent import MetricIntentInput
 from app.schemas.knowledge import KnowledgeEvidence, KnowledgeGeneration
 from app.schemas.mcp import QueryArguments, QueryResultPayload
 from app.schemas.memory import FormatPreferenceContent
 from app.schemas.memory_retrieval import MemoryReadRequest, MemorySelection
-from app.schemas.intent import MetricIntentInput
-from app.schemas.metric_resolution import MetricIntent
-from app.schemas.metric_resolution import RegionReference, RegionScope
+from app.schemas.metric_resolution import MetricIntent, RegionReference, RegionScope
 from app.schemas.metric_tools import MetricFragment, ResolveMetricArgs
 from app.schemas.metrics import MetricDefinition
 from app.schemas.retrieval import RetrievalQuery, RetrievalResult
@@ -165,13 +164,21 @@ class SchemaTokenPort(Protocol):
 
 class MemoryPort(Protocol):
     async def retrieve(
-        self, request: MemoryReadRequest, *, deadline: Deadline, counter: SchemaTokenPort,
+        self,
+        request: MemoryReadRequest,
+        *,
+        deadline: Deadline,
+        counter: SchemaTokenPort,
     ) -> MemorySelection: ...
 
 
 class MetricIntentPort(Protocol):
     async def interpret(
-        self, inputs: MetricIntentInput, *, deadline: Deadline, now: datetime,
+        self,
+        inputs: MetricIntentInput,
+        *,
+        deadline: Deadline,
+        now: datetime,
     ) -> MetricIntent: ...
 
 

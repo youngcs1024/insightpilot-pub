@@ -12,20 +12,34 @@ USER = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def stored(
-    kind: MemoryType = MemoryType.TERMINOLOGY, *, user: UUID = USER,
-    content: dict[str, object] | None = None, summary: str = "Saved preference",
+    kind: MemoryType = MemoryType.TERMINOLOGY,
+    *,
+    user: UUID = USER,
+    content: dict[str, object] | None = None,
+    summary: str = "Saved preference",
 ) -> StoredMemory:
     defaults = {
         MemoryType.TERMINOLOGY: {"term": "大促", "means": "618"},
-        MemoryType.METRIC_OVERRIDE: {"metric_key": "refund_rate", "patch": {"date_field": "r.requested_at"}},
+        MemoryType.METRIC_OVERRIDE: {
+            "metric_key": "refund_rate",
+            "patch": {"date_field": "r.requested_at"},
+        },
         MemoryType.REGION_FOCUS: {"region_ids": [1]},
         MemoryType.FORMAT_PREFERENCE: {"prefer": "table", "decimals": 3},
     }
-    return StoredMemory.model_validate({
-        "id": uuid4(), "user_id": user, "source_turn_id": uuid4(), "memory_type": kind,
-        "content": content or defaults[kind], "summary": summary, "confidence": 0.9,
-        "created_at": datetime(2026, 9, 1, tzinfo=UTC), "updated_at": datetime(2026, 9, 1, tzinfo=UTC),
-    })
+    return StoredMemory.model_validate(
+        {
+            "id": uuid4(),
+            "user_id": user,
+            "source_turn_id": uuid4(),
+            "memory_type": kind,
+            "content": content or defaults[kind],
+            "summary": summary,
+            "confidence": 0.9,
+            "created_at": datetime(2026, 9, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 9, 1, tzinfo=UTC),
+        }
+    )
 
 
 class MemoryPort:
@@ -35,7 +49,11 @@ class MemoryPort:
         self.fail_at = fail_at
 
     async def retrieve(
-        self, request: MemoryReadRequest, *, deadline: Deadline, counter: TokenCounter,
+        self,
+        request: MemoryReadRequest,
+        *,
+        deadline: Deadline,
+        counter: TokenCounter,
     ) -> MemorySelection:
         deadline.check("fake_memory")
         self.calls.append(request.model_copy(deep=True))
