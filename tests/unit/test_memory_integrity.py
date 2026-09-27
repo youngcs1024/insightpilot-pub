@@ -1,5 +1,7 @@
 """Startup contract comparison and bounded transaction retries without driver prose."""
 
+# ruff: noqa: PLR2004 -- fixed acceptance counts and retry/timeout boundaries.
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,7 +21,12 @@ def test_generated_expression_accepts_postgresql_catalog_casts() -> None:
     authored = "CASE WHEN is_active AND memory_type = 'metric_override' THEN content ->> 'metric_key' ELSE NULL END"
     catalog = "CASE WHEN (is_active AND ((memory_type)::text = 'metric_override'::text)) THEN (content ->> 'metric_key'::text) ELSE NULL::text END"
     assert canonical_expression(authored) == canonical_expression(catalog)
-    assert canonical_expression(authored) != canonical_expression(authored.replace("is_active", "NOT is_active"))
+    assert canonical_expression(authored) == canonical_expression(
+        f"({catalog})::character varying(64)"
+    )
+    assert canonical_expression(authored) != canonical_expression(
+        authored.replace("is_active", "NOT is_active")
+    )
 
 
 @pytest.mark.parametrize("wrapped", [True, False])
@@ -60,14 +67,23 @@ async def test_ordinary_conflict_is_not_retried(settings: Settings) -> None:
     service._write_once.assert_awaited_once()
 
 
-@pytest.mark.parametrize(("valid", "expression"), [
-    (False, ""), (True, "CASE WHEN is_active THEN 'wrong' ELSE NULL END"), (True, "SELECT ("),
-])
-async def test_memory_schema_drift_is_typed(monkeypatch: pytest.MonkeyPatch, valid: bool, expression: str) -> None:
+@pytest.mark.parametrize(
+    ("valid", "expression"),
+    [
+        (False, ""),
+        (True, "CASE WHEN is_active THEN 'wrong' ELSE NULL END"),
+        (True, "SELECT ("),
+    ],
+)
+async def test_memory_schema_drift_is_typed(
+    monkeypatch: pytest.MonkeyPatch, valid: bool, expression: str
+) -> None:
     database = MagicMock()
     database.session.return_value.__aenter__ = AsyncMock()
     database.session.return_value.__aexit__ = AsyncMock(return_value=False)
-    monkeypatch.setattr("app.services.memory.integrity.memory_schema_status", AsyncMock(
-        return_value=MemorySchemaStatus(valid=valid, expression=expression)))
+    monkeypatch.setattr(
+        "app.services.memory.integrity.memory_schema_status",
+        AsyncMock(return_value=MemorySchemaStatus(valid=valid, expression=expression)),
+    )
     with pytest.raises(MemorySchemaError):
         await validate_memory_schema(database, timeout_s=1)

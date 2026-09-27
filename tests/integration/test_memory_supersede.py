@@ -254,13 +254,12 @@ async def test_ambiguous_active_key_fails_without_partial_writes(
         summary="original",
         confidence=0.9,
     )
-    with pytest.raises(ConflictError):
+    with pytest.raises(ConflictError):  # noqa: PT012 -- deferred violation occurs at context exit.
         async with memory_db.session() as session, session.begin():
             repo = MemoryRepository(session, identity.user_id)
             await repo.create(value)
             await repo.create(value)
     assert await history(memory_db, identity) == []
-
 
 
 @pytest.mark.parametrize(

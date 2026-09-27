@@ -16,19 +16,21 @@ def upgrade() -> None:
         "memories",
         sa.Column(
             "active_metric_key",
-            sa.Text(),
+            sa.String(64),
             sa.Computed(
-                "CASE WHEN is_active AND memory_type = 'metric_override' "
-                "THEN content ->> 'metric_key' ELSE NULL END",
+                "(CASE WHEN is_active AND memory_type::text = 'metric_override'::text "
+                "THEN content ->> 'metric_key'::text ELSE NULL::text END)::character varying(64)",
                 persisted=True,
             ),
             nullable=True,
         ),
     )
     op.create_unique_constraint(
-        "uq_memories_active_metric", "memories",
+        "uq_memories_active_metric",
+        "memories",
         ["user_id", "memory_type", "active_metric_key"],
-        deferrable=True, initially="DEFERRED",
+        deferrable=True,
+        initially="DEFERRED",
     )
 
 

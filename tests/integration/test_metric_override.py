@@ -3,6 +3,7 @@
 import json
 from collections.abc import Iterator
 from decimal import Decimal
+from http import HTTPStatus
 
 import httpx
 import pytest
@@ -22,7 +23,13 @@ from tests.database_support import DatabaseStack
 from tests.integration.catalog_support import catalog_migrated, client
 from tests.integration.mcp_support import running_mcp_endpoint
 from tests.memory_support import memory_input
-from tests.metric_override_support import chat_turn, register, saved_memory, seed_boundary_case, session
+from tests.metric_override_support import (
+    chat_turn,
+    register,
+    saved_memory,
+    seed_boundary_case,
+    session,
+)
 from tests.metric_resolution_support import override, request, schema
 
 pytestmark = pytest.mark.integration
@@ -36,18 +43,24 @@ def server_endpoint(database_stack: DatabaseStack) -> Iterator[MCPSettings]:
 
 
 async def evidence(http: httpx.AsyncClient, turn: TurnResponse) -> EvidenceResponse:
-    response = await http.get(f"/api/v1/conversations/{turn.conversation_id}/turns/{turn.id}/evidence")
-    assert response.status_code == 200, response.text
+    response = await http.get(
+        f"/api/v1/conversations/{turn.conversation_id}/turns/{turn.id}/evidence"
+    )
+    assert response.status_code == HTTPStatus.OK, response.text
     return EvidenceResponse.model_validate(response.json())
 
 
 async def test_override_changes_date_field_in_sql(
-    settings: Settings, catalog_migrated: None, database_stack: DatabaseStack,
+    settings: Settings,
+    catalog_migrated: None,
+    database_stack: DatabaseStack,
     server_endpoint: MCPSettings,
 ) -> None:
     customer = await seed_boundary_case(database_stack)
-    settings.database = DatabaseSettings(port=database_stack.settings.db_host_port,
-                                        app_password=database_stack.settings.bootstrap.app_password)
+    settings.database = DatabaseSettings(
+        port=database_stack.settings.db_host_port,
+        app_password=database_stack.settings.bootstrap.app_password,
+    )
     settings.router = RouterSettings()
     async with session(settings, server_endpoint) as (http, application, database):
         user = await register(http, application)
@@ -77,20 +90,38 @@ async def test_override_changes_date_field_in_sql(
         # Commit a later supersession and prove historical evidence/replay remain unchanged.
         async with database.session() as db, db.begin():
             repo = MemoryRepository(db, user.id)
-            replacement = await repo.create(memory_input(explicit.id, kind=MemoryType.METRIC_OVERRIDE,
-                content={"metric_key": "refund_rate", "patch": {"date_field": "r.requested_at"}}))
+            replacement = await repo.create(
+                memory_input(
+                    explicit.id,
+                    kind=MemoryType.METRIC_OVERRIDE,
+                    content={
+                        "metric_key": "refund_rate",
+                        "patch": {"date_field": "r.requested_at"},
+                    },
+                )
+            )
             await repo.supersede(saved.id, by=replacement.id)
         assert await evidence(http, second) == snapshot
-        replay = await http.post(f"/api/v1/conversations/{second.conversation_id}/messages",
-            json={"content": f"客户{customer}在2026年8月的退款率是多少？"},
-            headers={"Idempotency-Key": "metric-override-demo"})
-        assert replay.status_code == 200
+        replay = await http.post(
+            f"/api/v1/conversations/{second.conversation_id}/messages",
+            json={"content": f"客户{customer}在2026年8月的退款率是多少?"},
+            headers={"Idempotency-Key": "metric-override-demo"},
+        )
+        assert replay.status_code == HTTPStatus.OK
         replayed = TurnResponse.model_validate(replay.json())
-        assert replayed.replayed and replayed.answer == second.answer
+        assert replayed.replayed
+        assert replayed.answer == second.answer
         # The ordinary gated reader must not inject this memory into knowledge questions.
         selection = await MemoryService(database, settings.database).retrieve(
-            MemoryReadRequest(user_id=user.id, question="退款政策是什么", stage=MemoryStage.FINALIZE,
-                              data_route=False), deadline=Deadline(float("inf")), counter=SchemaTokenCounter())
+            MemoryReadRequest(
+                user_id=user.id,
+                question="退款政策是什么",
+                stage=MemoryStage.FINALIZE,
+                data_route=False,
+            ),
+            deadline=Deadline(float("inf")),
+            counter=SchemaTokenCounter(),
+        )
         assert not selection.selected
         other = await register(http, application)
         foreign = await chat_turn(http, application, customer, paid=False, explicit=False)
@@ -98,15 +129,28 @@ async def test_override_changes_date_field_in_sql(
         assert other.id != user.id
         assert foreign_snapshot.data.data.metric_bindings[0].override_id is None
         assert Decimal(foreign_snapshot.data.data.rows[0][1]) == 0
-        print(json.dumps({"first_conversation": str(first.conversation_id),
-            "second_conversation": str(second.conversation_id), "memory_id": str(saved.id),
-            "source_turn_id": str(saved.source_turn_id), "evidence_id": str(snapshot.data.id),
-            "sql": snapshot.data.data.sql, "assumptions": second.answer.assumptions,
-            "saved_result": "1", "company_result": "0"}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "first_conversation": str(first.conversation_id),
+                    "second_conversation": str(second.conversation_id),
+                    "memory_id": str(saved.id),
+                    "source_turn_id": str(saved.source_turn_id),
+                    "evidence_id": str(snapshot.data.id),
+                    "sql": snapshot.data.data.sql,
+                    "assumptions": second.answer.assumptions,
+                    "saved_result": "1",
+                    "company_result": "0",
+                },
+                ensure_ascii=False,
+            )
+        )
 
 
 @pytest.mark.parametrize(("confidence", "applied"), [(0.89, False), (0.9, True)])
-async def test_expression_patch_requires_high_confidence(client: McpClient, confidence: float, applied: bool) -> None:
+async def test_expression_patch_requires_high_confidence(
+    client: McpClient, confidence: float, applied: bool
+) -> None:
     value = request()
     value.override = override(MetricPatch(expression="SUM(o.gross_amount)"))
     value.override.confidence = confidence

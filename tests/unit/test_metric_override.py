@@ -1,5 +1,7 @@
 """A saved patch is an optional candidate; explicit intent and policy remain authoritative."""
 
+# ruff: noqa: PLR2004 -- fixed acceptance counts and retry/timeout boundaries.
+
 import asyncio
 from unittest.mock import AsyncMock
 
@@ -51,7 +53,9 @@ async def test_second_refusal_propagates_without_further_fallback() -> None:
 
 
 @pytest.mark.parametrize("saved", [None, MetricPatch(date_field="o.created_at")])
-async def test_no_fallback_when_saved_patch_did_not_survive_precedence(saved: MetricPatch | None) -> None:
+async def test_no_fallback_when_saved_patch_did_not_survive_precedence(
+    saved: MetricPatch | None,
+) -> None:
     value = request(patch=MetricPatch(date_field="o.paid_at"))
     value.override = override(saved) if saved else None
     mcp = FakeMcpClient([])
@@ -61,7 +65,9 @@ async def test_no_fallback_when_saved_patch_did_not_survive_precedence(saved: Me
     assert len(mcp.metric_calls) == 1
 
 
-@pytest.mark.parametrize("failure", [UpstreamUnavailableError(), DeadlineExceededError(), asyncio.CancelledError()])
+@pytest.mark.parametrize(
+    "failure", [UpstreamUnavailableError(), DeadlineExceededError(), asyncio.CancelledError()]
+)
 async def test_operational_failure_never_discards_memory(failure: BaseException) -> None:
     value = request()
     value.override = override(MetricPatch(date_field="o.created_at"))
@@ -80,11 +86,14 @@ async def test_fallback_does_not_renew_expired_deadline() -> None:
     assert mcp.resolve_metric.await_count == 1
 
 
-@pytest.mark.parametrize("patch", [
-    MetricPatch(date_field="o.invented"),
-    MetricPatch(add_filters=["o.invented > 0"]),
-    MetricPatch(add_filters=["o.order_id IN (SELECT order_id FROM biz.orders)"]),
-])
+@pytest.mark.parametrize(
+    "patch",
+    [
+        MetricPatch(date_field="o.invented"),
+        MetricPatch(add_filters=["o.invented > 0"]),
+        MetricPatch(add_filters=["o.order_id IN (SELECT order_id FROM biz.orders)"]),
+    ],
+)
 def test_invalid_saved_patch_is_atomic_and_noted(patch: MetricPatch) -> None:
     value = request()
     value.override = override(patch)
@@ -96,7 +105,9 @@ def test_invalid_saved_patch_is_atomic_and_noted(patch: MetricPatch) -> None:
 
 def test_partial_explicit_override_names_only_surviving_saved_fields() -> None:
     value = request(patch=MetricPatch(date_field="o.paid_at"))
-    value.override = override(MetricPatch(date_field="o.created_at", add_filters=["o.gross_amount > 100"]))
+    value.override = override(
+        MetricPatch(date_field="o.created_at", add_filters=["o.gross_amount > 100"])
+    )
     result = build_binding(value, schema())
     note = next(note for note in result.assumptions if "自定义定义" in note)
     assert "GMV" in note

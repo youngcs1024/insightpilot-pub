@@ -19,8 +19,8 @@ from app.schemas.metric_resolution import ClarificationKind, MetricClarification
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
 from app.services.metric_binding import BindingRequest, BindingResult, merge_explicit
-from app.services.metric_override import resolve_binding
 from app.services.metric_intent import intent_messages
+from app.services.metric_override import resolve_binding
 from app.services.metric_templates import validate_grain
 from app.services.periods import Period, resolve_period
 

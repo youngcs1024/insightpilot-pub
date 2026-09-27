@@ -90,7 +90,10 @@ async def test_durable_preference_stored(settings: Settings) -> None:
     service._write = AsyncMock()
     turn = identity()
     await service.run(turn)
-    service._write.assert_awaited_once_with(turn, MemoryExtraction(candidates=[candidate()]))
+    service._write.assert_awaited_once()
+    args, kwargs = service._write.await_args
+    assert args == (turn, MemoryExtraction(candidates=[candidate()]))
+    assert kwargs["deadline"].at == llm.calls[0].deadline_at
     assert llm.calls[0].role is ModelRole.MEMORY_EXTRACT
 
 

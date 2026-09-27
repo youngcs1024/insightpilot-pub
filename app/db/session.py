@@ -36,7 +36,7 @@ def translate_database_error(exc: Exception) -> InsightPilotError:
     sqlstate = getattr(source, "sqlstate", None)
     if sqlstate == "23505":
         # SQLAlchemy's asyncpg adapter retains the original structured driver cause.
-        driver = source.__cause__ or source
+        driver = source.__cause__ if source is not None and source.__cause__ else source
         if getattr(driver, "constraint_name", None) == "uq_memories_active_metric":
             return MemoryWriteConflictError()
         return ConflictError()

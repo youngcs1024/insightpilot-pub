@@ -15,10 +15,14 @@ class MemorySchemaStatus(Contract):
 
 async def memory_schema_status(session: AsyncSession) -> MemorySchemaStatus:
     """Inspect the exact named constraint, key order and generated column metadata."""
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT c.contype = 'u' AND c.condeferrable AND c.condeferred
                AND c.convalidated AND i.indisvalid AND i.indisunique
                AND a.attgenerated = 's'
+               AND a.atttypid = 'varchar'::regtype AND a.atttypmod = 68
                AND ARRAY(SELECT k.attname::text
                          FROM unnest(c.conkey) WITH ORDINALITY AS x(attnum, ord)
                          JOIN pg_attribute k ON k.attrelid = c.conrelid
@@ -32,7 +36,14 @@ async def memory_schema_status(session: AsyncSession) -> MemorySchemaStatus:
         JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
         WHERE c.conrelid = to_regclass('public.memories')
           AND c.conname = 'uq_memories_active_metric'
-    """))).mappings().one_or_none()
-    return MemorySchemaStatus.model_validate(dict(row)) if row else MemorySchemaStatus(
-        valid=False, expression=""
+    """)
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    return (
+        MemorySchemaStatus.model_validate(dict(row))
+        if row
+        else MemorySchemaStatus(valid=False, expression="")
     )

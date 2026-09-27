@@ -13,8 +13,9 @@ from app.services.metric_binding import BindingRequest, BindingResult, build_bin
 logger = structlog.get_logger(__name__)
 
 
-async def _validate(result: BindingResult, request: BindingRequest, mcp: McpPort,
-                    deadline: Deadline) -> BindingResult:
+async def _validate(
+    result: BindingResult, request: BindingRequest, mcp: McpPort, deadline: Deadline
+) -> BindingResult:
     binding = result.binding
     query = sqlglot.parse_one(binding.resolved_expression, read="postgres")
     fragment = await mcp.resolve_metric(

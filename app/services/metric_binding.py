@@ -317,10 +317,11 @@ def build_binding(request: BindingRequest, schema: SchemaCatalog) -> BindingResu
         assumptions.append(
             f"{request.definition.display_name}应用了你的自定义定义，"
             f"设置于 {override.created_at.date().isoformat()}；"
-            "生效字段: " + ", ".join(
-                f"{source.field.value}={source.value}"
-                + ("（移除）" if not source.applied else "")
-                for source in resolved.sources if source.source is BindingSource.SAVED
+            "生效字段: "
+            + ", ".join(
+                f"{source.field.value}={source.value}" + ("（移除）" if not source.applied else "")
+                for source in resolved.sources
+                if source.source is BindingSource.SAVED
             )
         )
     return BindingResult(binding=binding, assumptions=assumptions)

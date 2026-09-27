@@ -5,8 +5,15 @@ from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 from sqlalchemy import (
-    CheckConstraint, Computed, DateTime, Enum, ForeignKey, Index, String, Text,
-    UniqueConstraint, true,
+    CheckConstraint,
+    Computed,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,8 +29,12 @@ class MemoryRecord(UserOwnedMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("ix_memories_user_type_active", "user_id", "memory_type", "is_active"),
         UniqueConstraint(
-            "user_id", "memory_type", "active_metric_key",
-            name="uq_memories_active_metric", deferrable=True, initially="DEFERRED",
+            "user_id",
+            "memory_type",
+            "active_metric_key",
+            name="uq_memories_active_metric",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
         CheckConstraint(
@@ -53,10 +64,10 @@ class MemoryRecord(UserOwnedMixin, TimestampMixin, Base):
     superseded_by: Mapped[UUID | None] = mapped_column(ForeignKey("memories.id"))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active_metric_key: Mapped[str | None] = mapped_column(
-        Text(),
+        String(64),
         Computed(
-            "CASE WHEN is_active AND memory_type = 'metric_override' "
-            "THEN content ->> 'metric_key' ELSE NULL END",
+            "(CASE WHEN is_active AND memory_type::text = 'metric_override'::text "
+            "THEN content ->> 'metric_key'::text ELSE NULL::text END)::character varying(64)",
             persisted=True,
         ),
     )

@@ -43,8 +43,8 @@ from app.services.graph import GraphService
 from app.services.health import HealthService, MCPProbe, PostgreSQLProbe
 from app.services.knowledge_generation import KnowledgeGenerationService
 from app.services.llm.service import LlmService
-from app.services.memory.integrity import validate_memory_schema
 from app.services.memory.extract import MemoryExtractionService
+from app.services.memory.integrity import validate_memory_schema
 from app.services.memory.service import MemoryService
 from app.services.metrics import MetricService
 from app.services.schema_catalog import SchemaCatalogService

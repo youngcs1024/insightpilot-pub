@@ -13,5 +13,9 @@ def test_no_node_signature_changed_since_phase_4() -> None:
     for key, expected in snapshot.items():
         path, name = key.split(":")
         nodes = ast.parse((ROOT / path).read_text()).body
-        node = next(item for item in nodes if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == name)
+        node = next(
+            item
+            for item in nodes
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == name
+        )
         assert ast.unparse(node.args) == expected, key

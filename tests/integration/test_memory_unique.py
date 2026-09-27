@@ -1,5 +1,7 @@
 """Deferred uniqueness is enforced at commit without changing append-only history."""
 
+# ruff: noqa: PLR2004 -- fixed acceptance counts and retry/timeout boundaries.
+
 import asyncio
 from collections.abc import AsyncIterator
 
@@ -34,22 +36,32 @@ async def memory_db(migrated_db: TestPostgres) -> AsyncIterator[Database]:
 
 async def test_duplicate_active_metric_rejected_only_at_commit(memory_db: Database) -> None:
     identity = await source_pair(memory_db, extraction_input())
-    value = memory_input(identity.turn_id, kind=MemoryType.METRIC_OVERRIDE,
-                         content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
+    value = memory_input(
+        identity.turn_id,
+        kind=MemoryType.METRIC_OVERRIDE,
+        content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}},
+    )
     async with memory_db.session() as session, session.begin():
         original = await MemoryRepository(session, identity.user_id).create(value)
-    with pytest.raises(MemoryWriteConflictError):
+    with pytest.raises(MemoryWriteConflictError):  # noqa: PT012 -- assert INSERT succeeds before COMMIT fails.
         async with memory_db.session() as session, session.begin():
             new = await MemoryRepository(session, identity.user_id).create(value)
             assert new.id != original.id  # INSERT/flush succeeded; COMMIT must reject it.
     async with memory_db.session() as session:
-        assert await MemoryRepository(session, identity.user_id).list_history(MemoryType.METRIC_OVERRIDE) == [original]
+        assert await MemoryRepository(session, identity.user_id).list_history(
+            MemoryType.METRIC_OVERRIDE
+        ) == [original]
 
 
-async def test_deferred_replacement_commits_and_historical_versions_survive(memory_db: Database) -> None:
+async def test_deferred_replacement_commits_and_historical_versions_survive(
+    memory_db: Database,
+) -> None:
     identity = await source_pair(memory_db, extraction_input())
-    value = memory_input(identity.turn_id, kind=MemoryType.METRIC_OVERRIDE,
-                         content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
+    value = memory_input(
+        identity.turn_id,
+        kind=MemoryType.METRIC_OVERRIDE,
+        content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}},
+    )
     async with memory_db.session() as session, session.begin():
         old = await MemoryRepository(session, identity.user_id).create(value)
     async with memory_db.session() as session, session.begin():
@@ -60,18 +72,26 @@ async def test_deferred_replacement_commits_and_historical_versions_survive(memo
         repo = MemoryRepository(session, identity.user_id)
         assert [row.id for row in await repo.list_active(MemoryType.METRIC_OVERRIDE)] == [new.id]
         assert (await repo.get(old.id)).superseded_by == new.id
-        key = await session.scalar(text("SELECT active_metric_key FROM memories WHERE id=:id AND user_id=:user"),
-                                   {"id": old.id, "user": identity.user_id})
+        key = await session.scalar(
+            text("SELECT active_metric_key FROM memories WHERE id=:id AND user_id=:user"),
+            {"id": old.id, "user": identity.user_id},
+        )
         assert key is None
     await validate_memory_schema(memory_db, timeout_s=5)
 
 
-async def test_concurrent_supersession_has_one_active_override(memory_db: Database, settings: Settings) -> None:
+async def test_concurrent_supersession_has_one_active_override(
+    memory_db: Database, settings: Settings
+) -> None:
     identity = await source_pair(memory_db, extraction_input())
     other = await source_pair(memory_db, extraction_input(), owner=identity)
     writer = MemoryExtractionService(memory_db, settings, FakeChatModel([]))
     first = MemoryExtraction(candidates=[candidate()])
-    second = MemoryExtraction(candidates=[candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})])
+    second = MemoryExtraction(
+        candidates=[
+            candidate(content={"metric_key": "refund_rate", "patch": {"date_field": "o.paid_at"}})
+        ]
+    )
     await asyncio.gather(writer._write(identity, first), writer._write(other, second))
     async with memory_db.session() as session:
         repo = MemoryRepository(session, identity.user_id)

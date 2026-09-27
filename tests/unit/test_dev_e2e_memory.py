@@ -1,5 +1,7 @@
 """The diagnostic entry point selects the cloud scenario and never hides a failing exit."""
 
+# ruff: noqa: PLR2004 -- fixed acceptance counts and retry/timeout boundaries.
+
 from unittest.mock import Mock
 
 import pytest
