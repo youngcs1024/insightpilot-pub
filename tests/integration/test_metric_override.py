@@ -101,7 +101,10 @@ async def test_override_changes_date_field_in_sql(
                 )
             )
             await repo.supersede(saved.id, by=replacement.id)
-        assert await evidence(http, second) == snapshot
+        historical = await evidence(http, second)
+        assert historical.model_dump(exclude={"request_id"}) == snapshot.model_dump(
+            exclude={"request_id"}
+        )
         replay = await http.post(
             f"/api/v1/conversations/{second.conversation_id}/messages",
             json={"content": f"客户{customer}在2026年8月的退款率是多少?"},
