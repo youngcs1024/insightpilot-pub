@@ -13,8 +13,12 @@ from app.agents.data.state import DataAgentState
 from app.agents.failures import FailureKind, NodeFailure
 from app.agents.prompts import SQL_CORRECT
 from app.agents.runtime import RuntimeContext
-from app.core.errors import ContextBudgetExceeded, DeadlineExceededError, InsightPilotError, LlmStructuredOutputError
-from app.services.llm.budget import prompt_budget
+from app.core.errors import (
+    ContextBudgetExceeded,
+    DeadlineExceededError,
+    InsightPilotError,
+    LlmStructuredOutputError,
+)
 from app.core.llm_config import ModelRole
 from app.schemas.sql_correction import (
     MAX_CORRECTIONS,
@@ -24,6 +28,7 @@ from app.schemas.sql_correction import (
     CorrectionStopReason,
     SqlCorrectionOutput,
 )
+from app.services.llm.budget import prompt_budget
 
 logger = structlog.get_logger(__name__)
 # Policy rejection, timeout, EMPTY_RESULT and every sanity flag deliberately do
@@ -124,10 +129,15 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[RuntimeContext]) -
     try:
         ctx.deadline.check("correct_sql")
         output = await ctx.llm.generate_structured(
-            ModelRole.SQL, build_messages(state), SqlCorrectionOutput, deadline=ctx.deadline,
+            ModelRole.SQL,
+            build_messages(state),
+            SqlCorrectionOutput,
+            deadline=ctx.deadline,
             budget=prompt_budget(
                 schema=state.schema_block,
-                metrics=json.dumps([b.model_dump(mode="json") for b in state.metric_bindings], ensure_ascii=False),
+                metrics=json.dumps(
+                    [b.model_dump(mode="json") for b in state.metric_bindings], ensure_ascii=False
+                ),
             ),
         )
         ctx.deadline.check("correct_sql_complete")

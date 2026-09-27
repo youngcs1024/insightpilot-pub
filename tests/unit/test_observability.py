@@ -14,12 +14,12 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from opentelemetry.trace import Status, StatusCode
 
 from app.core.budget import ModelContextLimits
-from app.services.schema_tokens import SchemaTokenCounter
 from app.core.config_models import ObservabilitySettings, Settings
 from app.core.deadline import Deadline
 from app.core.observability import Observability, TraceMetadata, model_role, observe
 from app.services.llm.contracts import CompletionRequest, Message
 from app.services.llm.transport import LlmTransport
+from app.services.schema_tokens import SchemaTokenCounter
 from tests.observability_support import invoke_trace_graph, tracing
 
 
@@ -39,7 +39,9 @@ async def test_generation_records_provider_tokens_without_messages(settings: Set
             with service.turn(uuid4().hex, TraceMetadata()), model_role("sql"):
                 await LlmTransport(client, SchemaTokenCounter()).complete(
                     CompletionRequest(
-                        model_limits=ModelContextLimits(context_window=1000000, max_input_tokens=991808),
+                        model_limits=ModelContextLimits(
+                            context_window=1000000, max_input_tokens=991808
+                        ),
                         model="test-model",
                         messages=[Message(role="user", content="private-input")],
                         temperature=0,

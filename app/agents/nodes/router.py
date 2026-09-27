@@ -14,6 +14,7 @@ from app.agents.nodes.prefilter import CLARIFICATION_QUESTION, prefilter
 from app.agents.prompts import CLARIFY, ROUTER
 from app.agents.runtime import RoutingRuntime, RuntimeContext
 from app.agents.state import AgentState
+from app.core.budget import ContextBudget, ContextSlot
 from app.core.errors import ConflictError, InsightPilotError, LlmStructuredOutputError
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
@@ -21,6 +22,7 @@ from app.core.routing import RoutingStrategy
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
 from app.services.llm.budget import prompt_budget
 from app.services.llm.usage import collect_usage
+from app.services.schema_tokens import SchemaTokenCounter
 
 logger = structlog.get_logger(__name__)
 _SPECIALIST_COUNT = 2
@@ -88,7 +90,8 @@ async def _classify(
                 budget=prompt_budget(
                     summary=inputs.routing_context.summary,
                     recent_messages=json.dumps(
-                        [m.model_dump() for m in inputs.routing_context.recent_messages], ensure_ascii=False
+                        [m.model_dump() for m in inputs.routing_context.recent_messages],
+                        ensure_ascii=False,
                     ),
                     memories=inputs.routing_context.model_dump_json(
                         include={"terminology", "format_preference"}
@@ -128,6 +131,9 @@ async def classify_question(
     with observe("router", TraceMetadata()):
         try:
             ctx.deadline.check("router")
+            ContextBudget(SchemaTokenCounter()).charge(
+                ContextSlot.SUMMARY, inputs.routing_context.summary
+            )
             bounded = RouterInput(
                 question=inputs.question,
                 routing_context=inputs.routing_context.model_copy(

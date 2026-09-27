@@ -1,5 +1,7 @@
 """Real PostgreSQL proves summary ownership, catch-up and stale-writer exclusion."""
 
+# ruff: noqa: PLR2004 -- explicit budget, cursor and fixture assertions.
+
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
@@ -35,14 +37,18 @@ async def summary_db(migrated_db: TestPostgres) -> AsyncIterator[Database]:
 
 async def stored(database: Database, identity: TurnIdentity) -> tuple[str | None, int]:
     async with database.session() as session:
-        row = await session.scalar(select(Conversation).where(Conversation.id == identity.conversation_id))
+        row = await session.scalar(
+            select(Conversation).where(Conversation.id == identity.conversation_id)
+        )
         assert row is not None
         return row.summary, row.summary_through_seq
 
 
 async def append(database: Database, identity: TurnIdentity, status: TurnStatus) -> TurnIdentity:
     async with database.session() as session, session.begin():
-        assistant = await TurnRepository(session, identity.user_id).create_pair(identity.conversation_id, "八月呢？", "summary-test")
+        assistant = await TurnRepository(session, identity.user_id).create_pair(
+            identity.conversation_id, "八月呢?", uuid4().hex
+        )
         assistant.content = "尚缺少八月信息。"
         assistant.status = status
         return identity.model_copy(update={"turn_id": assistant.id})
@@ -56,7 +62,9 @@ async def test_summary_persisted_in_conversation(summary_db: Database, settings:
     assert await stored(summary_db, identity) == ("用户要求退款率按申请时间计算。", 2)
     # Reconstruct services and replay the same completed turn: no generation occurs.
     replay = FakeChatModel([])
-    await SummaryService(ConversationService(summary_db), settings, replay, SchemaTokenCounter()).run(identity)
+    await SummaryService(
+        ConversationService(summary_db), settings, replay, SchemaTokenCounter()
+    ).run(identity)
     assert not replay.calls
 
 
@@ -70,12 +78,18 @@ async def test_stale_summary_write_rejected(summary_db: Database) -> None:
     assert await stored(summary_db, identity) == ("new summary", 2)
 
 
-async def test_summary_catches_up_in_order_and_skips_failed_content(summary_db: Database, settings: Settings) -> None:
+async def test_summary_catches_up_in_order_and_skips_failed_content(
+    summary_db: Database, settings: Settings
+) -> None:
     first = await source_pair(summary_db, extraction_input())
     await append(summary_db, first, TurnStatus.FAILED)
     last = await append(summary_db, first, TurnStatus.ABSTAINED)
-    llm = FakeChatModel([SummaryOutput(summary="保留第一轮。"), SummaryOutput(summary="保留第一轮；八月仍需澄清。")])
-    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(last)
+    llm = FakeChatModel(
+        [SummaryOutput(summary="保留第一轮。"), SummaryOutput(summary="保留第一轮；八月仍需澄清。")]
+    )
+    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(
+        last
+    )
     assert len(llm.calls) == 2
     assert '"existing_summary":"保留第一轮。"' in str(llm.calls[1].messages[1].content)
     assert '"status":"abstained"' in str(llm.calls[1].messages[1].content)
@@ -108,14 +122,54 @@ async def test_archive_during_generation_prevents_summary_commit(summary_db: Dat
 async def test_running_gap_is_not_skipped(summary_db: Database, settings: Settings) -> None:
     first = await source_pair(summary_db, extraction_input(status=TurnStatus.RUNNING))
     llm = FakeChatModel([])
-    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(first)
+    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(
+        first
+    )
     assert not llm.calls
     assert await stored(summary_db, first) == (None, 0)
 
 
-async def test_oversize_summary_keeps_last_committed_progress(summary_db: Database, settings: Settings) -> None:
+async def test_oversize_summary_keeps_last_committed_progress(
+    summary_db: Database, settings: Settings
+) -> None:
     first = await source_pair(summary_db, extraction_input())
     last = await append(summary_db, first, TurnStatus.DEGRADED)
-    llm = FakeChatModel([SummaryOutput(summary="保留已提交第一轮。"), SummaryOutput(summary=" token" * 600)])
-    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(last)
+    llm = FakeChatModel(
+        [SummaryOutput(summary="保留已提交第一轮。"), SummaryOutput(summary=" token" * 600)]
+    )
+    await SummaryService(ConversationService(summary_db), settings, llm, SchemaTokenCounter()).run(
+        last
+    )
     assert await stored(summary_db, first) == ("保留已提交第一轮。", 2)
+
+
+async def test_persisted_summary_is_additional_to_recent_history(
+    summary_db: Database, settings: Settings
+) -> None:
+    identity = await source_pair(summary_db, extraction_input())
+    conversations = ConversationService(summary_db)
+    await SummaryService(
+        conversations,
+        settings,
+        FakeChatModel([SummaryOutput(summary="已有退款口径对话。")]),
+        SchemaTokenCounter(),
+    ).run(identity)
+    next_turn = await append(summary_db, identity, TurnStatus.RUNNING)
+    prepared = await ConversationService(summary_db).prepare(next_turn)
+    assert prepared.summary == "已有退款口径对话。"
+    assert prepared.messages
+    assert prepared.question == "八月呢?"
+
+
+async def test_older_completion_cannot_overwrite_later_coverage(summary_db: Database) -> None:
+    identity = await source_pair(summary_db, extraction_input())
+    conversations = ConversationService(summary_db)
+    old = await conversations.summary_work(identity)
+    assert old is not None
+    assert await conversations.advance_summary(identity, old, "first")
+    second = await append(summary_db, identity, TurnStatus.DEGRADED)
+    newer = await conversations.summary_work(second)
+    assert newer is not None
+    assert await conversations.advance_summary(second, newer, "first and second")
+    assert not await conversations.advance_summary(identity, old, "late first")
+    assert await stored(summary_db, second) == ("first and second", 4)

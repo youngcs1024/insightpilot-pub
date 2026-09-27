@@ -12,10 +12,10 @@ from app.agents.contracts import EvidenceBundle, SynthesisInput, SynthesisResult
 from app.agents.prompts import SYNTHESIS, SYNTHESIS_REPAIR
 from app.agents.synthesis_validation import data_view, validate_output
 from app.core.errors import FabricatedCitation, SynthesisValidationError
-from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.schemas.mcp import Contract
 from app.schemas.synthesis import ClaimKind, SynthesisAbstention, SynthesisOutput
+from app.services.llm.budget import prompt_budget
 
 if TYPE_CHECKING:
     from app.agents.runtime import RuntimeContext

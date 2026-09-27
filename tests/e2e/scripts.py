@@ -19,6 +19,7 @@ from app.core.llm_config import ModelRole
 from app.schemas.knowledge import KnowledgeDraft, KnowledgePassage
 from app.schemas.memory_extraction import MemoryExtraction, MemoryExtractionInput
 from app.schemas.metric_resolution import MetricIntent, RegionReference
+from app.schemas.summary import SummaryOutput, SummaryWork
 from app.schemas.synthesis import (
     CellReference,
     Claim,
@@ -105,6 +106,20 @@ def memory_response(inputs: list[str]) -> MemoryExtraction:
     return MemoryExtraction()
 
 
+def background_response(name: str, inputs: list[str]) -> BaseModel | None:
+    """Validate both background envelopes without implying live model quality."""
+    if name == "MemoryExtraction":
+        return memory_response(inputs)
+    if name == "SummaryOutput":
+        source = SummaryWork.model_validate_json(inputs[0])
+        assert source.status.value in {"succeeded", "degraded", "abstained"}
+        assert source.covered_seq > source.expected_seq
+        return SummaryOutput(
+            summary=f"{source.existing_summary} Turn {source.covered_seq}: {source.status.value}."
+        )
+    return None
+
+
 class Script:
     """No live fallback; a schema can be consumed only the declared number of times."""
 
@@ -112,7 +127,7 @@ class Script:
         self.scenario = scenario
         self.status = ScriptStatus()
         self.counts: Counter[str] = Counter()
-        self.expected = Counter({"RouteDecision": 1})
+        self.expected = Counter({"RouteDecision": 1, "SummaryOutput": 1})
         if scenario in {Scenario.DATA, Scenario.FOLLOWUP, Scenario.BOTH, Scenario.KNOWLEDGE}:
             self.expected["MemoryExtraction"] = 1
         if scenario in {Scenario.DATA, Scenario.FOLLOWUP, Scenario.BOTH, Scenario.CHAOS}:
@@ -139,9 +154,9 @@ class Script:
         self.counts[name] += 1
         self.status.calls.append(name)
         inputs = human_inputs(request)
-        response = (
-            memory_response(inputs) if name == "MemoryExtraction" else self.response(name, inputs)
-        )
+        response = background_response(name, inputs)
+        if response is None:
+            response = self.response(name, inputs)
         fake = FakeChatModel([response])
         validated = await fake.generate_structured(
             ModelRole.ROUTER

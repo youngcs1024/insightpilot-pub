@@ -17,7 +17,6 @@ from app.agents.contracts import (
 )
 from app.core.budget import PromptBudget
 from app.core.config_models import RouterSettings, Settings
-from app.core.budget import PromptBudget
 from app.core.deadline import Deadline
 from app.core.errors import PeriodUnresolved
 from app.core.llm_config import ModelRole
@@ -40,7 +39,12 @@ class StructuredLlmPort(Protocol):
     """The model contract shared by routing and specialist services."""
 
     async def generate_structured[T: BaseModel](
-        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline,
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
         budget: PromptBudget | None = None,
     ) -> T: ...
 

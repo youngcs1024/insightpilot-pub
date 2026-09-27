@@ -5,11 +5,11 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from app.agents.contracts import RoutingContext
+from app.agents.multiturn import trim_history
 from app.agents.nodes.common import failed
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
 from app.core.budget import ContextBudget, ContextSlot
-from app.agents.multiturn import trim_history
 from app.core.errors import InsightPilotError
 from app.schemas.memory import FormatPreferenceContent, TerminologyContent
 from app.schemas.memory_retrieval import MemoryReadRequest, MemorySelection, MemoryStage

@@ -12,6 +12,7 @@ from app.agents.contracts import EvidenceSnapshot
 from app.agents.data import summarize
 from app.agents.data.caveats import CAVEATS
 from app.agents.failures import FailureKind
+from app.core.budget import PromptBudget
 from app.core.deadline import Deadline
 from app.core.llm_config import ModelRole
 from app.core.masking import mask, safe_attributes
@@ -35,7 +36,12 @@ async def test_exact_generation_summary_persisted() -> None:
     generate = ctx.llm.generate_structured
 
     async def checked[T: BaseModel](
-        role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> T:
         if role is ModelRole.SYNTHESIS:
             assert ctx.evidence.committed
@@ -50,7 +56,7 @@ async def test_exact_generation_summary_persisted() -> None:
             assert block["returned_row_count"] == RESULT_CEILING
             assert len(block["sample_rows"]) <= summarize.SAMPLE_CAP
             assert block["statistics"][0][-1] == "12497500"
-        return await generate(role, messages, schema, deadline=deadline)
+        return await generate(role, messages, schema, deadline=deadline, budget=budget)
 
     ctx.llm.generate_structured = checked
     output = await invoke(ctx)

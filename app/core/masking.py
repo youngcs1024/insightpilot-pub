@@ -12,7 +12,6 @@ from langfuse.types import MaskOtelSpansParams, MaskOtelSpansResult, OtelSpanPat
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from app.core.budget import BudgetReport
-
 from app.core.logging import _CREDENTIAL, _CREDENTIAL_ASSIGNMENT, _SECRET_KEY
 from app.schemas.sanity import SanityFlag
 
@@ -21,7 +20,15 @@ MAX_UNRESOLVED_REFERENCES = 20
 _ROW_MARKER = re.compile(r"\[<redacted: [0-9]+ rows × [0-9]+ cols>\]")  # noqa: RUF001 -- contract notation.
 REDACTED = "<redacted>"
 _ROUTING = frozenset(
-    {"route", "original_route", "confidence", "decided_by", "prefilter_hit", "router_tokens"}
+    {
+        "route",
+        "original_route",
+        "confidence",
+        "decided_by",
+        "prefilter_hit",
+        "router_tokens",
+        "context_budget",
+    }
 )
 _MEMORY = frozenset(
     {
@@ -176,9 +183,7 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key == "context_budget":
-            result[key] = _budget_diagnostic(value)
-        elif key in _ROUTING | _PROJECTION | _MEMORY:
+        if key in _ROUTING | _PROJECTION | _MEMORY:
             result[key] = _routing_diagnostic(key, value)
         elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)
@@ -203,15 +208,23 @@ def _budget_diagnostic(value: object) -> object:
             value = value.model_dump()
         if isinstance(value, str):
             value = json.loads(value)
-        return BudgetReport.model_validate_json(json.dumps(value), strict=True).model_dump(mode="json")
+        return BudgetReport.model_validate_json(json.dumps(value), strict=True).model_dump(
+            mode="json"
+        )
     except (ValidationError, ValueError, TypeError):
         return REDACTED
 
 
+def _source_diagnostic(key: str, value: object) -> object:
+    if key == "context_budget":
+        return _budget_diagnostic(value)
+    project = _memory_diagnostic if key in _MEMORY else _projection_diagnostic
+    return project(key, value)
+
+
 def _routing_diagnostic(key: str, value: object) -> object:
-    if key in _MEMORY | _PROJECTION:
-        project = _memory_diagnostic if key in _MEMORY else _projection_diagnostic
-        return project(key, value)
+    if key in _MEMORY | _PROJECTION | {"context_budget"}:
+        return _source_diagnostic(key, value)
     if value is None:
         return None
     if key in {"route", "original_route"}:

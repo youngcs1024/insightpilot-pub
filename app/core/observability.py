@@ -19,7 +19,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel, Field
 
-from app.core.budget import BudgetReport
+from app.core.budget import BudgetReport  # noqa: TC001 -- Pydantic resolves at runtime.
 from app.core.config_models import SchemaStrategy  # noqa: TC001 -- Pydantic resolves at runtime.
 from app.core.masking import mask, mask_otel_spans
 from app.core.trace_export import SafeSpanExporter

@@ -159,11 +159,13 @@ def test_prior_sql_omits_whole_oversized_statements() -> None:
 def test_history_trim_preserves_complete_messages_and_user_start() -> None:
     latest = HistoryMessage(role="user", content="2026年8月GMV")
     history = [
-        HistoryMessage(role="user", content="x" * HISTORY_TOKENS),
+        HistoryMessage(role="user", content=" word" * (HISTORY_TOKENS + 1)),
         HistoryMessage(role="assistant", content="old answer"),
         latest,
     ]
     assert trim_history(history) == [latest]
+    compressible = HistoryMessage(role="user", content="x" * HISTORY_TOKENS)
+    assert trim_history([compressible]) == [compressible]
     assert trim_history([HistoryMessage(role="assistant", content="orphan")]) == []
     assert trim_history([HistoryMessage(role="user", content="中" * HISTORY_TOKENS)]) == []
 

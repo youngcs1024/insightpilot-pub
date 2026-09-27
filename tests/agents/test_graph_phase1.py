@@ -10,6 +10,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 from app.agents.failures import FailureKind
+from app.core.budget import PromptBudget
 from app.core.deadline import Deadline
 from app.core.errors import (
     ConflictError,
@@ -114,14 +115,19 @@ async def test_snapshot_committed_before_generation() -> None:
     original = ctx.llm.generate_structured
 
     async def checked[T: BaseModel](
-        role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> T:
         if role == ModelRole.SYNTHESIS:
             assert ctx.evidence.committed
             assert ctx.evidence.snapshot.data.generation_block in str(messages[1].content).replace(
                 '\\"', '"'
             )
-        return await original(role, messages, schema, deadline=deadline)
+        return await original(role, messages, schema, deadline=deadline, budget=budget)
 
     ctx.llm.generate_structured = checked
     assert (await invoke(ctx)).status == "succeeded"

@@ -15,10 +15,10 @@ from app.agents.prompts import REWRITE_QUESTION
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError
-from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, update_current_observation
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification
+from app.services.llm.budget import prompt_budget
 
 logger = structlog.get_logger(__name__)
 

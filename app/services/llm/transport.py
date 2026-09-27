@@ -50,7 +50,7 @@ class LlmTransport:
             nonlocal attempts
             attempts += 1
             report = check_request(request, self.counter)
-            logger.info("context_budget_checked", model=request.model, budget=report.model_dump())
+            logger.info("context_budget_checked", model=request.model, budget=report)
             record_attempt()
             with observe(
                 "llm_completion",

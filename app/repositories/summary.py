@@ -44,7 +44,9 @@ class SummaryRepository:
         )
         if row is None or row.status is TurnStatus.RUNNING:
             return None
-        source = await turns.get(conversation_id, row.reply_to_turn_id) if row.reply_to_turn_id else None
+        source = (
+            await turns.get(conversation_id, row.reply_to_turn_id) if row.reply_to_turn_id else None
+        )
         if source is None or source.role is not TurnRole.USER or source.seq >= row.seq:
             raise ConflictError("Summary requires an owned preceding user turn.")
         return SummaryWork(

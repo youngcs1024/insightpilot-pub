@@ -13,7 +13,7 @@ from app.services.llm.contracts import CompletionRequest
 _reports: ContextVar[list[BudgetReport] | None] = ContextVar("context_budget_reports", default=None)
 
 
-def prompt_budget(
+def prompt_budget(  # noqa: PLR0913 -- the eight named source slots are an explicit contract.
     *,
     system_prompt: str | None = None,
     summary: str | None = None,

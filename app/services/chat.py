@@ -206,7 +206,11 @@ class ChatService:
                 raise
             else:
                 observation.update(TraceMetadata(status=result.status.value))
-                if result.status in {TurnStatus.SUCCEEDED, TurnStatus.DEGRADED, TurnStatus.ABSTAINED}:
+                if result.status in {
+                    TurnStatus.SUCCEEDED,
+                    TurnStatus.DEGRADED,
+                    TurnStatus.ABSTAINED,
+                }:
                     spawn(self.summary.run(ctx.identity), name="summarize-conversation")
                 if result.status is TurnStatus.SUCCEEDED:
                     spawn(self.memory.run(ctx.identity), name="extract-turn-memory")

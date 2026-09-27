@@ -25,20 +25,31 @@ async def test_summary_is_after_commit_and_nonblocking(
 
     async def blocked(identity: TurnIdentity) -> None:
         async with chat.database.session() as session:
-            row = await TurnRepository(session, identity.user_id).get(identity.conversation_id, identity.turn_id)
-            assert row is not None and row.status is TurnStatus.SUCCEEDED
+            row = await TurnRepository(session, identity.user_id).get(
+                identity.conversation_id, identity.turn_id
+            )
+            assert row is not None
+            assert row.status is TurnStatus.SUCCEEDED
         seen.append(identity)
         entered.set()
         await release.wait()
 
     monkeypatch.setattr(chat.app.state.chat.summary, "run", Mock(side_effect=blocked))
     try:
-        response = await chat.client.post((chat.url + "/stream" if stream else chat.url), json={"content":"2026年8月GMV是多少？"}, headers={"Idempotency-Key":"summary-nonblocking"})
+        response = await chat.client.post(
+            (chat.url + "/stream" if stream else chat.url),
+            json={"content": "count"},
+            headers={"Idempotency-Key": "summary-nonblocking"},
+        )
         assert response.status_code == HTTPStatus.OK, response.text
         async with asyncio.timeout(10):
             await entered.wait()
         assert not release.is_set()
-        replay = await chat.client.post((chat.url + "/stream" if stream else chat.url), json={"content":"2026年8月GMV是多少？"}, headers={"Idempotency-Key":"summary-nonblocking"})
+        replay = await chat.client.post(
+            (chat.url + "/stream" if stream else chat.url),
+            json={"content": "count"},
+            headers={"Idempotency-Key": "summary-nonblocking"},
+        )
         assert replay.status_code == HTTPStatus.OK
         assert len(seen) == 1
     finally:

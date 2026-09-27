@@ -88,7 +88,8 @@ class MetricIntentService:
             MetricIntent,
             deadline=deadline,
             budget=intent_budget(
-                definitions, now=now,
+                definitions,
+                now=now,
                 terminology=inputs.model_dump_json(include={"terminology"}),
             ),
         )

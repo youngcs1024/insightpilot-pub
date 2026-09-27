@@ -3,7 +3,7 @@
 import json
 from dataclasses import replace
 
-from app.agents.budget import SUMMARY_TOKENS
+from app.agents.failures import FailureKind
 from app.agents.knowledge.query_context import bounded_history
 from app.schemas.knowledge_query import KnowledgeClarificationKind
 from tests.agents.knowledge_support import FakeRetrieval, inputs, invoke, ranked
@@ -65,10 +65,10 @@ async def test_truncated_away_antecedent_is_not_accepted() -> None:
     assert service.calls == []
 
 
-async def test_long_summary_is_explicitly_bounded() -> None:
+async def test_long_summary_fails_without_silent_truncation() -> None:
     prior = topic()
     ctx = replace(context(responses=[rewrite(prior)]), retrieval=FakeRetrieval(ranked()))
-    await invoke(
+    output = await invoke(
         ctx,
         inputs(
             question="那运费呢\uff1f",
@@ -77,6 +77,6 @@ async def test_long_summary_is_explicitly_bounded() -> None:
             conversation_summary="政策资料" * 900,
         ),
     )
-    payload = json.loads(ctx.llm.calls[0].messages[1].content)
-    assert payload["summary"].endswith("[truncated]")
-    assert len(payload["summary"].encode("utf-8")) <= SUMMARY_TOKENS
+    assert output.failure is not None
+    assert output.failure.kind is FailureKind.CONTEXT_BUDGET_EXCEEDED
+    assert not ctx.llm.calls

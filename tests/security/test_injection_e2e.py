@@ -123,6 +123,7 @@ async def test_injection_e2e(  # noqa: PLR0915 -- one parameterized end-to-end c
         assert first.data is not None
         assert first.data.data.row_count == 0
         assert "o.region_id IN (2)" in first.data.data.sql
+        await session.wait_background()
         second = await session.ask(case.followup)
         following = await session.evidence(second)
         assert following.data is not None

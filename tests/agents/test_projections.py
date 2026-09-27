@@ -169,7 +169,6 @@ def test_summary_overflow_raises_without_silent_truncation() -> None:
         to_knowledge_input(state, token_counter=ctx.schema_token_counter)
 
 
-
 @pytest.mark.parametrize("route", list(Route))
 def test_format_preference_applies_in_formatter_for_all_routes(route: Route) -> None:
     ctx = context()

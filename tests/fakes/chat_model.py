@@ -89,14 +89,23 @@ class FakeChatModel(BaseChatModel):
         return self._generate(messages, stop=stop, **kwargs)
 
     async def generate_structured[T: BaseModel](
-        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline,
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
         budget: PromptBudget | None = None,
     ) -> T:
         """Respect deadlines and validate the response using the requested schema."""
         deadline.check("fake_llm")
         response = self._next(
             FakeCall(
-                messages=messages, budget=budget, role=role, schema_name=schema.__name__, deadline_at=deadline.at
+                messages=messages,
+                budget=budget,
+                role=role,
+                schema_name=schema.__name__,
+                deadline_at=deadline.at,
             )
         )
         if isinstance(response, str):

@@ -40,7 +40,9 @@ class Session:
                 status = await self.status()
                 spans = (await self.observations()).spans
                 pending = any(
-                    span.name == "memory_extract" and span.metadata.status is None for span in spans
+                    span.name in {"memory_extract", "conversation_summary"}
+                    and span.metadata.status is None
+                    for span in spans
                 )
                 if status.errors or (not any(status.remaining.values()) and not pending):
                     break
@@ -52,6 +54,27 @@ class Session:
         assert status.remaining, status
         assert not any(status.remaining.values()), status
         return status
+
+    async def wait_background(self) -> None:
+        """Drain the first pair before another turn in a multi-turn script."""
+        async with asyncio.timeout(10):
+            while True:
+                status = await self.status()
+                spans = (await self.observations()).spans
+                pending = any(
+                    span.name in {"memory_extract", "conversation_summary"}
+                    and span.metadata.status is None
+                    for span in spans
+                )
+                if status.errors:
+                    raise AssertionError(status)
+                if (
+                    "MemoryExtraction" in status.calls
+                    and "SummaryOutput" in status.calls
+                    and not pending
+                ):
+                    return
+                await asyncio.sleep(0.05)
 
     async def ask(self, question: str) -> TurnResponse:
         response = await self.client.post(

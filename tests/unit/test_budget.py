@@ -1,5 +1,7 @@
 """Source caps and final-wire request guards, without provider or database access."""
 
+# ruff: noqa: PLR2004 -- explicit budget, cursor and fixture assertions.
+
 import json
 from time import monotonic
 
@@ -11,10 +13,11 @@ from pydantic import BaseModel
 from tenacity import wait_none
 
 from app.core.budget import ContextBudget, ContextSlot, ModelContextLimits
-from app.core.config_models import LLMSettings
+from app.core.config_models import LLMSettings, Settings
 from app.core.deadline import Deadline
 from app.core.errors import ContextBudgetExceeded, LlmConfigurationError
 from app.core.llm_config import ModelRole
+from app.core.logging import SecretRedactor
 from app.core.masking import REDACTED, mask, safe_attributes
 from app.services.llm.budget import check_request, collect_budget_reports, prompt_budget
 from app.services.llm.contracts import CompletionRequest, Message
@@ -82,10 +85,14 @@ def test_metrics_budget_is_separate() -> None:
 
 def request() -> CompletionRequest:
     return CompletionRequest(
-        model="test", temperature=0, max_tokens=50,
+        model="test",
+        temperature=0,
+        max_tokens=50,
         messages=[Message(role="user", content="private 中文")],
         tools=[{"type": "function", "function": {"name": "foo", "parameters": {"type": "object"}}}],
-        model_limits=ModelContextLimits(context_window=10000, max_input_tokens=9000, max_output_tokens=1000),
+        model_limits=ModelContextLimits(
+            context_window=10000, max_input_tokens=9000, max_output_tokens=1000
+        ),
     )
 
 
@@ -146,20 +153,27 @@ async def test_slot_overflow_prevents_http(respx_mock: respx.MockRouter) -> None
     async with service() as llm:
         with pytest.raises(ContextBudgetExceeded):
             await llm.generate_structured(
-                ModelRole.SQL, [HumanMessage(content="question")], SmallOutput,
+                ModelRole.SQL,
+                [HumanMessage(content="question")],
+                SmallOutput,
                 deadline=Deadline(monotonic() + 10),
                 budget=prompt_budget(schema=business_schema().rendered * 3),
             )
     assert not route.called
 
 
-async def test_real_request_emits_report_without_sending_internal_budget(respx_mock: respx.MockRouter) -> None:
+async def test_real_request_emits_report_without_sending_internal_budget(
+    respx_mock: respx.MockRouter,
+) -> None:
     route = respx_mock.post(URL).mock(return_value=response('{"count":7}'))
     async with service() as llm:
         with collect_budget_reports() as reports:
             await llm.generate_structured(
-                ModelRole.SQL, [HumanMessage(content="question")], SmallOutput,
-                deadline=Deadline(monotonic() + 10), budget=prompt_budget(schema=business_schema().rendered),
+                ModelRole.SQL,
+                [HumanMessage(content="question")],
+                SmallOutput,
+                deadline=Deadline(monotonic() + 10),
+                budget=prompt_budget(schema=business_schema().rendered),
             )
     assert len(reports) == 1
     assert next(s.used for s in reports[0].slots if s.slot is ContextSlot.SCHEMA) > 0
@@ -173,19 +187,31 @@ async def test_smaller_fallback_window_checked_before_dispatch(
 ) -> None:
     monkeypatch.setattr("app.core.retry.wait_exponential", lambda **kwargs: wait_none())
     config = LLMSettings(
-        base_url="https://provider.invalid/v1", api_key="test", model="primary",
+        base_url="https://provider.invalid/v1",
+        api_key="test",
+        model="primary",
         roles={"sql": {"fallback_models": ["backup"]}},
         model_contexts={
-            "primary": {"context_window":1000000,"max_input_tokens":991808},
-            "backup": {"context_window":1000,"max_input_tokens":1000,"max_output_tokens":1000},
+            "primary": {"context_window": 1000000, "max_input_tokens": 991808},
+            "backup": {"context_window": 1000, "max_input_tokens": 1000, "max_output_tokens": 1000},
         },
     )
-    llm = LlmService(config, registry=ModelRegistry(config, [report(m, StructuredTier.NATIVE) for m in ("primary", "backup")]))
+    llm = LlmService(
+        config,
+        registry=ModelRegistry(
+            config, [report(m, StructuredTier.NATIVE) for m in ("primary", "backup")]
+        ),
+    )
     route = respx_mock.post(URL).mock(return_value=httpx.Response(503))
     await llm.start()
     try:
         with pytest.raises(ContextBudgetExceeded):
-            await llm.generate_structured(ModelRole.SQL, [HumanMessage(content="q")], SmallOutput, deadline=Deadline(monotonic()+10))
+            await llm.generate_structured(
+                ModelRole.SQL,
+                [HumanMessage(content="q")],
+                SmallOutput,
+                deadline=Deadline(monotonic() + 10),
+            )
     finally:
         await llm.aclose()
     assert route.call_count == 3
@@ -194,15 +220,46 @@ async def test_smaller_fallback_window_checked_before_dispatch(
 
 async def test_repair_rechecks_expanded_request(respx_mock: respx.MockRouter) -> None:
     config = LLMSettings(
-        base_url="https://provider.invalid/v1", api_key="test", model="primary",
-        model_contexts={"primary": {"context_window":10000,"max_input_tokens":5000,"max_output_tokens":3000}},
+        base_url="https://provider.invalid/v1",
+        api_key="test",
+        model="primary",
+        model_contexts={
+            "primary": {
+                "context_window": 10000,
+                "max_input_tokens": 5000,
+                "max_output_tokens": 3000,
+            }
+        },
     )
-    llm = LlmService(config, registry=ModelRegistry(config, [report("primary", StructuredTier.PROMPTED)]))
+    llm = LlmService(
+        config, registry=ModelRegistry(config, [report("primary", StructuredTier.PROMPTED)])
+    )
     route = respx_mock.post(URL).mock(return_value=response("x" * 6000))
     await llm.start()
     try:
         with pytest.raises(ContextBudgetExceeded):
-            await llm.generate_structured(ModelRole.SQL, [HumanMessage(content="q")], SmallOutput, deadline=Deadline(monotonic()+10))
+            await llm.generate_structured(
+                ModelRole.SQL,
+                [HumanMessage(content="q")],
+                SmallOutput,
+                deadline=Deadline(monotonic() + 10),
+            )
     finally:
         await llm.aclose()
     assert route.call_count == 1
+
+
+def test_typed_budget_logging_preserves_only_safe_metadata(settings: Settings) -> None:
+    report_value = ContextBudget(SchemaTokenCounter()).check_request(
+        "{}",
+        model=ModelContextLimits(context_window=1000000, max_input_tokens=991808),
+        output_tokens=2048,
+        message_count=1,
+        tool_count=0,
+    )
+    redactor = SecretRedactor(settings)
+    assert redactor.clean(report_value) == report_value.model_dump(mode="json")
+    assert redactor.clean({"tokenizer": "secret", "api_token": "secret"}) == {
+        "tokenizer": "***",
+        "api_token": "***",
+    }

@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field, ValidationError
 from app.agents.contracts import RouteDecision, RouterInput, RoutingContext
 from app.agents.nodes.router import route_question
 from app.agents.runtime import RoutingRuntime
-from app.core.config_models import LLMSettings, RouterSettings
 from app.core.budget import PromptBudget
+from app.core.config_models import LLMSettings, RouterSettings
 from app.core.deadline import Deadline
 from app.core.errors import InsightPilotError, LlmConfigurationError
 from app.core.llm_config import ModelRole
@@ -39,7 +39,12 @@ class LazyRoutingLlm:
         self._start_lock = asyncio.Lock()
 
     async def generate_structured[T: BaseModel](
-        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline,
+        self,
+        role: ModelRole,
+        messages: list[BaseMessage],
+        schema: type[T],
+        *,
+        deadline: Deadline,
         budget: PromptBudget | None = None,
     ) -> T:
         """Initialize once on the first classifier call and preserve its deadline."""
@@ -52,7 +57,9 @@ class LazyRoutingLlm:
                 await self.service.start()
             deadline.check("router_llm_initialized")
         deadline.check("router_llm_started")
-        return await self.service.generate_structured(role, messages, schema, deadline=deadline, budget=budget)
+        return await self.service.generate_structured(
+            role, messages, schema, deadline=deadline, budget=budget
+        )
 
     async def aclose(self) -> None:
         """Release resources even if initialization or classification failed."""

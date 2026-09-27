@@ -10,7 +10,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.prompts import KNOWLEDGE_CITATION_REPAIR, KNOWLEDGE_SYSTEM
 from app.core.errors import FabricatedCitation, KnowledgeEvidenceError
-from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.retrieval.evidence import render_documents
 from app.schemas.knowledge import (
@@ -19,6 +18,7 @@ from app.schemas.knowledge import (
     KnowledgeDraft,
     KnowledgeGeneration,
 )
+from app.services.llm.budget import prompt_budget
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage

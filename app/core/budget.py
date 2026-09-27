@@ -109,16 +109,14 @@ class BudgetReport(BaseModel):
 class ContextBudget:
     """Charge every occurrence; optional reduction belongs to the producer."""
 
-    def __init__(
-        self, counter: TokenCounter, limits: dict[ContextSlot, int] | None = None
-    ) -> None:
+    def __init__(self, counter: TokenCounter, limits: dict[ContextSlot, int] | None = None) -> None:
         self.counter = counter
         self.limits = {**DEFAULT_LIMITS, **(limits or {})}
         self.used = dict.fromkeys(ContextSlot, 0)
 
     def charge(self, slot: ContextSlot, text: str) -> None:
         """Reject excess before accepting this source's additional usage."""
-        count = self.used[slot] + self.counter.count(text)
+        count = self.used[slot] + (self.counter.count(text) if text else 0)
         if count > self.limits[slot]:
             raise ContextBudgetExceeded(slot=slot.value, used=count, limit=self.limits[slot])
         self.used[slot] = count

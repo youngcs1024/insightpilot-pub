@@ -5,9 +5,9 @@ import json
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.agents.budget import token_bound
+from app.agents.contracts import HistoryMessage
 from app.services.context_history import trim_context_messages
 from app.services.schema_tokens import SchemaTokenCounter
-from app.agents.contracts import HistoryMessage
 
 PRIOR_SQL_TOKENS = 2000
 

@@ -11,8 +11,8 @@ from app.agents.knowledge.query_context import antecedents, bounded_history, sha
 from app.agents.knowledge.state import KnowledgeAgentState
 from app.agents.prompts import KNOWLEDGE_REWRITE
 from app.agents.runtime import RuntimeContext
+from app.core.budget import ContextBudget, ContextSlot
 from app.core.errors import KnowledgeEvidenceError
-from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, update_current_observation
 from app.schemas.knowledge_query import (
@@ -23,6 +23,7 @@ from app.schemas.knowledge_query import (
 from app.schemas.retrieval import RetrievalQuery
 from app.services.knowledge_calendar import same_scope, year_of
 from app.services.knowledge_time import parse_time, reference_clarification, time_clarification
+from app.services.llm.budget import prompt_budget
 
 logger = structlog.get_logger(__name__)
 
@@ -105,6 +106,7 @@ async def rewrite_query(
     """One logical LLM call only when needed; transport retries remain service-owned."""
     ctx = runtime.context
     ctx.deadline.check("knowledge_query")
+    ContextBudget(ctx.schema_token_counter).charge(ContextSlot.SUMMARY, state.conversation_summary)
     resolution = state.time_resolution
     if resolution is None:
         raise KnowledgeEvidenceError(reason="knowledge_time_missing")
@@ -145,8 +147,12 @@ async def rewrite_query(
         deadline=ctx.deadline,
         budget=prompt_budget(
             summary=state.conversation_summary,
-            recent_messages=json.dumps([t.model_dump(mode="json") for t in history], ensure_ascii=False),
-            memories=json.dumps([m.model_dump() for m in state.relevant_memories], ensure_ascii=False),
+            recent_messages=json.dumps(
+                [t.model_dump(mode="json") for t in history], ensure_ascii=False
+            ),
+            memories=json.dumps(
+                [m.model_dump() for m in state.relevant_memories], ensure_ascii=False
+            ),
         ),
     )
     ctx.deadline.check("knowledge_query_rewritten")

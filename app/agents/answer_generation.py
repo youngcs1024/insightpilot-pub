@@ -11,10 +11,10 @@ from app.agents.runtime import RuntimeContext
 from app.agents.synthesis_generation import synthesis_input
 from app.agents.synthesis_validation import validate_output
 from app.core.errors import FabricatedCitation, SynthesisValidationError
-from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.schemas.memory import FormatPreferenceContent
 from app.schemas.synthesis import Claim, ClaimKind, RowCountReference, SynthesisOutput
+from app.services.llm.budget import prompt_budget
 
 logger = structlog.get_logger(__name__)
 

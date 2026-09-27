@@ -1,2 +1,3 @@
-上次草稿包含不在本次证据中的引用，已被拒绝。重新依据同一批参考资料生成一次回答。
-仅使用 valid_chunk_ids 中列出的 ID。每个文段必须有真实支持它的引用；无法支持时返回空 passages。
+The rejected draft cited material outside this evidence. Regenerate once from the
+same documents using only valid_chunk_ids. Every passage needs a supporting citation;
+return empty passages when unsupported.

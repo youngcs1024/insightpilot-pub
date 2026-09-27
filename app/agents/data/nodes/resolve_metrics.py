@@ -111,9 +111,13 @@ async def resolve_metrics(state: DataAgentState, runtime: Runtime[RuntimeContext
     intent = state.prepared_intent
     if intent is None:
         intent = await ctx.llm.generate_structured(
-            ModelRole.SQL, _messages(state, ctx, definitions), MetricIntent, deadline=ctx.deadline,
+            ModelRole.SQL,
+            _messages(state, ctx, definitions),
+            MetricIntent,
+            deadline=ctx.deadline,
             budget=intent_budget(
-                definitions, now=ctx.now,
+                definitions,
+                now=ctx.now,
                 terminology=state.model_dump_json(include={"relevant_memories"}),
             ),
         )

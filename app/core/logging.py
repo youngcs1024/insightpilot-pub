@@ -11,6 +11,7 @@ from asgi_correlation_id import correlation_id
 from pydantic import BaseModel, SecretStr
 from structlog.types import EventDict, Processor, WrappedLogger
 
+from app.core.budget import BudgetReport
 from app.core.config_models import Settings
 
 _SECRET_KEY = re.compile(
@@ -55,8 +56,8 @@ class SecretRedactor:
 
     def clean(self, value: object) -> object:
         """Walk structured fields without ever rendering a SecretStr value."""
-        if isinstance(value, SecretStr):
-            return "***"
+        if isinstance(value, (BudgetReport, SecretStr)):
+            return value.model_dump(mode="json") if isinstance(value, BudgetReport) else "***"
         if isinstance(value, Mapping):
             return {
                 str(key): "***" if credential_field(str(key)) else self.clean(item)

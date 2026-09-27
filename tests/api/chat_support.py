@@ -20,11 +20,11 @@ from app.api.dependencies import get_current_user
 from app.application import create_app
 from app.core.background import shutdown
 from app.core.config_models import Settings
-from app.schemas.summary import SummaryOutput
 from app.db.models import TurnStatus
 from app.db.session import Database
 from app.schemas.auth import UserResponse
 from app.schemas.memory_extraction import MemoryExtraction
+from app.schemas.summary import SummaryOutput
 from tests.agents.support import invoke, metric_intent, sql_candidate
 from tests.answer_support import data_draft
 from tests.factories import business_schema
@@ -94,7 +94,9 @@ async def chat(settings: Settings, auth_database: Database) -> AsyncIterator[Har
     )
     application = create_app(settings, database=auth_database, mcp_client=mcp)
     application.state.chat.graph = graph
-    application.state.chat.summary.llm = FakeChatModel([SummaryOutput(summary="已讨论订单数量。") for _ in range(20)])
+    application.state.chat.summary.llm = FakeChatModel(
+        [SummaryOutput(summary="已讨论订单数量。") for _ in range(20)]
+    )
     application.state.chat.memory.llm = FakeChatModel([MemoryExtraction() for _ in range(20)])
     application.state.llm = FakeChatModel(
         [

@@ -14,6 +14,7 @@ import structlog
 from pydantic import BaseModel, Field, SecretStr, TypeAdapter, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.budget import ModelContextLimits, default_model_contexts
 from app.core.config_models import (
     DataAgentSettings,
     HTTPSettings,
@@ -21,7 +22,6 @@ from app.core.config_models import (
     RouterSettings,
 )
 from app.core.errors import InsightPilotError
-from app.core.budget import ModelContextLimits, default_model_contexts
 from app.core.llm_config import ModelRole, ModelRoleSettings
 from app.retrieval.config import RetrievalSettings
 from scripts.model_evidence import Provenance
@@ -75,7 +75,9 @@ class DeploymentSettings(BaseSettings):
     llm_base_url: str = "https://example.invalid/v1"
     llm_model: str = "qwen3.6-flash-2026-04-16"
     llm_timeout_s: float = Field(default=45, ge=0.01, le=120)
-    llm_model_contexts: dict[str, ModelContextLimits] = Field(default_factory=default_model_contexts)
+    llm_model_contexts: dict[str, ModelContextLimits] = Field(
+        default_factory=default_model_contexts
+    )
     llm_roles: dict[ModelRole, ModelRoleSettings] = Field(default_factory=dict)
     llm_capabilities_paths: list[str] = Field(
         default_factory=lambda: ["app/resources/provider_capabilities.json"],
@@ -115,9 +117,9 @@ class DeploymentSettings(BaseSettings):
             "IP_JWT_SECRET": self.jwt_secret.get_secret_value() if self.jwt_secret else "",
             "IP_LLM_BASE_URL": self.llm_base_url,
             "IP_LLM_MODEL": self.llm_model,
-            "IP_LLM_MODEL_CONTEXTS": TypeAdapter(dict[str, ModelContextLimits]).dump_json(
-                self.llm_model_contexts
-            ).decode(),
+            "IP_LLM_MODEL_CONTEXTS": TypeAdapter(dict[str, ModelContextLimits])
+            .dump_json(self.llm_model_contexts)
+            .decode(),
             "IP_LLM_TIMEOUT_S": str(self.llm_timeout_s),
             "IP_LLM_ROLES": TypeAdapter(dict[ModelRole, ModelRoleSettings])
             .dump_json(self.llm_roles)

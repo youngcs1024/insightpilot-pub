@@ -10,7 +10,9 @@ from app.services.llm.messages import to_wire
 
 def history_text(messages: list[BaseMessage]) -> str:
     """Preserve message roles, tool arguments and result identifiers in accounting."""
-    return json.dumps([m.model_dump(exclude_none=True) for m in to_wire(messages)], ensure_ascii=False)
+    return json.dumps(
+        [m.model_dump(exclude_none=True) for m in to_wire(messages)], ensure_ascii=False
+    )
 
 
 def complete_tool_groups(messages: list[BaseMessage]) -> list[BaseMessage]:

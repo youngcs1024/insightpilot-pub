@@ -54,6 +54,8 @@ class RedTeamScript(Script):
     def __init__(self, scenario: Scenario) -> None:
         super().__init__(scenario)
         self.expected = Counter({"RouteDecision": 2 if scenario is Scenario.RED_WIDEN else 1})
+        if scenario is not Scenario.RED_SQL:
+            self.expected["SummaryOutput"] = 2 if scenario is Scenario.RED_WIDEN else 1
         if scenario in {Scenario.RED_SQL, Scenario.RED_CAUSALITY}:
             self.expected.update({"MetricIntent": 1, "SqlGeneratorOutput": 1})
         if scenario in {

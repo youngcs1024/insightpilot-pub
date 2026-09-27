@@ -77,12 +77,16 @@ def generation_budget(state: DataAgentState, ctx: RuntimeContext) -> PromptBudge
     return prompt_budget(
         system_prompt=SQL_GENERATE.format(
             date_context=build_date_context(now=ctx.now),
-            schema_block="", bindings="", examples="",
+            schema_block="",
+            bindings="",
+            examples="",
         ),
         schema=state.schema_block,
         metrics=json.dumps(
-            {"bindings": [b.model_dump(mode="json") for b in state.metric_bindings],
-             "examples": [e.model_dump(mode="json") for e in state.metric_examples]},
+            {
+                "bindings": [b.model_dump(mode="json") for b in state.metric_bindings],
+                "examples": [e.model_dump(mode="json") for e in state.metric_examples],
+            },
             ensure_ascii=False,
         ),
     )
@@ -131,8 +135,11 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[RuntimeContext]) 
     ctx = runtime.context
     ctx.deadline.check("generate_sql")
     output = await ctx.llm.generate_structured(
-        ModelRole.SQL, build_messages(state, ctx), SqlGeneratorOutput, deadline=ctx.deadline,
-        budget=generation_budget(state, ctx)
+        ModelRole.SQL,
+        build_messages(state, ctx),
+        SqlGeneratorOutput,
+        deadline=ctx.deadline,
+        budget=generation_budget(state, ctx),
     )
     ctx.deadline.check("generate_sql_complete")
     sql = clean_sql(output.sql)

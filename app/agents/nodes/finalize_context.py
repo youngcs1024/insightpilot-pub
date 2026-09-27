@@ -12,12 +12,12 @@ from app.agents.presentation import resolve_preference
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState, TurnContext
 from app.core.budget import ContextBudget, ContextSlot
-from app.services.memory.retrieve import memory_text
 from app.core.errors import ConflictError, InsightPilotError
 from app.core.observability import TraceMetadata, mark_degraded, update_current_observation
 from app.schemas.memory import TerminologyContent
 from app.schemas.metric_resolution import MetricPatches
 from app.services.knowledge_time import needs_history, parse_time
+from app.services.memory.retrieve import memory_text
 
 
 async def finalize_context(state: AgentState, runtime: Runtime[RuntimeContext]) -> Command[str]:
@@ -67,9 +67,10 @@ async def finalize_context(state: AgentState, runtime: Runtime[RuntimeContext]) 
                 scope = parsed.scope
         budget = ContextBudget(ctx.schema_token_counter)
         budget.charge(ContextSlot.SUMMARY, state.routing_context.summary)
-        budget.charge(ContextSlot.RECENT_MESSAGES, json.dumps(
-            [m.model_dump() for m in state.prepared.messages], ensure_ascii=False
-        ))
+        budget.charge(
+            ContextSlot.RECENT_MESSAGES,
+            json.dumps([m.model_dump() for m in state.prepared.messages], ensure_ascii=False),
+        )
         budget.charge(ContextSlot.MEMORIES, memory_text(selected.selection.selected))
         context = TurnContext(
             recent_messages=list(state.messages),

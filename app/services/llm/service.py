@@ -17,12 +17,12 @@ from app.core.errors import LlmConfigurationError, LlmResponseError, UpstreamUna
 from app.core.llm_config import ModelRole
 from app.core.observability import mark_degraded, model_role
 from app.services.llm.budget import complete_context
-from app.services.schema_tokens import SchemaTokenCounter
 from app.services.llm.contracts import CompletionRequest, GenerationBudget, ToolCall, ToolDefinition
 from app.services.llm.messages import to_wire
 from app.services.llm.registry import ModelRegistry, StructuredTier
 from app.services.llm.structured import generate_structured
 from app.services.llm.transport import LlmTransport
+from app.services.schema_tokens import SchemaTokenCounter
 
 logger = structlog.get_logger(__name__)
 
@@ -145,7 +145,9 @@ class LlmService:
         budget: PromptBudget | None = None,
     ) -> T:
         """Return the requested schema type through the common structured ladder."""
-        return await self.call(role, messages, response_format=schema, deadline=deadline, budget=budget)
+        return await self.call(
+            role, messages, response_format=schema, deadline=deadline, budget=budget
+        )
 
     async def call_with_tools(
         self,

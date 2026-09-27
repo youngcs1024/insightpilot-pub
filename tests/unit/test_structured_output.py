@@ -352,7 +352,7 @@ async def test_role_configuration_reaches_http(respx_mock: respx.MockRouter) -> 
     config = LLMSettings(
         base_url="https://provider.invalid/v1",
         model_contexts={
-            name: {"context_window":1000000,"max_input_tokens":991808}
+            name: {"context_window": 1000000, "max_input_tokens": 991808}
             for name in ("primary", "backup")
         },
         model="primary",
@@ -382,7 +382,7 @@ async def test_fallback_uses_its_own_capability_tier(respx_mock: respx.MockRoute
     config = LLMSettings(
         base_url="https://provider.invalid/v1",
         model_contexts={
-            name: {"context_window":1000000,"max_input_tokens":991808}
+            name: {"context_window": 1000000, "max_input_tokens": 991808}
             for name in ("primary", "backup")
         },
         model="primary",
