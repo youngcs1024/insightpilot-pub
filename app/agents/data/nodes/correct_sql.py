@@ -13,7 +13,8 @@ from app.agents.data.state import DataAgentState
 from app.agents.failures import FailureKind, NodeFailure
 from app.agents.prompts import SQL_CORRECT
 from app.agents.runtime import RuntimeContext
-from app.core.errors import DeadlineExceededError, InsightPilotError, LlmStructuredOutputError
+from app.core.errors import ContextBudgetExceeded, DeadlineExceededError, InsightPilotError, LlmStructuredOutputError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.schemas.sql_correction import (
     MAX_CORRECTIONS,
@@ -123,7 +124,11 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[RuntimeContext]) -
     try:
         ctx.deadline.check("correct_sql")
         output = await ctx.llm.generate_structured(
-            ModelRole.SQL, build_messages(state), SqlCorrectionOutput, deadline=ctx.deadline
+            ModelRole.SQL, build_messages(state), SqlCorrectionOutput, deadline=ctx.deadline,
+            budget=prompt_budget(
+                schema=state.schema_block,
+                metrics=json.dumps([b.model_dump(mode="json") for b in state.metric_bindings], ensure_ascii=False),
+            ),
         )
         ctx.deadline.check("correct_sql_complete")
         return _apply_candidate(state, output)
@@ -131,6 +136,7 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[RuntimeContext]) -
         logger.exception("sql_correction_failed", code=exc.code, exc_info=False)
         kinds: dict[type[InsightPilotError], FailureKind] = {
             DeadlineExceededError: FailureKind.DEADLINE_EXCEEDED,
+            ContextBudgetExceeded: FailureKind.CONTEXT_BUDGET_EXCEEDED,
             LlmStructuredOutputError: FailureKind.LLM_STRUCTURED_OUTPUT_FAILED,
         }
         kind = kinds.get(type(exc), FailureKind.NODE_OPERATION_FAILED)

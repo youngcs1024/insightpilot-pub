@@ -11,6 +11,7 @@ from app.agents.runtime import RuntimeContext
 from app.agents.synthesis_generation import synthesis_input
 from app.agents.synthesis_validation import validate_output
 from app.core.errors import FabricatedCitation, SynthesisValidationError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.schemas.memory import FormatPreferenceContent
 from app.schemas.synthesis import Claim, ClaimKind, RowCountReference, SynthesisOutput
@@ -64,6 +65,10 @@ async def data_claims(
             ],
             DataAnswerDraft,
             deadline=ctx.deadline,
+            budget=prompt_budget(
+                data_result=data.generation_block,
+                memories=preference.model_dump_json() if preference else "",
+            ),
         )
         try:
             checked = validate_output(SynthesisOutput(claims=draft.claims), source)

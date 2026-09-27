@@ -6,6 +6,7 @@ from pathlib import Path
 import structlog
 from pydantic import BaseModel, ValidationError
 
+from app.core.budget import ContextSlot
 from app.core.errors import LlmCapabilityError, LlmResponseError, LlmStructuredOutputError
 from app.services.llm.contracts import (
     Completion,
@@ -84,6 +85,8 @@ def _shape[T: BaseModel](
 ) -> CompletionRequest:
     shaped = request.model_copy(deep=True)
     definition = schema.model_json_schema()
+    if tier in {StructuredTier.NATIVE, StructuredTier.PROMPTED}:
+        shaped.context.add(ContextSlot.SYSTEM_PROMPT, _JSON_PROMPT)
     if tier is StructuredTier.NATIVE:
         # The approved provider also requires a JSON instruction with native schemas.
         shaped.messages = [Message(role="system", content=_JSON_PROMPT), *shaped.messages]
@@ -144,6 +147,7 @@ async def _repair[T: BaseModel](
 ) -> T:
     budget.deadline.check("llm_repair")
     repaired = request.model_copy(deep=True)
+    repaired.context.add(ContextSlot.SYSTEM_PROMPT, _REPAIR_PROMPT)
     repaired.messages.extend(
         [
             Message(role="system", content=_REPAIR_PROMPT),

@@ -8,6 +8,8 @@ from app.agents.contracts import RoutingContext
 from app.agents.nodes.common import failed
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
+from app.core.budget import ContextBudget, ContextSlot
+from app.agents.multiturn import trim_history
 from app.core.errors import InsightPilotError
 from app.schemas.memory import FormatPreferenceContent, TerminologyContent
 from app.schemas.memory_retrieval import MemoryReadRequest, MemorySelection, MemoryStage
@@ -19,6 +21,9 @@ async def prepare(state: AgentState, runtime: Runtime[RuntimeContext]) -> Comman
     try:
         ctx.deadline.check("prepare")
         prepared = await ctx.conversations.prepare(ctx.identity)
+        budget = ContextBudget(ctx.schema_token_counter)
+        budget.charge(ContextSlot.SUMMARY, prepared.summary)
+        prepared = prepared.model_copy(update={"messages": trim_history(prepared.messages)})
         memories = MemorySelection()
         if ctx.memories is not None and not state.memory_disabled:
             memories = await ctx.memories.retrieve(

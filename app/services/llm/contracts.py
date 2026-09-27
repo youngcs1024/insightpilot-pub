@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from app.core.budget import ContextSlot, ModelContextLimits, PromptBudget
 from app.core.deadline import Deadline
 
 
@@ -40,6 +41,9 @@ class Message(WireModel):
 class CompletionRequest(WireModel):
     """One HTTP call; shaping dictionaries stay inside the provider adapter."""
 
+    context: PromptBudget = Field(default_factory=PromptBudget, exclude=True)
+    slot_limits: dict[ContextSlot, int] = Field(default_factory=dict, exclude=True)
+    model_limits: ModelContextLimits | None = Field(default=None, exclude=True)
     model: str
     messages: list[Message]
     temperature: float

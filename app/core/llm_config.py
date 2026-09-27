@@ -5,6 +5,7 @@ from typing import Annotated
 
 from pydantic import Field
 
+from app.core.budget import ContextSlot, TokenLimit
 from app.core.settings_base import ConfigModel
 
 
@@ -22,6 +23,7 @@ class ModelRole(StrEnum):
 class ModelRoleSettings(ConfigModel):
     """Missing model and timeout inherit the enclosing LLM settings."""
 
+    context_limits: dict[ContextSlot, TokenLimit] = Field(default_factory=dict)
     model: str | None = Field(default=None, min_length=1, max_length=200)
     temperature: float = Field(default=0, ge=0, le=2)
     max_tokens: int = Field(default=2048, ge=1, le=32768)

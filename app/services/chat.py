@@ -42,6 +42,8 @@ from app.services.graph import GraphService
 from app.services.idempotency import AdmissionResult, IdempotencyService, MessageAdmission
 from app.services.knowledge_generation import validate_citations
 from app.services.memory.extract import MemoryExtractionService
+from app.services.schema_tokens import SchemaTokenCounter
+from app.services.summary import SummaryService
 from app.services.turn_results import (
     BothSourcesFailedError,
     TurnFailedError,
@@ -81,6 +83,9 @@ class ChatService:
         )
         self.idempotency = IdempotencyService(database, self.timeout_s)
         self.conversations = ConversationService(database)
+        self.summary = SummaryService(
+            self.conversations, settings, memory.llm, SchemaTokenCounter()
+        )
 
     @asynccontextmanager
     async def lease(self, conversation_id: UUID) -> AsyncIterator[bool]:
@@ -201,6 +206,8 @@ class ChatService:
                 raise
             else:
                 observation.update(TraceMetadata(status=result.status.value))
+                if result.status in {TurnStatus.SUCCEEDED, TurnStatus.DEGRADED, TurnStatus.ABSTAINED}:
+                    spawn(self.summary.run(ctx.identity), name="summarize-conversation")
                 if result.status is TurnStatus.SUCCEEDED:
                     spawn(self.memory.run(ctx.identity), name="extract-turn-memory")
                 return result
@@ -214,6 +221,8 @@ class ChatService:
                     output = await self.graph.invoke(ctx, callbacks=[callback])
                 finally:
                     callback.close()
+                if any(f.kind is FailureKind.CONTEXT_BUDGET_EXCEEDED for f in output.failures):
+                    raise TurnFailedError(FailureKind.CONTEXT_BUDGET_EXCEEDED, output.failures)
                 if output.answer is None or "deadline" not in output.answer.degraded_components:
                     ctx.deadline.check("commit_answer")
                     timer.reschedule(ctx.deadline.at)

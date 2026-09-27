@@ -17,6 +17,7 @@ API_ENVIRONMENT_KEYS = frozenset(
         "IP_LLM__API_KEY",
         "IP_LLM__TIMEOUT_S",
         "IP_LLM__ROLES",
+        "IP_LLM__MODEL_CONTEXTS",
         "IP_LLM__CAPABILITIES_PATHS",
         "IP_OBSERVABILITY",
         "IP_OBSERVABILITY__LOG_FORMAT",

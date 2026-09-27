@@ -7,7 +7,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.contracts import Route, RouteDecision, RouterInput
 from app.agents.multiturn import trim_history
 from app.agents.nodes.common import failed
@@ -20,6 +19,7 @@ from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, observe, record_route, update_current_observation
 from app.core.routing import RoutingStrategy
 from app.schemas.clarification import ClarificationCategory, ClarificationIntent, MissingDimension
+from app.services.llm.budget import prompt_budget
 from app.services.llm.usage import collect_usage
 
 logger = structlog.get_logger(__name__)
@@ -85,6 +85,15 @@ async def _classify(
                 ],
                 RouteDecision,
                 deadline=ctx.deadline,
+                budget=prompt_budget(
+                    summary=inputs.routing_context.summary,
+                    recent_messages=json.dumps(
+                        [m.model_dump() for m in inputs.routing_context.recent_messages], ensure_ascii=False
+                    ),
+                    memories=inputs.routing_context.model_dump_json(
+                        include={"terminology", "format_preference"}
+                    ),
+                ),
             )
             return decision.model_copy(update={"decided_by": "llm"})
         except LlmStructuredOutputError:
@@ -123,7 +132,7 @@ async def classify_question(
                 question=inputs.question,
                 routing_context=inputs.routing_context.model_copy(
                     update={
-                        "summary": bounded_text(inputs.routing_context.summary, SUMMARY_TOKENS),
+                        "summary": inputs.routing_context.summary,
                         "recent_messages": trim_history(inputs.routing_context.recent_messages),
                     },
                     deep=True,

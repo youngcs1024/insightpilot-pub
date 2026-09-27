@@ -351,6 +351,10 @@ async def test_successful_rate_limit_retry_does_not_change_model(
 async def test_role_configuration_reaches_http(respx_mock: respx.MockRouter) -> None:
     config = LLMSettings(
         base_url="https://provider.invalid/v1",
+        model_contexts={
+            name: {"context_window":1000000,"max_input_tokens":991808}
+            for name in ("primary", "backup")
+        },
         model="primary",
         api_key="synthetic-key",
         roles={"sql": {"temperature": 0.25, "max_tokens": 128, "timeout_s": 2}},
@@ -377,6 +381,10 @@ async def test_role_configuration_reaches_http(respx_mock: respx.MockRouter) -> 
 async def test_fallback_uses_its_own_capability_tier(respx_mock: respx.MockRouter) -> None:
     config = LLMSettings(
         base_url="https://provider.invalid/v1",
+        model_contexts={
+            name: {"context_window":1000000,"max_input_tokens":991808}
+            for name in ("primary", "backup")
+        },
         model="primary",
         api_key="synthetic-key",
         roles={"sql": {"fallback_models": ["backup"]}},

@@ -2,9 +2,11 @@
 
 import json
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, trim_messages
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from app.agents.budget import HISTORY_TOKENS, token_bound
+from app.agents.budget import token_bound
+from app.services.context_history import trim_context_messages
+from app.services.schema_tokens import SchemaTokenCounter
 from app.agents.contracts import HistoryMessage
 
 PRIOR_SQL_TOKENS = 2000
@@ -12,7 +14,7 @@ PRIOR_SQL_TOKENS = 2000
 
 def history_cost(messages: list[BaseMessage]) -> int:
     """Bound JSON-encoded message content plus role overhead conservatively."""
-    return token_bound(
+    return SchemaTokenCounter().count(
         json.dumps(
             [
                 {
@@ -34,14 +36,7 @@ def trim_history(messages: list[HistoryMessage]) -> list[HistoryMessage]:
         else AIMessage(content=item.content)
         for item in messages
     ]
-    trimmed = trim_messages(
-        converted,
-        max_tokens=HISTORY_TOKENS,
-        token_counter=history_cost,
-        strategy="last",
-        start_on="human",
-        allow_partial=False,
-    )
+    trimmed = trim_context_messages(converted, SchemaTokenCounter())
     return [
         HistoryMessage(
             role="user" if isinstance(item, HumanMessage) else "assistant",

@@ -94,6 +94,7 @@ services:
       IP_LLM__BASE_URL: ${IP_LLM_BASE_URL:-https://example.invalid/v1}
       IP_LLM__MODEL: ${IP_LLM_MODEL:-qwen3.6-flash-2026-04-16}
       IP_LLM__TIMEOUT_S: ${IP_LLM_TIMEOUT_S:-45}
+      IP_LLM__MODEL_CONTEXTS: ${IP_LLM_MODEL_CONTEXTS:?required}
       IP_LLM__ROLES: ${IP_LLM_ROLES:-{}}
       IP_LLM__CAPABILITIES_PATHS: ${IP_LLM_CAPABILITIES_PATHS:-["app/resources/provider_capabilities.json"]}
       IP_LLM__API_KEY: ${IP_LLM_API_KEY:-}

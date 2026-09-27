@@ -19,6 +19,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel, Field
 
+from app.core.budget import BudgetReport
 from app.core.config_models import SchemaStrategy  # noqa: TC001 -- Pydantic resolves at runtime.
 from app.core.masking import mask, mask_otel_spans
 from app.core.trace_export import SafeSpanExporter
@@ -74,6 +75,7 @@ _NODES = frozenset(
 class TraceMetadata(BaseModel):
     """Only explicitly reviewed diagnostic fields cross the tracing boundary."""
 
+    context_budget: BudgetReport | None = None
     referenced_prior_turn: bool | None = None
     unresolved_reference_count: int | None = Field(default=None, ge=0, le=20)
     schema_strategy: SchemaStrategy | None = None

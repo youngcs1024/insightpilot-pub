@@ -7,12 +7,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.knowledge.query_context import antecedents, bounded_history, shared_scope
 from app.agents.knowledge.state import KnowledgeAgentState
 from app.agents.prompts import KNOWLEDGE_REWRITE
 from app.agents.runtime import RuntimeContext
 from app.core.errors import KnowledgeEvidenceError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, update_current_observation
 from app.schemas.knowledge_query import (
@@ -131,7 +131,7 @@ async def rewrite_query(
                         "question": state.question,
                         "knowledge_intent": state.knowledge_intent,
                         "history": [turn.model_dump(mode="json") for turn in history],
-                        "summary": bounded_text(state.conversation_summary, SUMMARY_TOKENS),
+                        "summary": state.conversation_summary,
                         "terminology": [item.model_dump() for item in state.relevant_memories],
                         "explicit_time": resolution.scope.model_dump(mode="json")
                         if resolution.scope
@@ -143,6 +143,11 @@ async def rewrite_query(
         ],
         KnowledgeRewrite,
         deadline=ctx.deadline,
+        budget=prompt_budget(
+            summary=state.conversation_summary,
+            recent_messages=json.dumps([t.model_dump(mode="json") for t in history], ensure_ascii=False),
+            memories=json.dumps([m.model_dump() for m in state.relevant_memories], ensure_ascii=False),
+        ),
     )
     ctx.deadline.check("knowledge_query_rewritten")
     selected = antecedents(rewritten, history)

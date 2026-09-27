@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.data.state import DataAgentInput
 from app.agents.knowledge.state import KnowledgeAgentInput
+from app.core.budget import ContextBudget, ContextSlot
 from app.core.errors import ConflictError, ContextBudgetExceeded
 from app.core.observability import TraceMetadata, observe
 from app.schemas.memory import MemoryType, TerminologyContent, TerminologyProjection
@@ -24,6 +24,7 @@ def _context(state: AgentState, counter: SchemaTokenPort) -> TurnContext:
     if state.route is None or state.context is None:
         raise ConflictError("Specialist projection requires finalized routing context")
     context = state.context
+    ContextBudget(counter).charge(ContextSlot.SUMMARY, context.summary)
     # Count the combined selection, including types not destined for this specialist.
     # Identity/provenance stays in the parent; the bounded reference is content + summary.
     memories = memory_text(context.memories)
@@ -97,7 +98,7 @@ def to_knowledge_input(state: AgentState, *, token_counter: SchemaTokenPort) -> 
         time_scope=context.time_scope.model_copy(deep=True) if context.time_scope else None,
         region_scope=context.region_scope.model_copy(deep=True) if context.region_scope else None,
         relevant_memories=_terminology(context),
-        conversation_summary=bounded_text(context.summary, SUMMARY_TOKENS),
+        conversation_summary=context.summary,
         knowledge_history=[turn.model_copy(deep=True) for turn in context.knowledge_history],
     )
     record_projection(inputs, token_counter)

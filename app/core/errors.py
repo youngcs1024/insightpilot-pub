@@ -360,6 +360,13 @@ class ContextBudgetExceeded(InsightPilotError):  # noqa: N818 -- design contract
     """Required evidence cannot fit the generation budget."""
 
     code = "context_budget_exceeded"
+    user_message = "The context exceeds the configured token budget."
+
+    def __init__(self, *, slot: str = "context", used: int = 0, limit: int = 0) -> None:
+        super().__init__(slot=slot, used=used, limit=limit)
+        self.slot = slot
+        self.used = used
+        self.limit = limit
 
 
 class KnowledgeEvidenceError(InsightPilotError):

@@ -7,6 +7,8 @@ from app.core.errors import ConflictError, NotFoundError
 from app.db.session import Database
 from app.repositories.conversation import ConversationRepository
 from app.repositories.history import HistoryRepository
+from app.repositories.summary import SummaryRepository
+from app.schemas.summary import SummaryWork
 from app.repositories.turns import TurnRepository
 from app.schemas.chat import ConversationPage, ConversationResponse, TurnPage
 from app.services.turn_results import turn_response
@@ -22,6 +24,22 @@ class ConversationService:
         """Load a validated question and bounded history."""
         async with self.database.session() as session:
             return await HistoryRepository(session).prepare(identity)
+
+    async def summary_work(self, identity: TurnIdentity) -> SummaryWork | None:
+        """Read one owned chronological pair and the persisted compare-and-set cursor."""
+        async with self.database.session() as session:
+            return await SummaryRepository(session, identity.user_id).next_work(
+                identity.conversation_id, identity.turn_id
+            )
+
+    async def advance_summary(
+        self, identity: TurnIdentity, work: SummaryWork, summary: str
+    ) -> bool:
+        """Commit only when the source cursor still matches; never overwrite newer work."""
+        async with self.database.session() as session, session.begin():
+            return await SummaryRepository(session, identity.user_id).advance(
+                identity.conversation_id, work, summary
+            )
 
     async def create(self, user_id: UUID, title: str) -> ConversationResponse:
         """Create and commit an owned conversation."""

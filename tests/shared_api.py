@@ -35,6 +35,7 @@ async def client(
     # This savepoint fixture shares one connection; background commits use the
     # dedicated real-commit memory/chat suites, not concurrent savepoints here.
     application.state.chat.memory.run = AsyncMock(return_value=None)
+    application.state.chat.summary.run = AsyncMock(return_value=None)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=application),
         base_url="http://test",

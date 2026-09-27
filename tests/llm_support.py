@@ -53,6 +53,10 @@ async def service(
 ) -> AsyncIterator[LlmService]:
     config = LLMSettings(
         base_url="https://provider.invalid/v1",
+        model_contexts={
+            name: {"context_window":1000000,"max_input_tokens":991808}
+            for name in ("primary", "backup")
+        },
         model="primary",
         api_key="test-key-only",
         roles={"sql": {"fallback_models": ["backup"] if fallback else []}},

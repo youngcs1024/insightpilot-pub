@@ -9,7 +9,6 @@ import pytest
 from langgraph.runtime import Runtime
 from pydantic import ValidationError
 
-from app.agents.budget import SUMMARY_TOKENS, token_bound
 from app.agents.contracts import EvidenceRefs, Route
 from app.agents.data.nodes.resolve_metrics import resolve_metrics
 from app.agents.data.state import DataAgentInput, DataAgentState
@@ -162,14 +161,13 @@ def test_combined_memory_budget_fails_closed(
         project(state, token_counter=ctx.schema_token_counter)
 
 
-def test_summary_bounded_at_utf8_boundary() -> None:
+def test_summary_overflow_raises_without_silent_truncation() -> None:
     ctx = context()
     state = routed_state(ctx)
     state.context = state.context.model_copy(update={"summary": "中文摘要🙂" * 1000})
-    value = to_knowledge_input(state, token_counter=ctx.schema_token_counter)
-    assert token_bound(value.conversation_summary) <= SUMMARY_TOKENS
-    assert value.conversation_summary.endswith(" [truncated]")
-    assert "�" not in value.conversation_summary
+    with pytest.raises(ContextBudgetExceeded):
+        to_knowledge_input(state, token_counter=ctx.schema_token_counter)
+
 
 
 @pytest.mark.parametrize("route", list(Route))

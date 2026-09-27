@@ -7,11 +7,13 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from app.agents.prompts import METRIC_INTENT
+from app.core.budget import PromptBudget
 from app.core.deadline import Deadline
 from app.core.llm_config import ModelRole
 from app.schemas.intent import MetricIntentInput
 from app.schemas.metric_resolution import MetricIntent
 from app.schemas.metrics import MetricDefinition
+from app.services.llm.budget import prompt_budget
 from app.services.metric_templates import render_catalog_block
 from app.services.periods import build_date_context
 
@@ -24,6 +26,7 @@ class IntentLlmPort(Protocol):
         schema: type[T],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> T: ...
 
 
@@ -52,6 +55,17 @@ def intent_messages(
     ]
 
 
+def intent_budget(
+    definitions: list[MetricDefinition], *, now: datetime, terminology: str
+) -> PromptBudget:
+    """The catalog is metric data even when embedded in a system message."""
+    return prompt_budget(
+        system_prompt=METRIC_INTENT + "\n\n" + build_date_context(now=now),
+        metrics=render_catalog_block(definitions),
+        memories=terminology,
+    )
+
+
 class MetricIntentService:
     """Interpret once before memory eligibility; the data specialist consumes the result."""
 
@@ -73,4 +87,8 @@ class MetricIntentService:
             intent_messages(inputs, definitions, now=now),
             MetricIntent,
             deadline=deadline,
+            budget=intent_budget(
+                definitions, now=now,
+                terminology=inputs.model_dump_json(include={"terminology"}),
+            ),
         )

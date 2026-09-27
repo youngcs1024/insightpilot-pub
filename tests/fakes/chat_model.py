@@ -11,6 +11,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from app.core.budget import PromptBudget
 from app.core.deadline import Deadline
 from app.core.llm_config import ModelRole
 from app.services.llm.contracts import ToolCall, ToolDefinition
@@ -19,6 +20,7 @@ from app.services.llm.contracts import ToolCall, ToolDefinition
 class FakeCall(BaseModel):
     """Snapshot of a model invocation, independent of subsequent prompt edits."""
 
+    budget: PromptBudget | None = None
     messages: list[BaseMessage]
     role: ModelRole | None = None
     schema_name: str | None = None
@@ -87,13 +89,14 @@ class FakeChatModel(BaseChatModel):
         return self._generate(messages, stop=stop, **kwargs)
 
     async def generate_structured[T: BaseModel](
-        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline
+        self, role: ModelRole, messages: list[BaseMessage], schema: type[T], *, deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> T:
         """Respect deadlines and validate the response using the requested schema."""
         deadline.check("fake_llm")
         response = self._next(
             FakeCall(
-                messages=messages, role=role, schema_name=schema.__name__, deadline_at=deadline.at
+                messages=messages, budget=budget, role=role, schema_name=schema.__name__, deadline_at=deadline.at
             )
         )
         if isinstance(response, str):
@@ -107,6 +110,7 @@ class FakeChatModel(BaseChatModel):
         tools: list[ToolDefinition],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> list[ToolCall]:
         """Return one scripted provider call or a no-tool response."""
         deadline.check("fake_llm_native_tools")

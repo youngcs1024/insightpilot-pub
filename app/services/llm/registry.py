@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+from app.core.budget import ModelContextLimits
 from app.core.config_models import LLMSettings
 from app.core.errors import LlmConfigurationError
 from app.core.llm_config import ModelRole, ModelRoleSettings
@@ -34,12 +35,17 @@ class ModelRegistry:
     """Private capability and settings snapshots; calls never update either."""
 
     def __init__(self, settings: LLMSettings, reports: list[CapabilityReport]) -> None:
+        self._contexts = {
+            key: value.model_copy(deep=True) for key, value in settings.model_contexts.items()
+        }
         self._roles = {role: settings.for_role(role) for role in ModelRole}
         self._tiers = {report.model: report.recommended_tier for report in reports}
         if len(self._tiers) != len(reports):
             raise LlmConfigurationError()
         for config in self._roles.values():
             chain = [config.model, *config.fallback_models]
+            if any(model not in self._contexts for model in chain):
+                raise LlmConfigurationError("Every configured model requires context limits.")
             if len(set(chain)) != len(chain) or any(model not in self._tiers for model in chain):
                 raise LlmConfigurationError()
 
@@ -58,6 +64,13 @@ class ModelRegistry:
     def role(self, role: ModelRole) -> ModelRoleSettings:
         """Return an independent settings copy so callers cannot modify the registry."""
         return self._roles[role].model_copy(deep=True)
+
+    def context(self, model: str) -> ModelContextLimits:
+        """Return this exact model's limits, never the primary model's defaults."""
+        try:
+            return self._contexts[model].model_copy(deep=True)
+        except KeyError as exc:
+            raise LlmConfigurationError() from exc
 
     def tier(self, model: str) -> StructuredTier:
         """Return the probed starting tier for a configured model."""

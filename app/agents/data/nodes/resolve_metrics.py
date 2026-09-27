@@ -19,7 +19,7 @@ from app.schemas.metric_resolution import ClarificationKind, MetricClarification
 from app.schemas.metrics import Grain, MetricDefinition
 from app.schemas.schema_catalog import SchemaCatalog
 from app.services.metric_binding import BindingRequest, BindingResult, merge_explicit
-from app.services.metric_intent import intent_messages
+from app.services.metric_intent import intent_budget, intent_messages
 from app.services.metric_override import resolve_binding
 from app.services.metric_templates import validate_grain
 from app.services.periods import Period, resolve_period
@@ -111,7 +111,11 @@ async def resolve_metrics(state: DataAgentState, runtime: Runtime[RuntimeContext
     intent = state.prepared_intent
     if intent is None:
         intent = await ctx.llm.generate_structured(
-            ModelRole.SQL, _messages(state, ctx, definitions), MetricIntent, deadline=ctx.deadline
+            ModelRole.SQL, _messages(state, ctx, definitions), MetricIntent, deadline=ctx.deadline,
+            budget=intent_budget(
+                definitions, now=ctx.now,
+                terminology=state.model_dump_json(include={"relevant_memories"}),
+            ),
         )
     # Current explicit names replace an upstream default; bindings retain resolved IDs.
     if state.prepared_intent is None and (intent.region.names or intent.region.all_regions):

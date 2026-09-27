@@ -10,11 +10,14 @@ from langchain_core.messages import AIMessage, BaseMessage
 from opentelemetry import trace
 from pydantic import BaseModel
 
+from app.core.budget import PromptBudget
 from app.core.config_models import LLMSettings
 from app.core.deadline import Deadline
 from app.core.errors import LlmConfigurationError, LlmResponseError, UpstreamUnavailableError
 from app.core.llm_config import ModelRole
 from app.core.observability import mark_degraded, model_role
+from app.services.llm.budget import complete_context
+from app.services.schema_tokens import SchemaTokenCounter
 from app.services.llm.contracts import CompletionRequest, GenerationBudget, ToolCall, ToolDefinition
 from app.services.llm.messages import to_wire
 from app.services.llm.registry import ModelRegistry, StructuredTier
@@ -44,11 +47,13 @@ class LlmService:
         self._settings = settings.model_copy(deep=True)
         self._registry = registry
         self._client = client
+        self._counter: SchemaTokenCounter | None = None
 
     async def start(self) -> None:
         """Validate evidence before creating the client; no provider request is made."""
         if self._registry is None:
             self._registry = await asyncio.to_thread(ModelRegistry.load, self._settings)
+        self._counter = await asyncio.to_thread(SchemaTokenCounter)
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=str(self._settings.base_url).rstrip("/") + "/",
@@ -69,6 +74,7 @@ class LlmService:
         messages: list[BaseMessage],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
         response_format: None = None,
     ) -> BaseMessage: ...
 
@@ -79,6 +85,7 @@ class LlmService:
         messages: list[BaseMessage],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
         response_format: type[T],
     ) -> T: ...
 
@@ -88,10 +95,11 @@ class LlmService:
         messages: list[BaseMessage],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
         response_format: type[BaseModel] | None = None,
     ) -> BaseMessage | BaseModel:
         """Generate with independent fallback state and one immutable request deadline."""
-        if self._registry is None or self._client is None:
+        if self._registry is None or self._client is None or self._counter is None:
             raise LlmConfigurationError()
         config = self._registry.role(role)
         if config.model is None or config.timeout_s is None:
@@ -102,6 +110,9 @@ class LlmService:
             deadline.check("llm_call")
             model = chain[state.index]
             request = CompletionRequest(
+                context=complete_context(messages, budget),
+                slot_limits=config.context_limits,
+                model_limits=self._registry.context(model),
                 model=model,
                 messages=to_wire(messages),
                 temperature=config.temperature,
@@ -131,9 +142,10 @@ class LlmService:
         schema: type[T],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> T:
         """Return the requested schema type through the common structured ladder."""
-        return await self.call(role, messages, response_format=schema, deadline=deadline)
+        return await self.call(role, messages, response_format=schema, deadline=deadline, budget=budget)
 
     async def call_with_tools(
         self,
@@ -142,9 +154,10 @@ class LlmService:
         tools: list[ToolDefinition],
         *,
         deadline: Deadline,
+        budget: PromptBudget | None = None,
     ) -> list[ToolCall]:
         """Request at most one native call; callers validate and dispatch it locally."""
-        if self._registry is None or self._client is None or not tools:
+        if self._registry is None or self._client is None or self._counter is None or not tools:
             raise LlmConfigurationError()
         config = self._registry.role(role)
         if config.model is None or config.timeout_s is None:
@@ -153,6 +166,9 @@ class LlmService:
         for index, model in enumerate(chain):
             deadline.check("llm_native_tools")
             request = CompletionRequest(
+                context=complete_context(messages, budget),
+                slot_limits=config.context_limits,
+                model_limits=self._registry.context(model),
                 model=model,
                 messages=to_wire(messages),
                 temperature=config.temperature,
@@ -174,7 +190,7 @@ class LlmService:
             logger.info("llm_native_tools_started", role=role, fallback_index=index)
             try:
                 with model_role(role.value):
-                    completion = await LlmTransport(self._client).complete(
+                    completion = await LlmTransport(self._client, self._counter).complete(
                         request,
                         deadline=deadline,
                         timeout_s=config.timeout_s,
@@ -209,9 +225,9 @@ class LlmService:
         deadline: Deadline,
         timeout_s: float,
     ) -> BaseModel | BaseMessage:
-        if self._registry is None or self._client is None:
+        if self._registry is None or self._client is None or self._counter is None:
             raise LlmConfigurationError()
-        transport = LlmTransport(self._client)
+        transport = LlmTransport(self._client, self._counter)
         if schema is not None:
             return await generate_structured(
                 transport,

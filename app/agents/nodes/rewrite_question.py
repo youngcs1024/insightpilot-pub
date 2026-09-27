@@ -8,7 +8,6 @@ from langgraph.graph import END
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.contracts import RewrittenQuestion
 from app.agents.multiturn import trim_history
 from app.agents.nodes.common import failed
@@ -16,6 +15,7 @@ from app.agents.prompts import REWRITE_QUESTION
 from app.agents.runtime import RuntimeContext
 from app.agents.state import AgentState
 from app.core.errors import ConflictError, InsightPilotError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.core.observability import TraceMetadata, update_current_observation
 from app.schemas.metric_resolution import ClarificationKind, MetricClarification
@@ -43,7 +43,7 @@ async def rewrite_question(state: AgentState, runtime: Runtime[RuntimeContext]) 
                     content=json.dumps(
                         {
                             "question": prepared.question,
-                            "summary": bounded_text(prepared.summary, SUMMARY_TOKENS),
+                            "summary": prepared.summary,
                             "history": [
                                 item.model_dump() for item in trim_history(prepared.messages)
                             ],
@@ -54,6 +54,12 @@ async def rewrite_question(state: AgentState, runtime: Runtime[RuntimeContext]) 
             ],
             RewrittenQuestion,
             deadline=ctx.deadline,
+            budget=prompt_budget(
+                summary=prepared.summary,
+                recent_messages=json.dumps(
+                    [m.model_dump() for m in trim_history(prepared.messages)], ensure_ascii=False
+                ),
+            ),
         )
         ctx.deadline.check("rewrite_question_complete")
         update_current_observation(

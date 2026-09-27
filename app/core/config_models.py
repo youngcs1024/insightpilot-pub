@@ -8,6 +8,7 @@ from urllib.parse import quote_plus, urlsplit
 
 from pydantic import Field, HttpUrl, model_validator
 
+from app.core.budget import ContextSlot, ModelContextLimits, default_model_contexts
 from app.core.llm_config import ModelRole, ModelRoleSettings
 from app.core.routing import RoutingStrategy
 from app.core.settings_base import (
@@ -53,6 +54,7 @@ class LLMSettings(ConfigModel):
     model: str = Field(min_length=1)
     api_key: Secret = Field(repr=False)
     timeout_s: float = Field(default=45, ge=0.01, le=120)
+    model_contexts: dict[str, ModelContextLimits] = Field(default_factory=default_model_contexts)
     roles: dict[ModelRole, ModelRoleSettings] = Field(default_factory=dict)
     capabilities_paths: list[Path] = Field(
         default_factory=lambda: [Path("app/resources/provider_capabilities.json")],
@@ -63,9 +65,15 @@ class LLMSettings(ConfigModel):
     def for_role(self, role: ModelRole) -> ModelRoleSettings:
         """Resolve legacy defaults without mutating the configured role mapping."""
         configured = self.roles.get(role, ModelRoleSettings())
+        limits = {}
+        if role is ModelRole.ROUTER:
+            limits = {ContextSlot.SYSTEM_PROMPT: 2048}
+        elif role is ModelRole.SQL:
+            limits = {ContextSlot.SYSTEM_PROMPT: 1536, ContextSlot.METRICS: 16384}
         return configured.model_copy(
             deep=True,
             update={
+                "context_limits": {**limits, **configured.context_limits},
                 "model": configured.model or self.model,
                 "timeout_s": configured.timeout_s
                 if configured.timeout_s is not None

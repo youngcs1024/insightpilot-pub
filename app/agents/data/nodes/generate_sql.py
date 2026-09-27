@@ -18,8 +18,10 @@ from app.agents.data.state import DataAgentState
 from app.agents.multiturn import prior_queries
 from app.agents.prompts import SQL_GENERATE
 from app.agents.runtime import RuntimeContext
+from app.core.budget import PromptBudget
 from app.core.errors import SqlGenerationError
 from app.core.llm_config import ModelRole
+from app.services.llm.budget import prompt_budget
 from app.services.periods import build_date_context
 
 logger = structlog.get_logger(__name__)
@@ -70,6 +72,22 @@ def build_messages(state: DataAgentState, ctx: RuntimeContext) -> list[BaseMessa
     return messages
 
 
+def generation_budget(state: DataAgentState, ctx: RuntimeContext) -> PromptBudget:
+    """Separate instructions from the complete schema, bindings and examples."""
+    return prompt_budget(
+        system_prompt=SQL_GENERATE.format(
+            date_context=build_date_context(now=ctx.now),
+            schema_block="", bindings="", examples="",
+        ),
+        schema=state.schema_block,
+        metrics=json.dumps(
+            {"bindings": [b.model_dump(mode="json") for b in state.metric_bindings],
+             "examples": [e.model_dump(mode="json") for e in state.metric_examples]},
+            ensure_ascii=False,
+        ),
+    )
+
+
 def clean_sql(query: str) -> str:
     """Strip only outer fencing and whitespace; preserve literal and comment bytes."""
     cleaned = query.strip()
@@ -113,7 +131,8 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[RuntimeContext]) 
     ctx = runtime.context
     ctx.deadline.check("generate_sql")
     output = await ctx.llm.generate_structured(
-        ModelRole.SQL, build_messages(state, ctx), SqlGeneratorOutput, deadline=ctx.deadline
+        ModelRole.SQL, build_messages(state, ctx), SqlGeneratorOutput, deadline=ctx.deadline,
+        budget=generation_budget(state, ctx)
     )
     ctx.deadline.check("generate_sql_complete")
     sql = clean_sql(output.sql)

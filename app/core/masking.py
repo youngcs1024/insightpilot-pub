@@ -9,7 +9,9 @@ from collections.abc import Mapping
 from contextlib import suppress
 
 from langfuse.types import MaskOtelSpansParams, MaskOtelSpansResult, OtelSpanPatch
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError
+
+from app.core.budget import BudgetReport
 
 from app.core.logging import _CREDENTIAL, _CREDENTIAL_ASSIGNMENT, _SECRET_KEY
 from app.schemas.sanity import SanityFlag
@@ -34,6 +36,7 @@ _MEMORY = frozenset(
 _PROJECTION = frozenset({"projection_specialist", "projection_tokens", "projection_tokenizer"})
 _SAFE = frozenset(
     {
+        "context_budget",
         "referenced_prior_turn",
         "unresolved_reference_count",
         "user_id",
@@ -173,7 +176,9 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
     for key, value in data.items():
         if not isinstance(key, str):
             continue
-        if key in _ROUTING | _PROJECTION | _MEMORY:
+        if key == "context_budget":
+            result[key] = _budget_diagnostic(value)
+        elif key in _ROUTING | _PROJECTION | _MEMORY:
             result[key] = _routing_diagnostic(key, value)
         elif key in {"referenced_prior_turn", "unresolved_reference_count"}:
             result[key] = _rewrite_diagnostic(key, value)
@@ -190,6 +195,17 @@ def _mapping(data: Mapping[object, object], depth: int) -> dict[str, object]:
         else:
             result[key] = REDACTED
     return result
+
+
+def _budget_diagnostic(value: object) -> object:
+    try:
+        if isinstance(value, BudgetReport):
+            value = value.model_dump()
+        if isinstance(value, str):
+            value = json.loads(value)
+        return BudgetReport.model_validate_json(json.dumps(value), strict=True).model_dump(mode="json")
+    except (ValidationError, ValueError, TypeError):
+        return REDACTED
 
 
 def _routing_diagnostic(key: str, value: object) -> object:
@@ -318,6 +334,9 @@ def safe_attributes(attributes: Mapping[str, object]) -> dict[str, str | bool]:
             replacements[key] = value
             continue
         metadata_key = key.removeprefix("langfuse.observation.metadata.")
+        if metadata_key != key and metadata_key == "context_budget":
+            replacements[key] = json.dumps(_budget_diagnostic(value))
+            continue
         if metadata_key != key and metadata_key in _ROUTING | _PROJECTION:
             replacements[key] = _routing_attribute(metadata_key, value)
             continue

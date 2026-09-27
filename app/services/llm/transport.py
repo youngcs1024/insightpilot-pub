@@ -7,6 +7,7 @@ import structlog
 from opentelemetry import trace
 from pydantic import ValidationError
 
+from app.core.budget import TokenCounter
 from app.core.deadline import Deadline
 from app.core.errors import (
     LlmCapabilityError,
@@ -17,6 +18,7 @@ from app.core.errors import (
 )
 from app.core.observability import TraceMetadata, current_role, observe
 from app.core.retry import run_operation
+from app.services.llm.budget import check_request
 from app.services.llm.contracts import Completion, CompletionRequest, ErrorResponse
 from app.services.llm.registry import StructuredTier
 from app.services.llm.usage import record_attempt, record_usage
@@ -29,8 +31,9 @@ _CAPABILITY_CODES = {"unsupported_parameter", "unsupported_value", "unsupported_
 class LlmTransport:
     """The service owns the injected client and closes it with the application."""
 
-    def __init__(self, client: httpx.AsyncClient) -> None:
+    def __init__(self, client: httpx.AsyncClient, counter: TokenCounter) -> None:
         self.client = client
+        self.counter = counter
 
     async def complete(
         self,
@@ -46,10 +49,13 @@ class LlmTransport:
         async def operation() -> Completion:
             nonlocal attempts
             attempts += 1
+            report = check_request(request, self.counter)
+            logger.info("context_budget_checked", model=request.model, budget=report.model_dump())
             record_attempt()
             with observe(
                 "llm_completion",
                 TraceMetadata(
+                    context_budget=report,
                     model=request.model,
                     role=current_role(),
                     attempt=attempts,

@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.prompts import KNOWLEDGE_CITATION_REPAIR, KNOWLEDGE_SYSTEM
 from app.core.errors import FabricatedCitation, KnowledgeEvidenceError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.retrieval.evidence import render_documents
 from app.schemas.knowledge import (
@@ -115,6 +116,10 @@ class KnowledgeGenerationService:
                 ),
                 KnowledgeDraft,
                 deadline=deadline,
+                budget=prompt_budget(
+                    evidence=evidence.generation_block,
+                    memories=format_preference.model_dump_json() if format_preference else "",
+                ),
             )
             if not draft.passages:
                 return KnowledgeGeneration(

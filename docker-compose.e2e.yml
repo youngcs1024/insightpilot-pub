@@ -124,6 +124,7 @@ services:
       IP_LLM__BASE_URL: http://inference:8100/v1
       IP_LLM__MODEL: qwen3.6-flash-2026-04-16
       IP_LLM__TIMEOUT_S: ${IP_LLM_TIMEOUT_S:-45}
+      IP_LLM__MODEL_CONTEXTS: '{"qwen3.6-flash-2026-04-16":{"context_window":1000000,"max_input_tokens":991808}}'
       IP_LLM__ROLES: '{}'
       IP_LLM__CAPABILITIES_PATHS: ${IP_LLM_CAPABILITIES_PATHS:-["app/resources/provider_capabilities.json"]}
       IP_LLM__API_KEY: e2e-synthetic-only

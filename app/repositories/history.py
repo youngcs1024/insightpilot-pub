@@ -3,7 +3,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.budget import SUMMARY_TOKENS, bounded_text
 from app.agents.contracts import PreparedContext, TurnIdentity
 from app.agents.multiturn import trim_history
 from app.core.errors import ConflictError, NotFoundError
@@ -116,7 +115,7 @@ class HistoryRepository:
             ),
             has_prior_turns=has_prior_turns,
             question=user.content,
-            summary=bounded_text(conversation.summary or "", SUMMARY_TOKENS),
+            summary=conversation.summary or "",
             messages=messages,
             prior_sql=[data_snapshot(record).data.sql for record in records],
             knowledge_history=knowledge_history,

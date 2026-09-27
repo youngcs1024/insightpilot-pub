@@ -100,6 +100,7 @@ def test_multiple_reports_are_indexed_per_model(tmp_path: Path) -> None:
         ).model_dump_json()
     )
     config = settings()
+    config.model_contexts["second"] = config.model_contexts[MODEL].model_copy(deep=True)
     config.capabilities_paths.append(file)
     config.roles[ModelRole.SQL] = ModelRoleSettings(fallback_models=["second"])
     registry = ModelRegistry.load(config)

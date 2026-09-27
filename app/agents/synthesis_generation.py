@@ -12,6 +12,7 @@ from app.agents.contracts import EvidenceBundle, SynthesisInput, SynthesisResult
 from app.agents.prompts import SYNTHESIS, SYNTHESIS_REPAIR
 from app.agents.synthesis_validation import data_view, validate_output
 from app.core.errors import FabricatedCitation, SynthesisValidationError
+from app.services.llm.budget import prompt_budget
 from app.core.llm_config import ModelRole
 from app.schemas.mcp import Contract
 from app.schemas.synthesis import ClaimKind, SynthesisAbstention, SynthesisOutput
@@ -116,6 +117,10 @@ async def generate_synthesis(
             _messages(source, missing, repair=attempt > 1),
             SynthesisOutput,
             deadline=ctx.deadline,
+            budget=prompt_budget(
+                data_result=source.data.generation_block if source.data else "",
+                evidence=source.knowledge.generation_block if source.knowledge else "",
+            ),
         )
         try:
             validated = validate_output(draft, source)
