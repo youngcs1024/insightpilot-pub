@@ -9,6 +9,7 @@ import pytest
 
 from app.agents.contracts import TurnIdentity
 from app.agents.runtime import RuntimeContext
+from app.core.background import shutdown
 from app.core.config_models import DatabaseSettings
 from app.db.models import Conversation, TurnStatus, User
 from app.db.session import Database
@@ -43,6 +44,9 @@ async def graph_database(
     try:
         yield database, settings
     finally:
+        # Direct ChatService tests now schedule summaries even for degraded turns.
+        # Match application shutdown: settle retained tasks before disposing their DB.
+        await shutdown(5)
         await database.aclose()
 
 
